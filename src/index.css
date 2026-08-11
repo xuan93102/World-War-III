@@ -1,0 +1,37 @@
+:root {
+  /* Overwritten at runtime by SettingsProvider; these are the dark defaults
+     so the very first paint isn't unstyled. */
+  --bg: #101010;
+  --surface: #1c1c1c;
+  --border: #333;
+  --text: #eee;
+  --text-dim: #888;
+  --map-bg: #101010;
+  --font-scale: 1;
+
+  --accent: #4f8ef7;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
+  font-size: calc(16px * var(--font-scale));
+  overscroll-behavior: none;
+}
+
+#root {
+  height: 100dvh;
+  width: 100%;
+}
+
+button {
+  font-family: inherit;
+}

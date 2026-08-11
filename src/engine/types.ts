@@ -1,0 +1,74 @@
+import type { BuildingType } from './buildings';
+import type { UnitCounts } from './units';
+
+export type PlayerId = string;
+
+export type AiDifficulty = 'easy' | 'normal' | 'hard';
+
+export interface RegionDef {
+  id: string;
+  name: string;
+  area: 'north' | 'central' | 'south' | 'east';
+  path: string;
+  cx: number;
+  cy: number;
+  neighbors: string[];
+  /** Projected land area; scales food output and neutral garrison size. */
+  landArea: number;
+}
+
+export interface MountainPass {
+  from: string;
+  to: string;
+  name: string;
+}
+
+export interface RegionState {
+  owner: PlayerId | null;
+  isCore: boolean;
+  /**
+   * Troops stationed here. On neutral land this is the garrison, which is
+   * only ever militia and is sized by land area; on owned land it's whatever
+   * the owner has trained or moved in.
+   */
+  units: UnitCounts;
+  /** Completed building, if any. One per region (docs/game-design.md 5). */
+  building?: { type: BuildingType; hp: number };
+  /** In-progress build, if any. Mutually exclusive with `building`. */
+  construction?: { type: BuildingType; remainingSeconds: number; totalSeconds: number };
+  /**
+   * Seconds the current owner has held a *completed* wonder here. Resets if
+   * the wonder is lost or destroyed; at WONDER_HOLD_SECONDS the owner wins.
+   */
+  wonderHeldSeconds?: number;
+}
+
+export interface PlayerState {
+  id: PlayerId;
+  name: string;
+  color: string;
+  /**
+   * Villagers on the payroll — the only population that earns gold. Troops
+   * are counted separately (they live on regions); total population is
+   * villagers + troops, via GameEngine.population().
+   */
+  villagers: number;
+  populationCap: number;
+  money: number;
+  food: number;
+  /** Present for AI-controlled seats; omitted for human players. */
+  aiDifficulty?: AiDifficulty;
+  coreRegionId: string;
+}
+
+export interface GameState {
+  regions: Record<string, RegionState>;
+  players: Record<PlayerId, PlayerState>;
+  elapsedSeconds: number;
+  /**
+   * Seconds until the next gold payout. Gold arrives in whole-minute
+   * instalments rather than trickling in, so "10 villagers" visibly means
+   * "+10 gold, once a minute".
+   */
+  secondsUntilPayout: number;
+}
