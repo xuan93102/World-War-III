@@ -285,6 +285,92 @@
   line-height: 1.45;
 }
 
+/* Map key: an icon exactly as the map draws it, next to what it means. */
+.help-legend {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.help-legend-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Fixed column so every caption starts on the same line, whatever the
+   swatch's natural width is. */
+.help-legend-icon {
+  flex: none;
+  width: 36px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.help-legend-text {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+}
+
+.help-garrison {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: #ff8a80;
+}
+
+.help-swatch {
+  flex: none;
+}
+
+.help-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.help-entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.help-entry-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.help-entry-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.help-entry-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.help-entry-meta {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.help-entry-desc {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  line-height: 1.45;
+  margin-top: 2px;
+}
+
+.notice-wide {
+  max-width: 620px;
+  text-align: left;
+}
+
 /* ---------- starting-region picker ---------- */
 
 .map-picker {
@@ -830,9 +916,18 @@
   gap: 8px;
 }
 
+/* Icons keep their own size and sit centred, while the text around them
+   keeps the head row's baseline alignment. */
+.building-icon {
+  flex: none;
+  align-self: center;
+}
+
 .build-option-name {
   font-size: 0.85rem;
   font-weight: 600;
+  /* Takes the slack so the cost stays pinned right, next to the icon left. */
+  flex: 1;
 }
 
 .build-option-cost {
@@ -860,6 +955,9 @@
 .build-status-name {
   font-size: 0.9rem;
   font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 7px;
 }
 
 .build-status-meta {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { TRANSLATIONS, type TranslationKey } from './translations';
-import { DEFAULT_SETTINGS, FONT_SCALE_VALUES, THEMES, type Settings } from './types';
+import { DEFAULT_SETTINGS, FONT_SCALE_VALUES, MAP_TILT, THEMES, type Settings } from './types';
 import { SettingsContext } from './useSettings';
 
 const STORAGE_KEY = 'ww3.settings';
@@ -19,6 +19,7 @@ function loadSettings(): Settings {
         parsed.fontScale && parsed.fontScale in FONT_SCALE_VALUES
           ? parsed.fontScale
           : DEFAULT_SETTINGS.fontScale,
+      mapMode: parsed.mapMode && parsed.mapMode in MAP_TILT ? parsed.mapMode : DEFAULT_SETTINGS.mapMode,
     };
   } catch {
     return DEFAULT_SETTINGS;

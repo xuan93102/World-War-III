@@ -1,6 +1,6 @@
 import { useSettings } from '../../settings/useSettings';
 import type { TranslationKey } from '../../settings/translations';
-import type { FontScale, Language, Theme } from '../../settings/types';
+import type { FontScale, Language, MapMode, Theme } from '../../settings/types';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -16,6 +16,11 @@ const THEME_OPTIONS: { id: Theme; labelKey: TranslationKey }[] = [
   { id: 'dark', labelKey: 'settings.theme.dark' },
   { id: 'darkBlue', labelKey: 'settings.theme.darkBlue' },
   { id: 'light', labelKey: 'settings.theme.light' },
+];
+
+const MAP_MODE_OPTIONS: { id: MapMode; labelKey: TranslationKey }[] = [
+  { id: '2d', labelKey: 'settings.mapMode.2d' },
+  { id: '3d', labelKey: 'settings.mapMode.3d' },
 ];
 
 const FONT_OPTIONS: { id: FontScale; labelKey: TranslationKey }[] = [
@@ -61,6 +66,23 @@ export function SettingsScreen({ onBack }: SettingsScreenProps) {
             </button>
           ))}
         </div>
+      </div>
+
+      <div className="panel">
+        <div className="field-label">{t('settings.mapMode')}</div>
+        <div className="segmented">
+          {MAP_MODE_OPTIONS.map((o) => (
+            <button
+              key={o.id}
+              className={settings.mapMode === o.id ? 'is-selected' : undefined}
+              aria-pressed={settings.mapMode === o.id}
+              onClick={() => setSettings({ mapMode: o.id })}
+            >
+              {t(o.labelKey)}
+            </button>
+          ))}
+        </div>
+        <p className="hint-text">{t('settings.mapMode.hint')}</p>
       </div>
 
       <div className="panel">

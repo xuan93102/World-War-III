@@ -10,6 +10,19 @@ export { MOUNTAIN_PASSES };
 // real geographic adjacency.
 export const REGIONS: RegionDef[] = REGION_GEOMETRY;
 
+/**
+ * Whether the 山地公路 tech (core level 2 — docs/game-design.md 3.2 and 11) has
+ * been researched. Until it is, passes are sealed, and the map draws each
+ * crossing greyed out to say so.
+ *
+ * Hard-coded false because the tech system doesn't exist yet (docs 14). This is
+ * deliberately the single place anything asks the question: when techs land it
+ * becomes a per-player lookup and only this function changes.
+ */
+export function hasMountainRoad(): boolean {
+  return false;
+}
+
 export function isMountainPass(a: string, b: string): boolean {
   return MOUNTAIN_PASSES.some(
     (p) => (p.from === a && p.to === b) || (p.from === b && p.to === a),

@@ -1,4 +1,5 @@
 import { BUILDINGS, BUILDING_ORDER, type BuildingType } from '../engine/buildings';
+import { BuildingIcon } from './buildingIcons';
 import { FOOD_PER_MIN_BY_SIZE, landSizeOf, type LandSize } from '../engine/land';
 import { totalUnits, type UnitType } from '../engine/units';
 import { UnitPanel } from './UnitPanel';
@@ -106,6 +107,7 @@ export function RegionPanel({
           {regionState.construction ? (
             <div className="build-status">
               <div className="build-status-name">
+                <BuildingIcon type={regionState.construction.type} />
                 {t(BUILDINGS[regionState.construction.type].nameKey)}・{t('building.building')}
               </div>
               <div className="progress-track">
@@ -128,7 +130,10 @@ export function RegionPanel({
             </div>
           ) : regionState.building ? (
             <div className="build-status">
-              <div className="build-status-name">{t(BUILDINGS[regionState.building.type].nameKey)}</div>
+              <div className="build-status-name">
+                <BuildingIcon type={regionState.building.type} />
+                {t(BUILDINGS[regionState.building.type].nameKey)}
+              </div>
               <div className="build-status-meta">
                 {t(BUILDINGS[regionState.building.type].descKey)}
               </div>
@@ -161,6 +166,7 @@ export function RegionPanel({
                     title={def.implemented ? t(def.descKey) : lockedReason ? t(lockedReason) : undefined}
                   >
                     <span className="build-option-head">
+                      <BuildingIcon type={type} size={20} />
                       <span className="build-option-name">{t(def.nameKey)}</span>
                       <span className="build-option-cost">
                         {def.costMoney > 0 && `${t('game.money')} ${def.costMoney}`}

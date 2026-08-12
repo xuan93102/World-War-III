@@ -1,16 +1,68 @@
+import { BUILDINGS, BUILDING_ORDER } from '../../engine/buildings';
+import { UNITS, type UnitType } from '../../engine/units';
 import { useSettings } from '../../settings/useSettings';
+import type { TranslationKey } from '../../settings/translations';
+import { BuildingIcon } from '../buildingIcons';
 
 interface HelpScreenProps {
   onBack: () => void;
 }
 
+const UNIT_ORDER: UnitType[] = ['militia', 'conscript', 'volunteer', 'marine'];
+
+/** A short stretch of mountain road, at the two states it can be in. */
+function RoadSwatch({ locked }: { locked: boolean }) {
+  const deck = locked ? '#767c85' : '#e08a3d';
+  const edge = locked ? '#41464d' : '#9c5a20';
+  return (
+    <svg className="help-swatch" viewBox="0 0 34 16" width={34} height={16} aria-hidden="true">
+      <line x1="3" y1="10.5" x2="31" y2="7.5" stroke={edge} strokeWidth={7} strokeLinecap="round" />
+      <line x1="3" y1="8" x2="31" y2="5" stroke={deck} strokeWidth={7} strokeLinecap="round" />
+      <line
+        x1="3"
+        y1="8"
+        x2="31"
+        y2="5"
+        stroke="#12161c"
+        strokeWidth={7}
+        strokeLinecap="round"
+        strokeOpacity={0.22}
+        strokeDasharray="6 6"
+      />
+    </svg>
+  );
+}
+
+/** Two peaks of the range, drawn the same way the map draws them. */
+function RidgeSwatch() {
+  return (
+    <svg className="help-swatch" viewBox="0 0 34 16" width={34} height={16} aria-hidden="true">
+      <path d="M4 15 L11 3 L11 15 Z" fill="#a5825c" />
+      <path d="M18 15 L11 3 L11 15 Z" fill="#5f482f" />
+      <path d="M18 15 L24 6 L24 15 Z" fill="#a5825c" />
+      <path d="M30 15 L24 6 L24 15 Z" fill="#5f482f" />
+    </svg>
+  );
+}
+
+function LegendRow({ icon, textKey }: { icon: React.ReactNode; textKey: TranslationKey }) {
+  const { t } = useSettings();
+  return (
+    <div className="help-legend-row">
+      <span className="help-legend-icon">{icon}</span>
+      <span className="help-legend-text">{t(textKey)}</span>
+    </div>
+  );
+}
+
 export function HelpScreen({ onBack }: HelpScreenProps) {
   const { t } = useSettings();
+
   return (
     <div className="screen screen-centered">
       <h2 className="screen-title">{t('help.title')}</h2>
 
-      <div className="panel">
+      <div className="panel panel-wide">
         <div className="field-label">{t('help.map')}</div>
         <ul className="help-list">
           <li>{t('help.mapPan')}</li>
@@ -19,18 +71,114 @@ export function HelpScreen({ onBack }: HelpScreenProps) {
           <li>{t('help.mapReset')}</li>
           <li>{t('help.mapLabels')}</li>
         </ul>
+        <p className="hint-text">{t('help.mapMode')}</p>
       </div>
 
-      <div className="panel">
+      <div className="panel panel-wide">
+        <div className="field-label">{t('help.legend')}</div>
+        <div className="help-legend">
+          <LegendRow icon={<BuildingIcon type="core" size={26} />} textKey="help.legendCore" />
+          <LegendRow icon={<BuildingIcon type="academy" size={26} />} textKey="help.legendBuilding" />
+          <LegendRow
+            icon={
+              <svg className="help-swatch" viewBox="0 0 24 24" width={26} height={26} aria-hidden="true">
+                <rect
+                  x="0.8"
+                  y="0.8"
+                  width="22.4"
+                  height="22.4"
+                  rx="6"
+                  fill="#d9534f"
+                  fillOpacity={0.35}
+                  stroke="#12161c"
+                  strokeWidth="1.6"
+                  strokeDasharray="3 2.2"
+                />
+              </svg>
+            }
+            textKey="help.legendConstruction"
+          />
+          <LegendRow icon={<span className="help-garrison">⚔8</span>} textKey="help.legendGarrison" />
+          <LegendRow icon={<RoadSwatch locked />} textKey="help.legendPassLocked" />
+          <LegendRow icon={<RoadSwatch locked={false} />} textKey="help.legendPassUnlocked" />
+          <LegendRow icon={<RidgeSwatch />} textKey="help.legendRidge" />
+        </div>
+      </div>
+
+      <div className="panel panel-wide">
+        <div className="field-label">{t('help.buildings')}</div>
+        <p className="hint-text">{t('help.buildingsNote')}</p>
+        <div className="help-entries">
+          {BUILDING_ORDER.map((type) => {
+            const def = BUILDINGS[type];
+            return (
+              <div className="help-entry" key={type}>
+                <BuildingIcon type={type} size={26} />
+                <div className="help-entry-body">
+                  <div className="help-entry-head">
+                    <span className="help-entry-name">{t(def.nameKey)}</span>
+                    <span className="help-entry-meta">
+                      {def.implemented ? (
+                        <>
+                          {def.costMoney > 0 && `${t('game.money')} ${def.costMoney}`}
+                          {def.costFood > 0 && `　${t('game.food')} ${def.costFood}`}
+                        </>
+                      ) : (
+                        t('help.locked')
+                      )}
+                    </span>
+                  </div>
+                  <div className="help-entry-desc">{t(def.descKey)}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="panel panel-wide">
+        <div className="field-label">{t('help.units')}</div>
+        <p className="hint-text">{t('help.unitsNote')}</p>
+        <div className="help-entries">
+          {UNIT_ORDER.map((type) => {
+            const def = UNITS[type];
+            const source = def.upgradeFrom
+              ? t('help.unitUpgradeFrom').replace('{n}', t(`unit.${def.upgradeFrom}` as TranslationKey))
+              : type === 'militia'
+                ? t('help.unitTrainCore')
+                : t('help.unitTrainAcademy');
+            const cost = def.trainCost ?? def.upgradeCost;
+            return (
+              <div className="help-entry" key={type}>
+                <div className="help-entry-body">
+                  <div className="help-entry-head">
+                    <span className="help-entry-name">{t(`unit.${type}` as TranslationKey)}</span>
+                    <span className="help-entry-meta">
+                      {t('unit.atk')} {def.atk}　{t('unit.hp')} {def.hp}
+                      {cost !== null && `　${t('game.money')} ${cost}`}
+                    </span>
+                  </div>
+                  <div className="help-entry-desc">{source}</div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="panel panel-wide">
         <div className="field-label">{t('help.rules')}</div>
         <ul className="help-list">
           <li>{t('help.rulesCore')}</li>
           <li>{t('help.rulesResource')}</li>
+          <li>{t('help.rulesLand')}</li>
+          <li>{t('help.rulesCapture')}</li>
           <li>{t('help.rulesMountain')}</li>
+          <li>{t('help.rulesWonder')}</li>
         </ul>
       </div>
 
-      <p className="notice">{t('help.wip')}</p>
+      <p className="notice notice-wide">{t('help.notImplemented')}</p>
 
       <button className="btn btn-ghost" onClick={onBack}>
         {t('menu.back')}

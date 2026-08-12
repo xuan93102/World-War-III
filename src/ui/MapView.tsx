@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { select } from 'd3-selection';
 import 'd3-transition'; // side-effect: adds .transition() to d3-selection Selection
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomTransform } from 'd3-zoom';
 import { MAP_BOUNDS, MOUNTAIN_RANGE_PATH } from '../engine/mapData.generated';
-import { REGIONS, MOUNTAIN_PASSES } from '../engine/regions';
+import { REGIONS, MOUNTAIN_PASSES, hasMountainRoad } from '../engine/regions';
 import { totalUnits } from '../engine/units';
+import { BuildingBadge, BuildingSolid, GROUND_Y, type IconKey } from './buildingIcons';
+import { shade } from './colors';
 import { useSettings } from '../settings/useSettings';
-import { THEMES } from '../settings/types';
+import { MAP_TILT, THEMES } from '../settings/types';
 import type { GameState, PlayerState } from '../engine/types';
 
 interface MapViewProps {
@@ -17,19 +19,63 @@ interface MapViewProps {
 }
 
 // Label/marker colours that read the same on every theme.
-const CORE_RING = '#ffd54a';
-const BUILDING_MARKER = '#ffffff';
 const MILITIA_COLOR = '#ff8a80';
+// On-screen size of a building badge, in pixels — divided by the zoom scale
+// when drawn so it stays the same size however far you zoom, like the labels.
+const BUILDING_BADGE_PX = 17;
+// How far above the region's centroid the badge sits: enough to clear both the
+// core ring (r=7) and the name label underneath it.
+const BUILDING_BADGE_OFFSET_PX = 15;
 const RIDGE_COLOR = '#8b6b4a';
+// The extruded side of the island in 3D. Deliberately near-black rather than a
+// shade of any theme: it reads as the shadowed cut face on every background.
+const LAND_EDGE_COLOR = '#0b1016';
+// Lit and shaded faces of the mountain peaks, from the same family as the
+// ridge line they stand on.
+const PEAK_LIT = '#a5825c';
+const PEAK_SHADE = '#5f482f';
+// Peaks are placed this far apart along the ridge, and vary between these
+// heights — all in world units, so the range grows as you zoom into it the
+// way real terrain would.
+const PEAK_SPACING = 8;
+const PEAK_MIN_H = 6;
+const PEAK_MAX_H = 15;
+// On-screen size of a building *model* on the 3D map. Much bigger than the flat
+// 2D badge: it's the building itself now, not a marker standing in for one.
+const BUILDING_MODEL_PX = 44;
+// A pass is drawn as a road that actually crosses the range, not a marker
+// sitting on it: the peaks are cleared away for PASS_GAP either side of the
+// crossing (a pass *is* a gap in the mountains) and the road runs through the
+// notch, well past the ridge on both sides.
+const PASS_ROAD_LENGTH = 46;
+const PASS_GAP = 15;
+const PASS_DARK = '#9c5a20';
+// Greyed out until 山地公路 is researched — see hasMountainRoad().
+const PASS_LOCKED = '#767c85';
+const PASS_LOCKED_DARK = '#41464d';
+const MODEL_OUTLINE = '#12161c';
 const PASS_COLOR = '#e08a3d';
-// Length of the pass "gate" marker, in world units — deliberately fixed to
-// the map rather than the screen, so the marker stays tied to the real
-// geographic width of the corridor as you zoom.
-const PASS_GATE_LENGTH = 22;
 
 const WORLD_PADDING = 20;
-const WORLD_WIDTH = MAP_BOUNDS.maxX - MAP_BOUNDS.minX + WORLD_PADDING * 2;
-const WORLD_HEIGHT = MAP_BOUNDS.maxY - MAP_BOUNDS.minY + WORLD_PADDING * 2;
+// How thick the island slab looks in 3D, in world units. Left in world units
+// on purpose: a real extrusion should grow as you zoom in, the way the land
+// itself does.
+const LAND_DEPTH = 7;
+
+// Everything below is parameterised by `tilt` — the vertical squash applied to
+// the ground plane (1 in 2D, less in 3D; see MAP_TILT). Because the tilt is a
+// transform on the world content, the world's *effective* height shrinks with
+// it, and the fit/zoom/pan maths all have to work in those tilted units or the
+// map ends up off-centre and pannable into empty space. At tilt = 1 every
+// formula here reduces to exactly what it was before 3D existed.
+function worldWidth(): number {
+  return MAP_BOUNDS.maxX - MAP_BOUNDS.minX + WORLD_PADDING * 2;
+}
+
+function worldHeight(tilt: number): number {
+  return (MAP_BOUNDS.maxY - MAP_BOUNDS.minY) * tilt + WORLD_PADDING * 2;
+}
+
 // The pannable world region — also doubles as "how far out you can zoom",
 // since scaleExtent's minimum is set to whatever scale exactly fits this
 // extent into the viewport (see minScaleFor). d3-zoom's own translateExtent
@@ -37,19 +83,21 @@ const WORLD_HEIGHT = MAP_BOUNDS.maxY - MAP_BOUNDS.minY + WORLD_PADDING * 2;
 // pan within (the extent exactly fills the viewport already), and panning
 // only opens up once zoomed in — and even then never far enough to show
 // space outside the map.
-const WORLD_EXTENT: [[number, number], [number, number]] = [
-  [MAP_BOUNDS.minX - WORLD_PADDING, MAP_BOUNDS.minY - WORLD_PADDING],
-  [MAP_BOUNDS.maxX + WORLD_PADDING, MAP_BOUNDS.maxY + WORLD_PADDING],
-];
-
-function minScaleFor(width: number, height: number): number {
-  return Math.min(width / WORLD_WIDTH, height / WORLD_HEIGHT);
+function worldExtent(tilt: number): [[number, number], [number, number]] {
+  return [
+    [MAP_BOUNDS.minX - WORLD_PADDING, MAP_BOUNDS.minY * tilt - WORLD_PADDING],
+    [MAP_BOUNDS.maxX + WORLD_PADDING, MAP_BOUNDS.maxY * tilt + WORLD_PADDING],
+  ];
 }
 
-function fitTransform(width: number, height: number): ZoomTransform {
-  const scale = minScaleFor(width, height);
-  const tx = width / 2 - scale * (MAP_BOUNDS.minX + WORLD_WIDTH / 2 - WORLD_PADDING);
-  const ty = height / 2 - scale * (MAP_BOUNDS.minY + WORLD_HEIGHT / 2 - WORLD_PADDING);
+function minScaleFor(width: number, height: number, tilt: number): number {
+  return Math.min(width / worldWidth(), height / worldHeight(tilt));
+}
+
+function fitTransform(width: number, height: number, tilt: number): ZoomTransform {
+  const scale = minScaleFor(width, height, tilt);
+  const tx = width / 2 - scale * ((MAP_BOUNDS.minX + MAP_BOUNDS.maxX) / 2);
+  const ty = height / 2 - scale * (((MAP_BOUNDS.minY + MAP_BOUNDS.maxY) / 2) * tilt);
   return zoomIdentity.translate(tx, ty).scale(scale);
 }
 
@@ -64,7 +112,10 @@ function fitTransform(width: number, height: number): ZoomTransform {
 // showing blank space beyond its own edges (which, when the map is narrower
 // than the viewport in one axis, just means it can slide between flush-left
 // and flush-right instead of being pinned to the middle).
-function panConstrain(
+// Built per tilt, so the floor-scale test below measures against the same
+// (possibly squashed) world the fit and scaleExtent were computed from.
+function makePanConstrain(tilt: number) {
+  return function panConstrain(
   transform: ZoomTransform,
   extent: [[number, number], [number, number]],
   translateExtent: [[number, number], [number, number]],
@@ -79,7 +130,7 @@ function panConstrain(
   // BOTH axes — "locked, can't pan at all" per the original ask — rather
   // than letting the slack axis's slide-range apply. Above the floor, the
   // slide-range formula below is what fixes the direction asymmetry.
-  if (k <= minScaleFor(viewW, viewH) + 1e-6) {
+  if (k <= minScaleFor(viewW, viewH, tilt) + 1e-6) {
     return zoomIdentity.translate(viewW / 2 - ((wx0 + wx1) / 2) * k, viewH / 2 - ((wy0 + wy1) / 2) * k).scale(k);
   }
 
@@ -90,6 +141,7 @@ function panConstrain(
   const ty = Math.min(tyBounds[1], Math.max(tyBounds[0], transform.y));
 
   return zoomIdentity.translate(tx, ty).scale(k);
+  };
 }
 
 // The pan bounds have to track the CURRENT rotation: translateExtent is a
@@ -135,6 +187,10 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
   const isLightTheme = settings.theme === 'light';
   const labelFill = isLightTheme ? '#14181d' : '#fff';
   const labelHalo = isLightTheme ? '#ffffff' : '#000';
+  const tilt = MAP_TILT[settings.mapMode];
+  const is3D = settings.mapMode === '3d';
+  // Sealed (and drawn grey) until 山地公路 is researched.
+  const unlockedPasses = hasMountainRoad();
 
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -146,6 +202,10 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
   // drives a zoom/pan themselves (sourceEvent is null for programmatic
   // transform() calls, non-null for real wheel/drag/touch input).
   const userHasInteracted = useRef(false);
+  // The zoom behaviour is built once but needs the live tilt; see its
+  // .constrain() below.
+  const tiltRef = useRef(tilt);
+  tiltRef.current = tilt;
 
   // Rotation: right-click + drag, desktop-first. d3-zoom has no rotation
   // support built in, so this is tracked as separate state.
@@ -211,20 +271,53 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
         // ignore
       }
       // Re-anchor to whatever world point is currently under the screen
-      // center, using the pan/zoom transform in effect right now — then
-      // hold that fixed for the rest of the gesture (and any panning that
-      // happens before the next rotation starts).
-      setRotationPivot({
-        x: (size.width / 2 - transform.x) / transform.k,
-        y: (size.height / 2 - transform.y) / transform.k,
-      });
+      // center, then hold that fixed for the rest of the gesture (and any
+      // panning that happens before the next rotation starts).
+      //
+      // Screen content is world -> rotate -> tilt -> pan/zoom, so finding that
+      // point means undoing all three. Inverting the pan/zoom alone lands on a
+      // point in *rotated* space, which is only the world point when the map
+      // happens to be unrotated and flat.
+      const centreX = (size.width / 2 - transform.x) / transform.k;
+      const centreY = (size.height / 2 - transform.y) / transform.k / tilt;
+      const unrotate = (-rotation * Math.PI) / 180;
+      const cos = Math.cos(unrotate);
+      const sin = Math.sin(unrotate);
+      const ox = centreX - rotationPivot.x;
+      const oy = centreY - rotationPivot.y;
+      const pivot = {
+        x: rotationPivot.x + ox * cos - oy * sin,
+        y: rotationPivot.y + ox * sin + oy * cos,
+      };
+
+      // Moving the pivot without touching the angle teleports the map: every
+      // point shifts by (I - R(angle))(new - old), because it's now being spun
+      // about a different centre. That's zero while the map is unrotated, which
+      // is why this only bit once you'd rotated and then panned — and it
+      // compounded, so alternating the two walked the map off screen. Cancel it
+      // with an equal and opposite pan, leaving the view exactly where it was.
+      const shiftX = pivot.x - centreX;
+      const shiftY = (pivot.y - centreY) * tilt;
+      if (
+        (Math.abs(shiftX) > 1e-9 || Math.abs(shiftY) > 1e-9) &&
+        svgRef.current &&
+        zoomBehaviorRef.current
+      ) {
+        select(svgRef.current).call(
+          zoomBehaviorRef.current.transform,
+          zoomIdentity
+            .translate(transform.x - transform.k * shiftX, transform.y - transform.k * shiftY)
+            .scale(transform.k),
+        );
+      }
+      setRotationPivot(pivot);
       const rect = containerRef.current!.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
       const startAngle = (Math.atan2(e.clientY - centerY, e.clientX - centerX) * 180) / Math.PI;
       rotateDrag.current = { startAngle, startRotation: rotation, centerX, centerY };
     },
-    [rotation, size, transform],
+    [rotation, rotationPivot.x, rotationPivot.y, size, transform, tilt],
   );
 
   const handlePointerMove = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
@@ -296,8 +389,10 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
   useEffect(() => {
     if (!svgRef.current) return;
     const zoomBehavior = zoom<SVGSVGElement, unknown>()
-      .translateExtent(WORLD_EXTENT)
-      .constrain(panConstrain)
+      .translateExtent(worldExtent(tiltRef.current))
+      // Read the tilt through a ref rather than capturing it: this behaviour is
+      // built exactly once, but the tilt changes whenever the map mode does.
+      .constrain((tr, ext, tExt) => makePanConstrain(tiltRef.current)(tr, ext, tExt))
       .on('zoom', (event: D3ZoomEvent<SVGSVGElement, unknown>) => {
         if (event.sourceEvent) userHasInteracted.current = true;
         setTransform(event.transform);
@@ -323,12 +418,32 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
     if (size.width === 0 || size.height === 0) return;
     zoomBehaviorRef.current
       .extent([[0, 0], [size.width, size.height]])
-      .scaleExtent([minScaleFor(size.width, size.height), 12]);
+      .scaleExtent([minScaleFor(size.width, size.height, tilt), 12]);
     if (userHasInteracted.current) return;
-    const initial = fitTransform(size.width, size.height);
+    const initial = fitTransform(size.width, size.height, tilt);
     select(svgRef.current).call(zoomBehaviorRef.current.transform, initial);
     setTransform(initial); // belt-and-suspenders alongside the event round-trip
-  }, [size.width, size.height]);
+  }, [size.width, size.height, tilt]);
+
+  // Switching map mode changes the world's height under the camera, so the
+  // old pan/zoom is no longer meaningful — refit. Unlike the effect above this
+  // ignores `userHasInteracted`: the user asked for a different view of the
+  // map, so re-framing it is the expected outcome, not an override of their
+  // panning. Skipped on the first pass so 2D start-up keeps its normal path.
+  const lastTilt = useRef(tilt);
+  useEffect(() => {
+    if (lastTilt.current === tilt) return;
+    lastTilt.current = tilt;
+    if (!svgRef.current || !zoomBehaviorRef.current || size.width === 0) return;
+    // rotation/rotationPivot are read through the closure on purpose (same
+    // reasoning as the rotation effect below) — this must not re-run on every
+    // rotation, it just needs whatever angle is in effect when the mode flips.
+    zoomBehaviorRef.current.translateExtent(rotatedExtent(worldExtent(tilt), rotation, rotationPivot));
+    select(svgRef.current).call(
+      zoomBehaviorRef.current.transform,
+      fitTransform(size.width, size.height, tilt),
+    );
+  }, [tilt, size.width, size.height]);
 
   // Keep the pan bounds matched to the CURRENT rotation (see rotatedExtent's
   // comment for why). Re-applying `.transform()` with the transform we
@@ -338,7 +453,7 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
   // getting corrected on the next pan/zoom gesture.
   useEffect(() => {
     if (!svgRef.current || !zoomBehaviorRef.current) return;
-    zoomBehaviorRef.current.translateExtent(rotatedExtent(WORLD_EXTENT, rotation, rotationPivot));
+    zoomBehaviorRef.current.translateExtent(rotatedExtent(worldExtent(tilt), rotation, rotationPivot));
     // `transform` (and `rotationPivot` as a whole object, vs. the .x/.y
     // primitives already in the deps below) are intentionally read via
     // closure, not listed as dependencies — this effect should only re-run
@@ -360,13 +475,58 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
     select(svgRef.current)
       .transition()
       .duration(200)
-      .call(zoomBehaviorRef.current.transform, fitTransform(size.width, size.height));
+      .call(zoomBehaviorRef.current.transform, fitTransform(size.width, size.height, tilt));
     setRotation(0);
     setRotationPivot({
       x: (MAP_BOUNDS.minX + MAP_BOUNDS.maxX) / 2,
       y: (MAP_BOUNDS.minY + MAP_BOUNDS.maxY) / 2,
     });
-  }, [size]);
+  }, [size, tilt]);
+
+  // Peak positions along the Central Mountain Range, sampled straight off the
+  // ridge path so the relief follows the real divide rather than an invented
+  // line. Measured once on a detached <path> — the geometry never changes.
+  // Heights come from a cheap integer hash of the index: deterministic (so the
+  // range doesn't reshuffle on every render) but irregular enough to read as
+  // terrain instead of a row of identical cones.
+  const ridgePeaks = useMemo(() => {
+    const probe = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    probe.setAttribute('d', MOUNTAIN_RANGE_PATH);
+    const total = probe.getTotalLength();
+    if (!total) return [];
+    const peaks: { x: number; y: number; h: number }[] = [];
+    for (let d = 0, i = 0; d <= total; d += PEAK_SPACING, i++) {
+      const pt = probe.getPointAtLength(d);
+      // A pass is a *gap* in the range, so clear the peaks around each one and
+      // let the road run through the notch. Without this the road would be
+      // buried behind the very mountains it's supposed to cross.
+      const blocked = MOUNTAIN_PASSES.some(
+        (pass) => Math.hypot(pass.x - pt.x, pass.y - pt.y) < PASS_GAP,
+      );
+      if (blocked) continue;
+      const jitter = ((i * 2654435761) % 1024) / 1024;
+      peaks.push({ x: pt.x, y: pt.y, h: PEAK_MIN_H + jitter * (PEAK_MAX_H - PEAK_MIN_H) });
+    }
+    return peaks;
+  }, []);
+
+  // Maps a world point through the same rotate-then-tilt the ground plane gets,
+  // so a billboard drawn at the result lands exactly on top of that spot on the
+  // map while itself staying upright and unsquashed.
+  const project = useCallback(
+    (x: number, y: number) => {
+      const rad = (rotation * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      const dx = x - rotationPivot.x;
+      const dy = y - rotationPivot.y;
+      return {
+        x: rotationPivot.x + dx * cos - dy * sin,
+        y: (rotationPivot.y + dx * sin + dy * cos) * tilt,
+      };
+    },
+    [rotation, rotationPivot.x, rotationPivot.y, tilt],
+  );
 
   const colorByPlayer: Record<string, string> = {};
   for (const p of players) colorByPlayer[p.id] = p.color;
@@ -389,6 +549,24 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
         style={{ width: '100%', height: '100%', touchAction: 'none' }}
       >
         <g transform={transform.toString()}>
+        {/* The island's thickness: the same region shapes, in one flat dark
+            colour, offset straight down beneath the ground plane. Drawn as a
+            single silhouette (they tile, so the union is the coastline) rather
+            than per-region walls, which would show seams along every internal
+            border. The offset sits OUTSIDE the tilt so "down" stays screen-down
+            at any viewing angle. */}
+        {is3D && (
+          <g transform={`translate(0 ${LAND_DEPTH})`} pointerEvents="none">
+            <g transform={`scale(1 ${tilt})`}>
+              <g transform={`rotate(${rotation} ${rotationPivot.x} ${rotationPivot.y})`}>
+                {REGIONS.map((region) => (
+                  <path key={region.id} d={region.path} fill={LAND_EDGE_COLOR} />
+                ))}
+              </g>
+            </g>
+          </g>
+        )}
+        <g transform={`scale(1 ${tilt})`}>
         <g transform={`rotate(${rotation} ${rotationPivot.x} ${rotationPivot.y})`}>
           {REGIONS.map((region) => {
             const regionState = gameState.regions[region.id];
@@ -396,13 +574,26 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
               ? colorByPlayer[regionState.owner]
               : themeColors.neutralRegion;
             const isSelected = region.id === selectedRegionId;
+            // A player's territory is one flat colour, so a fixed grey border
+            // disappeared into any solid block of it. Bordering owned ground
+            // with a dark shade of its *own* colour keeps every internal line
+            // visible no matter how much of the map one side holds.
+            const stroke = isSelected
+              ? labelFill
+              : regionState.owner
+                ? shade(fill, -0.5)
+                : themeColors.regionStroke;
             return (
               <path
                 key={region.id}
                 d={region.path}
                 fill={fill}
-                stroke={isSelected ? labelFill : themeColors.regionStroke}
-                strokeWidth={(isSelected ? 2 : 0.6) / transform.k}
+                stroke={stroke}
+                strokeWidth={isSelected ? 3 : 1.5}
+                // Constant width on screen regardless of zoom, rotation or the
+                // 3D tilt. The tilt scales y but not x, which would otherwise
+                // thin every north-south border to 62% of the east-west ones.
+                vectorEffect="non-scaling-stroke"
                 onClick={() => onSelectRegion(region.id)}
                 style={{ cursor: 'pointer' }}
               />
@@ -421,70 +612,163 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
             pointerEvents="none"
           />
 
-          {/* Each pass is drawn as a short "gate" crossing the ridge at the
-              real midpoint of the two regions' shared border (see the
-              crossing-point calc in scripts/build-map-data.mjs), rather than
-              a long centroid-to-centroid line that cut across unrelated
-              territory on its way. */}
-          <g stroke={PASS_COLOR} fill="none" pointerEvents="none" strokeLinecap="round">
-            {MOUNTAIN_PASSES.map((pass) => {
-              const half = PASS_GATE_LENGTH / 2;
-              const rad = (pass.angle * Math.PI) / 180;
-              const dx = Math.cos(rad) * half;
-              const dy = Math.sin(rad) * half;
-              return (
-                <line
-                  key={pass.name}
-                  x1={pass.x - dx}
-                  y1={pass.y - dy}
-                  x2={pass.x + dx}
-                  y2={pass.y + dy}
-                  strokeWidth={3.5 / transform.k}
-                />
-              );
-            })}
-          </g>
-          <g pointerEvents="none">
-            {MOUNTAIN_PASSES.map((pass) => (
-              <text
-                key={pass.name}
-                x={pass.x}
-                y={pass.y - (PASS_GATE_LENGTH / 2 + 4 / transform.k)}
-                textAnchor="middle"
-                fontSize={9 / transform.k}
-                fill={PASS_COLOR}
-                style={{ paintOrder: 'stroke', stroke: labelHalo, strokeWidth: 2.5 / transform.k, strokeOpacity: 0.7 }}
-              >
-                {pass.name}
-              </text>
-            ))}
-          </g>
+        </g>
+        </g>
 
-          {REGIONS.map((region) => {
+        {/* Billboard layer. Labels and badges must always face the viewer, so
+            they can't live inside the tilt/rotation groups — a rotated map
+            would tip them over and the tilt would squash them. They sit here
+            in plain pan/zoom space instead, each positioned by applying the
+            same rotate-then-tilt to its anchor point by hand (see `project`).
+            At rotation 0 and tilt 1 that's the identity, so 2D is unchanged. */}
+        <g pointerEvents="none">
+          {/* Mountain relief. Each peak is a two-faced cone standing on the
+              ridge — lit on the left, shaded on the right, same light as the
+              buildings. Drawn far-to-near so nearer peaks overlap the ones
+              behind them, which is what makes it read as a range with depth
+              rather than a row of triangles. */}
+          {is3D &&
+            ridgePeaks
+              .map((peak) => ({ p: project(peak.x, peak.y), h: peak.h }))
+              .sort((a, b) => a.p.y - b.p.y)
+              .map(({ p, h }, i) => {
+                const w = h * 0.55;
+                return (
+                  <g key={`peak-${i}`}>
+                    <path d={`M${p.x - w} ${p.y} L${p.x} ${p.y - h} L${p.x} ${p.y} Z`} fill={PEAK_LIT} />
+                    <path d={`M${p.x + w} ${p.y} L${p.x} ${p.y - h} L${p.x} ${p.y} Z`} fill={PEAK_SHADE} />
+                  </g>
+                );
+              })}
+
+          {/* A gateway planted on the crossing: two posts under a lintel, same
+              three-tone shading as the buildings. Stands on GROUND_Y like they
+              do, so it sits on the terrain rather than floating over it. */}
+          {MOUNTAIN_PASSES.map((pass) => {
+            // Both ends of the road in world space, then projected — so the
+            // road lies *on* the ground and foreshortens with it, unlike the
+            // labels and buildings which stand up off it.
+            const rad = (pass.angle * Math.PI) / 180;
+            const half = PASS_ROAD_LENGTH / 2;
+            const a = project(pass.x - Math.cos(rad) * half, pass.y - Math.sin(rad) * half);
+            const b = project(pass.x + Math.cos(rad) * half, pass.y + Math.sin(rad) * half);
+            const mid = project(pass.x, pass.y);
+            const deck = unlockedPasses ? PASS_COLOR : PASS_LOCKED;
+            const edge = unlockedPasses ? PASS_DARK : PASS_LOCKED_DARK;
+            const width = 7 / transform.k;
+            return (
+              <g key={pass.name}>
+                {/* Offset copy underneath gives the roadbed thickness. */}
+                <line
+                  x1={a.x}
+                  y1={a.y + width * 0.5}
+                  x2={b.x}
+                  y2={b.y + width * 0.5}
+                  stroke={edge}
+                  strokeWidth={width}
+                  strokeLinecap="round"
+                />
+                <line
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke={deck}
+                  strokeWidth={width}
+                  strokeLinecap="round"
+                />
+                {/* Kerbs, so the deck reads as a road rather than a bare bar. */}
+                <line
+                  x1={a.x}
+                  y1={a.y}
+                  x2={b.x}
+                  y2={b.y}
+                  stroke={MODEL_OUTLINE}
+                  strokeWidth={width}
+                  strokeLinecap="round"
+                  strokeOpacity={0.22}
+                  strokeDasharray={`${width * 0.9} ${width * 0.9}`}
+                />
+                <text
+                  x={mid.x}
+                  y={mid.y - width - 4 / transform.k}
+                  textAnchor="middle"
+                  fontSize={9 / transform.k}
+                  fill={deck}
+                  style={{ paintOrder: 'stroke', stroke: labelHalo, strokeWidth: 2.5 / transform.k, strokeOpacity: 0.7 }}
+                >
+                  {pass.name}
+                </text>
+              </g>
+            );
+          })}
+
+          {REGIONS.map((region) => ({ region, p: project(region.cx, region.cy) }))
+            // Near regions last, so a building in front overlaps the one behind
+            // it instead of the other way round. Only matters in 3D, where the
+            // models have height; in 2D nothing overlaps.
+            .sort((a, b) => (is3D ? a.p.y - b.p.y : 0))
+            .map(({ region, p }) => {
             const regionState = gameState.regions[region.id];
             return (
-              <g key={`label-${region.id}`} pointerEvents="none">
-                {regionState.isCore && (
-                  <circle cx={region.cx} cy={region.cy} r={7 / transform.k} fill="none" stroke={CORE_RING} strokeWidth={2 / transform.k} />
-                )}
-                {/* Building marker: filled square once complete, hollow while
-                    still under construction. */}
-                {(regionState.building || regionState.construction) && (
-                  <rect
-                    x={region.cx - 3 / transform.k}
-                    y={region.cy - (showLabels ? 11 : 3) / transform.k}
-                    width={6 / transform.k}
-                    height={6 / transform.k}
-                    fill={regionState.building ? BUILDING_MARKER : 'none'}
-                    stroke={BUILDING_MARKER}
-                    strokeWidth={1.2 / transform.k}
-                    strokeDasharray={regionState.construction ? `${2 / transform.k} ${1.5 / transform.k}` : undefined}
-                  />
-                )}
+              <g key={`label-${region.id}`}>
+                {/* What stands on this ground: the core (tinted with its owner's
+                    colour) and whatever building is here, translucent while it's
+                    still going up. A core region can hold a building too, so they
+                    sit side by side. In 3D these are the buildings themselves,
+                    planted on the terrain; in 2D they're badges above the label. */}
+                {(() => {
+                  const badges: { key: IconKey; color?: string; dashed?: boolean }[] = [];
+                  if (regionState.isCore) {
+                    badges.push({
+                      key: 'core',
+                      color: regionState.owner ? colorByPlayer[regionState.owner] : undefined,
+                    });
+                  }
+                  const built = regionState.building?.type ?? regionState.construction?.type;
+                  if (built) badges.push({ key: built, dashed: !regionState.building });
+                  if (badges.length === 0) return null;
+
+                  const size = (is3D ? BUILDING_MODEL_PX : BUILDING_BADGE_PX) / transform.k;
+                  const scale = size / 24;
+                  const gap = size * (is3D ? 0.02 : 0.15);
+                  const total = badges.length * size + (badges.length - 1) * gap;
+                  // 3D plants the model's footprint on the centroid; 2D floats
+                  // the badge above it, clear of the name label underneath.
+                  const y = is3D
+                    ? p.y - GROUND_Y * scale
+                    : p.y - BUILDING_BADGE_OFFSET_PX / transform.k - size / 2;
+                  return badges.map((badge, i) => {
+                    const x = p.x - total / 2 + i * (size + gap);
+                    return (
+                      <g key={badge.key}>
+                        {/* Contact shadow, squashed by the tilt so it lies on
+                            the ground rather than standing up with the model. */}
+                        {is3D && (
+                          <ellipse
+                            cx={x + size / 2}
+                            cy={p.y}
+                            rx={size * 0.3}
+                            ry={size * 0.3 * tilt}
+                            fill="#000"
+                            opacity={0.28}
+                          />
+                        )}
+                        <g transform={`translate(${x} ${y}) scale(${scale})`}>
+                          {is3D ? (
+                            <BuildingSolid type={badge.key} color={badge.color} underConstruction={badge.dashed} />
+                          ) : (
+                            <BuildingBadge type={badge.key} color={badge.color} underConstruction={badge.dashed} />
+                          )}
+                        </g>
+                      </g>
+                    );
+                  });
+                })()}
                 {showLabels && (
                   <text
-                    x={region.cx}
-                    y={region.cy + 3.5 / transform.k}
+                    x={p.x}
+                    y={p.y + 3.5 / transform.k}
                     textAnchor="middle"
                     fontSize={11 / transform.k}
                     fill={labelFill}
@@ -497,8 +781,8 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
                     undefended land near each core read at a glance. */}
                 {regionState.owner === null && totalUnits(regionState.units) > 0 && (
                   <text
-                    x={region.cx}
-                    y={region.cy + (showLabels ? 13 : 4) / transform.k}
+                    x={p.x}
+                    y={p.y + (showLabels ? 13 : 4) / transform.k}
                     textAnchor="middle"
                     fontSize={8 / transform.k}
                     fill={MILITIA_COLOR}

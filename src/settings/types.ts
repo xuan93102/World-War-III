@@ -1,17 +1,30 @@
 export type Language = 'zh-TW' | 'zh-CN' | 'en';
 export type Theme = 'dark' | 'darkBlue' | 'light';
 export type FontScale = 'small' | 'medium' | 'large';
+/** Flat top-down map, or the same map tilted back into a 3D-looking board. */
+export type MapMode = '2d' | '3d';
 
 export interface Settings {
   language: Language;
   theme: Theme;
   fontScale: FontScale;
+  mapMode: MapMode;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   language: 'zh-TW',
   theme: 'dark',
   fontScale: 'medium',
+  mapMode: '2d',
+};
+
+/**
+ * How much the ground plane is squashed vertically in 3D mode — the cosine of
+ * the viewing angle, so 0.62 is looking down at about 52°. 1 is dead flat.
+ */
+export const MAP_TILT: Record<MapMode, number> = {
+  '2d': 1,
+  '3d': 0.62,
 };
 
 export const FONT_SCALE_VALUES: Record<FontScale, number> = {
