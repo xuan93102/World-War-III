@@ -15,6 +15,10 @@ interface MapViewProps {
   gameState: GameState;
   players: PlayerState[];
   selectedRegionId: string | null;
+  /** Regions a pending march would walk through, in order. */
+  marchRoute: string[] | null;
+  /** Where that route starts. */
+  routeFrom: string | null;
   onSelectRegion: (regionId: string) => void;
 }
 
@@ -56,6 +60,8 @@ const PASS_LOCKED_DARK = '#41464d';
 const MODEL_OUTLINE = '#12161c';
 // On-screen diameter of the counter marking an army in transit.
 const MARCH_MARKER_PX = 20;
+// The dashed line previewing where a march would go.
+const ROUTE_COLOR = '#ffd54a';
 const PASS_COLOR = '#e08a3d';
 
 const WORLD_PADDING = 20;
@@ -181,7 +187,14 @@ function rotatedExtent(
   ];
 }
 
-export function MapView({ gameState, players, selectedRegionId, onSelectRegion }: MapViewProps) {
+export function MapView({
+  gameState,
+  players,
+  selectedRegionId,
+  marchRoute,
+  routeFrom,
+  onSelectRegion,
+}: MapViewProps) {
   const { settings, t } = useSettings();
   const themeColors = THEMES[settings.theme];
   // Label text needs to contrast against the region fill, which is dark on
@@ -704,6 +717,34 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
               </g>
             );
           })}
+
+          {/* The route a pending march would walk, drawn stop by stop so it's
+              clear the column passes through real ground rather than jumping
+              to the far end. */}
+          {routeFrom && marchRoute && marchRoute.length > 0 && (
+            <g pointerEvents="none">
+              {marchRoute.map((step, i) => {
+                const prev = i === 0 ? routeFrom : marchRoute[i - 1];
+                const a = project(getRegion(prev).cx, getRegion(prev).cy);
+                const b = project(getRegion(step).cx, getRegion(step).cy);
+                return (
+                  <g key={step}>
+                    <line
+                      x1={a.x}
+                      y1={a.y}
+                      x2={b.x}
+                      y2={b.y}
+                      stroke={ROUTE_COLOR}
+                      strokeWidth={3 / transform.k}
+                      strokeDasharray={`${5 / transform.k} ${4 / transform.k}`}
+                      strokeLinecap="round"
+                    />
+                    <circle cx={b.x} cy={b.y} r={3 / transform.k} fill={ROUTE_COLOR} />
+                  </g>
+                );
+              })}
+            </g>
+          )}
 
           {/* Armies on the road (docs 8). Drawn at the point they've actually
               reached between the two regions, so march time is something you

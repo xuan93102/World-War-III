@@ -13,6 +13,7 @@ import { FOOD_PER_MIN_BY_SIZE, MILITIA_BY_SIZE, landSizeOf, safeZoneAround } fro
 import { UNITS, totalUnits, type UnitCounts, type UnitType } from './units';
 import {
   addUnits,
+  findPath,
   marchSeconds,
   stackContains,
   subtractUnits,
@@ -143,6 +144,43 @@ export class GameEngine {
     return marchSeconds(from, to);
   }
 
+  /**
+   * Whether an army of `playerId` can stand in this region. Enemy ground and
+   * garrisoned neutral ground would both have to be fought for, and combat
+   * resolution (docs 6.2) doesn't exist yet — so for now a march routes around
+   * them rather than into them.
+   */
+  private canEnter(regionId: string, playerId: PlayerId): boolean {
+    const region = this.state.regions[regionId];
+    if (!region) return false;
+    if (region.owner !== null && region.owner !== playerId) return false;
+    // Your own regions are always open, garrison or not — that's how
+    // reinforcements reach the front.
+    if (region.owner === null && totalUnits(region.units) > 0) return false;
+    return true;
+  }
+
+  /** The route a march would take, or null if there's no legal way through. */
+  marchRoute(from: string, to: string, playerId: PlayerId): string[] | null {
+    return findPath(
+      from,
+      to,
+      (id) => this.canEnter(id, playerId),
+      (a, b) => terrainRejection(a, b) === null,
+    );
+  }
+
+  /** Total seconds for a whole route, summing each hop. */
+  routeSeconds(from: string, route: string[]): number {
+    let total = 0;
+    let at = from;
+    for (const step of route) {
+      total += marchSeconds(at, step);
+      at = step;
+    }
+    return total;
+  }
+
   marchRejection(
     from: string,
     to: string,
@@ -152,34 +190,34 @@ export class GameEngine {
     const origin = this.state.regions[from];
     if (!origin || origin.owner !== playerId) return 'notOwner';
     if (!stackContains(origin.units, units)) return 'noUnits';
-    const terrain = terrainRejection(from, to);
-    if (terrain) return terrain;
-    // Arriving where someone would have to be fought isn't possible yet:
-    // combat resolution (docs 6.2) is the next piece of work. Until it lands,
-    // marching is limited to your own ground and to empty neutral land, which
-    // is exactly the capture loop and nothing more.
-    const target = this.state.regions[to];
-    const hostile =
-      // Someone else's ground, or neutral ground with a garrison standing on
-      // it. Your own regions are always open, garrison or not — that's how
-      // reinforcements reach the front.
-      (target.owner !== null && target.owner !== playerId) ||
-      (target.owner === null && totalUnits(target.units) > 0);
-    if (hostile) return 'contested';
-    return null;
+    if (from === to) return 'notAdjacent';
+    if (this.marchRoute(from, to, playerId) !== null) return null;
+    // No route. Say which wall they hit: a sealed pass reads very differently
+    // from "there's an army in the way", and both are actionable.
+    if (terrainRejection(from, to) === 'passLocked') return 'passLocked';
+    if (!this.canEnter(to, playerId)) return 'contested';
+    return 'noRoute';
   }
 
-  /** Sends part of a region's garrison to an adjacent one. Returns the order. */
+  /**
+   * Sends part of a region's garrison to another region, however far. The army
+   * walks the route one hop at a time.
+   */
   startMarch(from: string, to: string, playerId: PlayerId, units: UnitCounts): March | null {
     if (this.marchRejection(from, to, playerId, units) !== null) return null;
+    const route = this.marchRoute(from, to, playerId);
+    if (!route || route.length === 0) return null;
     const origin = this.state.regions[from];
     origin.units = subtractUnits(origin.units, units);
-    const seconds = marchSeconds(from, to);
+    const [next, ...rest] = route;
+    const seconds = marchSeconds(from, next);
     const march: March = {
       id: `m${this.nextMarchId++}`,
       playerId,
       from,
-      to,
+      to: next,
+      route: rest,
+      destination: to,
       units: { ...units },
       totalSeconds: seconds,
       remainingSeconds: seconds,
@@ -204,15 +242,40 @@ export class GameEngine {
       .reduce((sum, m) => sum + totalUnits(m.units), 0);
   }
 
-  private arrive(march: March): void {
+  /**
+   * Ends the current hop. The army really enters `march.to` — taking it if
+   * it's empty neutral land — and then either stops there or sets off on the
+   * next leg. Returns true when the whole march is done.
+   *
+   * Entering for real at every stop is the point: it's what will let an enemy
+   * standing on the route intercept the column (docs 6.2, once combat exists)
+   * instead of watching it teleport past.
+   */
+  private completeHop(march: March): boolean {
     const target = this.state.regions[march.to];
     // Walking into empty neutral land takes it — that's the capture rule from
-    // docs 3.3, now reachable for the first time. setRegionOwner clears the
-    // region's units, so claim first and land the army after.
+    // docs 3.3. setRegionOwner clears the region's units, so claim first and
+    // land the army after.
     if (target.owner === null && totalUnits(target.units) === 0) {
       this.setRegionOwner(march.to, march.playerId);
     }
-    target.units = addUnits(target.units, march.units);
+
+    const next = march.route[0];
+    // Journey over, or the road ahead closed while we were walking (someone
+    // took the next region). Either way the army stops here.
+    if (next === undefined || !this.canEnter(next, march.playerId)) {
+      target.units = addUnits(target.units, march.units);
+      return true;
+    }
+
+    march.from = march.to;
+    march.to = next;
+    march.route = march.route.slice(1);
+    march.totalSeconds = marchSeconds(march.from, march.to);
+    // Carry the overshoot into the next leg so a long march doesn't gain a
+    // fraction of a second at every stop.
+    march.remainingSeconds += march.totalSeconds;
+    return false;
   }
 
   ownedRegions(playerId: PlayerId): RegionState[] {
@@ -563,8 +626,12 @@ export class GameEngine {
       const stillMoving: March[] = [];
       for (const march of this.state.marches) {
         march.remainingSeconds -= deltaSeconds;
-        if (march.remainingSeconds <= 0) this.arrive(march);
-        else stillMoving.push(march);
+        // A loop, not an `if`: one tick can span several short hops.
+        let done = false;
+        while (!done && march.remainingSeconds <= 0) {
+          done = this.completeHop(march);
+        }
+        if (!done) stillMoving.push(march);
       }
       this.state.marches = stillMoving;
     }

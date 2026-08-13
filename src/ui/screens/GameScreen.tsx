@@ -34,6 +34,11 @@ export function GameScreen({
 
   const [, forceRender] = useState(0);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
+  // While picking a march destination, map clicks choose the target instead of
+  // changing which region the panel is showing — otherwise selecting the
+  // destination would navigate away from the panel issuing the order.
+  const [marchTarget, setMarchTarget] = useState<string | null>(null);
+  const [pickingMarch, setPickingMarch] = useState(false);
   const [paused, setPaused] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const lastTimeRef = useRef<number>(performance.now());
@@ -117,7 +122,16 @@ export function GameScreen({
             gameState={engine.state}
             players={players}
             selectedRegionId={selectedRegionId}
-            onSelectRegion={setSelectedRegionId}
+            marchRoute={
+              pickingMarch && selectedRegionId && marchTarget
+                ? engine.marchRoute(selectedRegionId, marchTarget, humanPlayerId)
+                : null
+            }
+            routeFrom={pickingMarch ? selectedRegionId : null}
+            onSelectRegion={(id) => {
+              if (pickingMarch) setMarchTarget(id);
+              else setSelectedRegionId(id);
+            }}
           />
           {paused && !isOver && (
             <div className="pause-overlay">
@@ -130,6 +144,12 @@ export function GameScreen({
           players={players}
           humanPlayerId={humanPlayerId}
           selectedRegionId={selectedRegionId}
+          marchTarget={marchTarget}
+          pickingMarch={pickingMarch}
+          onPickMarch={(picking) => {
+            setPickingMarch(picking);
+            if (!picking) setMarchTarget(null);
+          }}
           onClaim={(regionId, owner) => {
             engine.setRegionOwner(regionId, owner);
             forceRender((n) => n + 1);
@@ -148,6 +168,8 @@ export function GameScreen({
           }}
           onMarch={(from, to, units) => {
             engine.startMarch(from, to, humanPlayerId, units);
+            setPickingMarch(false);
+            setMarchTarget(null);
             forceRender((n) => n + 1);
           }}
           onCancelBuild={(regionId) => {

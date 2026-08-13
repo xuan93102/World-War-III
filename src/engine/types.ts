@@ -70,9 +70,20 @@ export interface PlayerState {
 export interface March {
   id: string;
   playerId: PlayerId;
+  /** Where the current hop started. */
   from: string;
+  /** The region this hop ends in — the *next* stop, not the final one. */
   to: string;
+  /**
+   * Regions still to enter after `to`, in order. A long march is walked one
+   * hop at a time, genuinely entering each region on the way, so an enemy can
+   * intercept it by standing on the route.
+   */
+  route: string[];
+  /** Where the whole march is headed; equals `to` on the final leg. */
+  destination: string;
   units: UnitCounts;
+  /** Duration of the current hop. */
   totalSeconds: number;
   remainingSeconds: number;
 }

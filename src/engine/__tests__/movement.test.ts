@@ -11,6 +11,8 @@ import { totalUnits } from '../units';
 // core, sits in the ungarrisoned safe zone (docs 3.3).
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
+// Two hops from the core, so outside the safe zone and garrisoned by default.
+const FAR = 'taipei-4';
 // The 北宜 pass, from the generated map data.
 const PASS_FROM = 'newtaipei-5';
 const PASS_TO = 'yilan-2';
@@ -53,9 +55,29 @@ describe('march orders', () => {
     expect(g.marchRejection(CORE, NEXT_DOOR, 'p1', { militia: 2 })).toBeNull();
   });
 
-  it('only moves between neighbours', () => {
+  it('rejects marching to where you already are', () => {
     const g = withTroops(newGame());
-    expect(g.marchRejection(CORE, 'kaohsiung-1', 'p1', { militia: 1 })).toBe('notAdjacent');
+    expect(g.marchRejection(CORE, CORE, 'p1', { militia: 1 })).toBe('notAdjacent');
+  });
+
+  it('reaches past the next region, routing hop by hop', () => {
+    const g = withTroops(newGame(), 3);
+    // Two hops out; clear its garrison so there's a legal way in.
+    g.state.regions[FAR].units = {};
+    const route = g.marchRoute(CORE, FAR, 'p1');
+    expect(route, 'two hops').toHaveLength(2);
+    expect(route?.at(-1)).toBe(FAR);
+    expect(g.routeSeconds(CORE, route!), 'time is the sum of the hops').toBe(
+      2 * MARCH_SECONDS_PER_HOP,
+    );
+    expect(g.marchRejection(CORE, FAR, 'p1', { militia: 3 })).toBeNull();
+  });
+
+  it('finds no way through ground that would have to be fought for', () => {
+    const g = withTroops(newGame());
+    // The enemy core is walled off by garrisoned neutral land in every
+    // direction, so there's simply no legal route to it yet.
+    expect(g.marchRejection(CORE, 'kaohsiung-1', 'p1', { militia: 1 })).toBe('contested');
   });
 
   it('seals mountain passes until the road tech exists', () => {
@@ -135,6 +157,39 @@ describe('arrival', () => {
     g.tick(MARCH_SECONDS_PER_HOP);
     expect(totalUnits(g.state.regions[NEXT_DOOR].units), 'both waves').toBe(6);
     expect(g.state.marches, 'road is clear').toHaveLength(0);
+  });
+
+  // The whole point of walking the route rather than skipping to the end: the
+  // army is really in each region on the way, which is where an enemy will be
+  // able to intercept it once combat exists.
+  it('enters every region along the way, not just the ends', () => {
+    const g = withTroops(newGame(), 3);
+    g.state.regions[FAR].units = {};
+    const route = g.marchRoute(CORE, FAR, 'p1')!;
+    g.startMarch(CORE, FAR, 'p1', { militia: 3 });
+
+    g.tick(MARCH_SECONDS_PER_HOP);
+    expect(g.state.regions[route[0]].owner, 'took the region it passed through').toBe('p1');
+    expect(g.state.marches, 'still on the road').toHaveLength(1);
+    expect(totalUnits(g.state.regions[FAR].units), 'not there yet').toBe(0);
+
+    g.tick(MARCH_SECONDS_PER_HOP);
+    expect(g.state.regions[FAR].owner, 'arrived').toBe('p1');
+    expect(totalUnits(g.state.regions[FAR].units)).toBe(3);
+    expect(g.state.marches).toHaveLength(0);
+  });
+
+  it('halts where it stands if the road ahead closes mid-march', () => {
+    const g = withTroops(newGame(), 3);
+    g.state.regions[FAR].units = {};
+    const route = g.marchRoute(CORE, FAR, 'p1')!;
+    g.startMarch(CORE, FAR, 'p1', { militia: 3 });
+    // Someone garrisons the destination while the column is still walking.
+    g.state.regions[FAR].units = { militia: 2 };
+
+    g.tick(MARCH_SECONDS_PER_HOP);
+    expect(g.state.marches, 'stopped short rather than walking into it').toHaveLength(0);
+    expect(totalUnits(g.state.regions[route[0]].units), 'holds where it got to').toBe(3);
   });
 
   it('lands mixed stacks intact', () => {

@@ -215,6 +215,9 @@ const zhTW = {
   'march.outgoing': '行軍中',
   'march.incoming': '前來增援',
   'march.eta': '{n}秒後抵達',
+  'march.pickFar': '選擇遠方目的地…',
+  'march.pickingOnMap': '請在地圖上點選目的地（再按一次取消）',
+  'march.routeSummary': '前往 {to}：{hops} 格，共 {n} 秒',
 };
 
 const zhCN: Record<keyof typeof zhTW, string> = {
@@ -432,6 +435,9 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'march.outgoing': '行军中',
   'march.incoming': '前来增援',
   'march.eta': '{n}秒后抵达',
+  'march.pickFar': '选择远方目的地…',
+  'march.pickingOnMap': '请在地图上点选目的地（再按一次取消）',
+  'march.routeSummary': '前往 {to}：{hops} 格，共 {n} 秒',
 };
 
 const en: Record<keyof typeof zhTW, string> = {
@@ -649,6 +655,9 @@ const en: Record<keyof typeof zhTW, string> = {
   'march.outgoing': 'Departing',
   'march.incoming': 'Incoming',
   'march.eta': 'arrives in {n}s',
+  'march.pickFar': 'Pick a distant target…',
+  'march.pickingOnMap': 'Click a region on the map (click again to cancel)',
+  'march.routeSummary': 'To {to}: {hops} hops, {n}s total',
 };
 
 export type TranslationKey = keyof typeof zhTW;

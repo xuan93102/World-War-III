@@ -21,7 +21,8 @@ export type MarchRejection =
   | 'notAdjacent'
   | 'noUnits'
   | 'passLocked'
-  | 'contested';
+  | 'contested'
+  | 'noRoute';
 
 /** Seconds for one hop between two adjacent regions. */
 export function marchSeconds(from: string, to: string): number {
@@ -41,6 +42,60 @@ export function terrainRejection(from: string, to: string): MarchRejection | nul
   // Sealed until the tech exists (docs 3.2). hasMountainRoad() is the single
   // place that question is asked.
   if (isMountainPass(from, to) && !hasMountainRoad()) return 'passLocked';
+  return null;
+}
+
+/**
+ * Shortest route between two regions, as the list of regions to enter in
+ * order (excluding `from`, including `to`). Returns null when no legal route
+ * exists.
+ *
+ * A multi-hop march is a *sequence of single hops* — the army genuinely enters
+ * each region on the way rather than skipping from end to end. That's what
+ * gives interception something to bite on: an enemy parks on your route and
+ * your column walks into them. Without real intermediate stops there'd be
+ * nowhere to stand to intercept.
+ *
+ * `canEnter` and `canCross` are supplied by the engine, which is the thing
+ * that knows who holds what.
+ */
+export function findPath(
+  from: string,
+  to: string,
+  canEnter: (regionId: string) => boolean,
+  canCross: (a: string, b: string) => boolean,
+): string[] | null {
+  if (from === to) return null;
+  const cameFrom = new Map<string, string>();
+  const seen = new Set<string>([from]);
+  let frontier = [from];
+
+  while (frontier.length > 0) {
+    const next: string[] = [];
+    for (const current of frontier) {
+      for (const neighbor of getRegion(current).neighbors) {
+        if (seen.has(neighbor)) continue;
+        if (!canCross(current, neighbor)) continue;
+        // The destination only has to be enterable, not passable-through —
+        // they're the same test today, but keeping the check here means an
+        // "attack this region" order can relax it later without touching BFS.
+        if (!canEnter(neighbor)) continue;
+        seen.add(neighbor);
+        cameFrom.set(neighbor, current);
+        if (neighbor === to) {
+          const route = [to];
+          let step = to;
+          while (cameFrom.get(step) !== from) {
+            step = cameFrom.get(step)!;
+            route.unshift(step);
+          }
+          return route;
+        }
+        next.push(neighbor);
+      }
+    }
+    frontier = next;
+  }
   return null;
 }
 

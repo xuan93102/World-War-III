@@ -20,6 +20,9 @@ interface RegionPanelProps {
   onTrain: (regionId: string, type: UnitType, count: number) => void;
   onUpgrade: (regionId: string, type: UnitType, count: number) => void;
   onMarch: (from: string, to: string, units: UnitCounts) => void;
+  marchTarget: string | null;
+  pickingMarch: boolean;
+  onPickMarch: (picking: boolean) => void;
   onCancelBuild: (regionId: string) => void;
   onDemolish: (regionId: string) => void;
 }
@@ -49,6 +52,9 @@ export function RegionPanel({
   onTrain,
   onUpgrade,
   onMarch,
+  marchTarget,
+  pickingMarch,
+  onPickMarch,
   onCancelBuild,
   onDemolish,
 }: RegionPanelProps) {
@@ -107,6 +113,9 @@ export function RegionPanel({
         engine={engine}
         regionId={selectedRegionId}
         playerId={humanPlayerId}
+        marchTarget={marchTarget}
+        pickingMarch={pickingMarch}
+        onPickMarch={onPickMarch}
         onMarch={onMarch}
       />
 

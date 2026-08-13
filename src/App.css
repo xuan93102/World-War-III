@@ -1125,3 +1125,14 @@
     font-size: 2rem;
   }
 }
+
+/* Summary of a pending march: where, how many hops, how long. */
+.march-route {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}

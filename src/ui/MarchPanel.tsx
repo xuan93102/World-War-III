@@ -10,6 +10,10 @@ interface MarchPanelProps {
   engine: GameEngine;
   regionId: string;
   playerId: string;
+  /** Destination chosen by clicking the map, while picking is active. */
+  marchTarget: string | null;
+  pickingMarch: boolean;
+  onPickMarch: (picking: boolean) => void;
   onMarch: (from: string, to: string, units: UnitCounts) => void;
 }
 
@@ -19,9 +23,17 @@ const REJECTION_KEY: Partial<Record<MarchRejection, TranslationKey>> = {
   contested: 'march.reject.contested',
 };
 
-export function MarchPanel({ engine, regionId, playerId, onMarch }: MarchPanelProps) {
+export function MarchPanel({
+  engine,
+  regionId,
+  playerId,
+  marchTarget,
+  pickingMarch,
+  onPickMarch,
+  onMarch,
+}: MarchPanelProps) {
   const { t } = useSettings();
-  const [target, setTarget] = useState<string | null>(null);
+  const [nearby, setNearby] = useState<string | null>(null);
   const [counts, setCounts] = useState<UnitCounts>({});
 
   const region = engine.state.regions[regionId];
@@ -29,6 +41,11 @@ export function MarchPanel({ engine, regionId, playerId, onMarch }: MarchPanelPr
   const available = UNIT_ORDER.filter((type) => (stationed[type] ?? 0) > 0);
 
   if (region.owner !== playerId) return null;
+
+  // While picking on the map the map's choice wins; otherwise it's whichever
+  // neighbouring chip was tapped.
+  const target = pickingMarch ? marchTarget : nearby;
+  const route = target ? engine.marchRoute(regionId, target, playerId) : null;
 
   const setCount = (type: UnitType, next: number) => {
     const capped = Math.max(0, Math.min(stationed[type] ?? 0, next));
@@ -43,6 +60,7 @@ export function MarchPanel({ engine, regionId, playerId, onMarch }: MarchPanelPr
   const chosen = totalUnits(counts);
   const rejection = target ? engine.marchRejection(regionId, target, playerId, counts) : null;
   const canGo = target !== null && chosen > 0 && rejection === null;
+  const totalSeconds = route ? engine.routeSeconds(regionId, route) : 0;
 
   return (
     <section className="march-section">
@@ -66,7 +84,10 @@ export function MarchPanel({ engine, regionId, playerId, onMarch }: MarchPanelPr
                   className={`march-target${target === id ? ' is-selected' : ''}`}
                   disabled={blocked}
                   title={key ? t(key) : undefined}
-                  onClick={() => setTarget(id)}
+                  onClick={() => {
+                    onPickMarch(false);
+                    setNearby(id);
+                  }}
                 >
                   <span className="march-target-name">{getRegion(id).name}</span>
                   <span className="march-target-time">{engine.marchSeconds(regionId, id)}s</span>
@@ -102,6 +123,32 @@ export function MarchPanel({ engine, regionId, playerId, onMarch }: MarchPanelPr
             })}
           </div>
 
+          {/* Anywhere reachable, not just next door — the route is walked hop
+              by hop, so a far target is a long column, not a teleport. */}
+          <button
+            className={`btn btn-sm${pickingMarch ? ' btn-primary' : ''}`}
+            onClick={() => {
+              onPickMarch(!pickingMarch);
+              setNearby(null);
+            }}
+          >
+            {pickingMarch ? t('march.pickingOnMap') : t('march.pickFar')}
+          </button>
+
+          {target && route && (
+            <p className="march-route">
+              {t('march.routeSummary')
+                .replace('{to}', getRegion(target).name)
+                .replace('{hops}', String(route.length))
+                .replace('{n}', String(totalSeconds))}
+            </p>
+          )}
+          {target && !route && (
+            <p className="hint-text">
+              {t(rejection === 'passLocked' ? 'march.reject.passLocked' : 'march.reject.contested')}
+            </p>
+          )}
+
           <button
             className="btn btn-primary btn-sm"
             disabled={!canGo}
@@ -109,11 +156,11 @@ export function MarchPanel({ engine, regionId, playerId, onMarch }: MarchPanelPr
               if (!target) return;
               onMarch(regionId, target, counts);
               setCounts({});
-              setTarget(null);
+              setNearby(null);
             }}
           >
-            {target
-              ? `${t('march.depart')}・${getRegion(target).name}（${engine.marchSeconds(regionId, target)}s）`
+            {target && route
+              ? `${t('march.depart')}・${getRegion(target).name}（${totalSeconds}s）`
               : t('march.pickTarget')}
           </button>
           <p className="hint-text">{t('march.hint')}</p>
