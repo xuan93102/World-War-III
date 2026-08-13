@@ -2,7 +2,6 @@ import type { Language } from './types';
 
 const zhTW = {
   'game.title': 'Salient',
-  'game.subtitle': '台灣戰略對局',
 
   'menu.start': '開始遊戲',
   'menu.settings': '設定',
@@ -233,7 +232,6 @@ const zhTW = {
 
 const zhCN: Record<keyof typeof zhTW, string> = {
   'game.title': 'Salient',
-  'game.subtitle': '台湾战略对局',
 
   'menu.start': '开始游戏',
   'menu.settings': '设置',
@@ -464,7 +462,6 @@ const zhCN: Record<keyof typeof zhTW, string> = {
 
 const en: Record<keyof typeof zhTW, string> = {
   'game.title': 'Salient',
-  'game.subtitle': 'A Taiwan Strategy Match',
 
   'menu.start': 'Start Game',
   'menu.settings': 'Settings',

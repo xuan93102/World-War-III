@@ -83,12 +83,6 @@
   letter-spacing: 0.06em;
 }
 
-.game-subtitle {
-  margin: 6px 0 0;
-  color: var(--text-dim);
-  font-size: 0.95rem;
-}
-
 .screen-title {
   margin: 0;
   font-size: 1.5rem;

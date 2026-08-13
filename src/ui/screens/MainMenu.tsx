@@ -12,7 +12,6 @@ export function MainMenu({ onStart, onSettings, onHelp }: MainMenuProps) {
     <div className="screen screen-centered">
       <div className="title-block">
         <h1 className="game-title">{t('game.title')}</h1>
-        <p className="game-subtitle">{t('game.subtitle')}</p>
       </div>
       <div className="menu-buttons">
         <button className="btn btn-primary btn-lg" onClick={onStart}>
