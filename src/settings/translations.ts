@@ -96,7 +96,7 @@ const zhTW = {
   'help.rulesMountain': '中央山脈把東西部隔開，只有5個穿山點可以通行。',
   'help.rulesWonder': '蓋出奇觀並守住3分鐘即可獲勝。',
 
-  'help.notImplemented': '尚未實作：戰鬥結算、行軍、資重、科技樹、偵查與PVP連線。目前可用面板下方的 debug 按鈕直接指定地塊歸屬，以便測試。',
+  'help.notImplemented': '尚未實作：戰鬥結算、資重、科技樹、偵查與PVP連線。行軍已可使用，但路上的攔截尚未實作。目前可用面板下方的 debug 按鈕直接指定地塊歸屬，以便測試。',
 
   'game.regions': '區塊',
   'game.population': '人口',
@@ -212,7 +212,8 @@ const zhTW = {
   'march.hint': '部隊在路上時仍佔用人口。走進沒有守軍的中立地塊即完成佔領。',
   'march.reject.passLocked': '穿山點尚未開通，需要「山地公路」科技',
   'march.reject.contested': '該地有敵軍或中立守軍——戰鬥系統尚未實作',
-  'march.inTransit': '行軍中',
+  'march.outgoing': '行軍中',
+  'march.incoming': '前來增援',
   'march.eta': '{n}秒後抵達',
 };
 
@@ -312,7 +313,7 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'help.rulesMountain': '中央山脉把东西部隔开，只有5个穿山点可以通行。',
   'help.rulesWonder': '盖出奇观并守住3分钟即可获胜。',
 
-  'help.notImplemented': '尚未实作：战斗结算、行军、资重、科技树、侦查与PVP连线。目前可用面板下方的 debug 按钮直接指定地块归属，以便测试。',
+  'help.notImplemented': '尚未实作：战斗结算、资重、科技树、侦查与PVP连线。行军已可使用，但路上的拦截尚未实作。目前可用面板下方的 debug 按钮直接指定地块归属，以便测试。',
 
   'game.regions': '区块',
   'game.population': '人口',
@@ -428,7 +429,8 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'march.hint': '部队在路上时仍占用人口。走进没有守军的中立地块即完成占领。',
   'march.reject.passLocked': '穿山点尚未开通，需要「山地公路」科技',
   'march.reject.contested': '该地有敌军或中立守军——战斗系统尚未实作',
-  'march.inTransit': '行军中',
+  'march.outgoing': '行军中',
+  'march.incoming': '前来增援',
   'march.eta': '{n}秒后抵达',
 };
 
@@ -528,7 +530,7 @@ const en: Record<keyof typeof zhTW, string> = {
   'help.rulesMountain': 'The Central Mountain Range splits east from west — only 5 passes cross it.',
   'help.rulesWonder': 'Build a wonder and hold it for 3 minutes to win.',
 
-  'help.notImplemented': 'Not yet built: combat resolution, marching, supply, the tech tree, scouting and PvP networking. For now the debug buttons at the bottom of the side panel set region ownership directly, for testing.',
+  'help.notImplemented': 'Not yet built: combat resolution, supply, the tech tree, scouting and PvP networking. Marching works, but armies on the road cannot be intercepted yet. For now the debug buttons at the bottom of the side panel set region ownership directly, for testing.',
 
   'game.regions': 'Regions',
   'game.population': 'Pop',
@@ -644,7 +646,8 @@ const en: Record<keyof typeof zhTW, string> = {
   'march.hint': 'Troops on the road still take population. Walking into ungarrisoned neutral land captures it.',
   'march.reject.passLocked': 'The pass is sealed until Mountain Highway is researched',
   'march.reject.contested': 'Enemies or a neutral garrison hold it — combat isn’t built yet',
-  'march.inTransit': 'On the march',
+  'march.outgoing': 'Departing',
+  'march.incoming': 'Incoming',
   'march.eta': 'arrives in {n}s',
 };
 

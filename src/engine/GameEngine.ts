@@ -188,6 +188,15 @@ export class GameEngine {
     return march;
   }
 
+  /**
+   * Marches leaving or heading for a region. Troops on the road belong to no
+   * region, so this is how a region can still account for the troops that just
+   * left it and the ones on their way in.
+   */
+  marchesInvolving(regionId: string): March[] {
+    return this.state.marches.filter((m) => m.from === regionId || m.to === regionId);
+  }
+
   /** Troops this player has on the road, by unit type. */
   marchingUnits(playerId: PlayerId): number {
     return this.state.marches

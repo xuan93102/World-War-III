@@ -1,4 +1,5 @@
 import { UNITS, UNIT_ORDER, totalUnits, type UnitType } from '../engine/units';
+import { getRegion } from '../engine/regions';
 import { useSettings } from '../settings/useSettings';
 import type { GameEngine } from '../engine/GameEngine';
 
@@ -31,6 +32,30 @@ export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: Un
           ))
         )}
       </div>
+
+      {/* Troops that have left here, or are on their way in. They're on the
+          road and count for neither region's garrison, so without this the
+          origin just reads "no garrison" the instant an army sets off. */}
+      {engine.marchesInvolving(regionId).map((march) => {
+        const outbound = march.from === regionId;
+        return (
+          <div key={march.id} className="unit-transit">
+            <span className="unit-transit-label">
+              {t(outbound ? 'march.outgoing' : 'march.incoming')}
+            </span>
+            <span className="unit-transit-body">
+              {UNIT_ORDER.filter((type) => (march.units[type] ?? 0) > 0)
+                .map((type) => `${t(UNITS[type].nameKey)} ×${march.units[type]}`)
+                .join('、')}
+              {outbound ? ' → ' : ' ← '}
+              {getRegion(outbound ? march.to : march.from).name}
+            </span>
+            <span className="unit-transit-eta">
+              {t('march.eta').replace('{n}', String(Math.ceil(march.remainingSeconds)))}
+            </span>
+          </div>
+        );
+      })}
 
       {isMine && (
         <div className="unit-actions">

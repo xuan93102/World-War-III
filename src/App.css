@@ -813,6 +813,36 @@
   gap: 8px;
 }
 
+/* Troops on the road, shown on both the region they left and the one they're
+   heading for — neither counts them as garrison while they travel. */
+.unit-transit {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  border: 1px dashed var(--border);
+  background: var(--bg);
+  font-size: 0.72rem;
+}
+
+.unit-transit-label {
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
+.unit-transit-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.unit-transit-eta {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 /* Destinations: one chip per neighbour, with the hop's cost on it. */
 .march-targets {
   display: flex;
