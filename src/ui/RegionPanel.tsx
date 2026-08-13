@@ -5,7 +5,6 @@ import { totalUnits, type UnitCounts, type UnitType } from '../engine/units';
 import { UnitPanel } from './UnitPanel';
 import { MarchPanel } from './MarchPanel';
 import { BattlePanel } from './BattlePanel';
-import { getRegion } from '../engine/regions';
 import { useSettings } from '../settings/useSettings';
 import type { TranslationKey } from '../settings/translations';
 import type { BuildRejection, GameEngine } from '../engine/GameEngine';
@@ -67,7 +66,7 @@ export function RegionPanel({
     return <div className="region-panel region-panel-empty">{t('game.selectHint')}</div>;
   }
 
-  const region = getRegion(selectedRegionId);
+  const region = engine.map.region(selectedRegionId);
   const regionState = engine.state.regions[selectedRegionId];
   const owner = regionState.owner ? players.find((p) => p.id === regionState.owner) : null;
   const isMine = regionState.owner === humanPlayerId;

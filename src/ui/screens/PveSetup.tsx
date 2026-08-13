@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { REGIONS, getRegion } from '../../engine/regions';
+import { DEFAULT_MAP_ID, MAPS, getMap } from '../../engine/maps';
 import { MIN_CORE_DISTANCE, validOpponentCores } from '../../engine/startingPositions';
 import { useSettings } from '../../settings/useSettings';
 import type { TranslationKey } from '../../settings/translations';
@@ -18,10 +18,6 @@ interface PveSetupProps {
   onBack: () => void;
 }
 
-const MAPS: { id: string; nameKey: TranslationKey; descKey: TranslationKey }[] = [
-  { id: 'taiwan', nameKey: 'pve.map.taiwan', descKey: 'pve.map.taiwanDesc' },
-];
-
 const DIFFICULTIES: { id: AiDifficulty; nameKey: TranslationKey; descKey: TranslationKey }[] = [
   { id: 'easy', nameKey: 'pve.difficulty.easy', descKey: 'pve.difficulty.easyDesc' },
   { id: 'normal', nameKey: 'pve.difficulty.normal', descKey: 'pve.difficulty.normalDesc' },
@@ -32,26 +28,33 @@ function pick<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-// Regions with no legal opponent placement can't be chosen at all — they'd
-// leave nowhere to put the AI. (東勢和平石岡 is the one such region: it sits
-// at the middle of the mountain-pass network, so nothing is far enough away.)
-const UNPICKABLE = new Set(REGIONS.filter((r) => validOpponentCores(r.id).length === 0).map((r) => r.id));
-const PICKABLE = REGIONS.filter((r) => !UNPICKABLE.has(r.id)).map((r) => r.id);
-
 export function PveSetup({ playerColor, opponentColor, onBegin, onBack }: PveSetupProps) {
   const { t } = useSettings();
-  const [mapId, setMapId] = useState(MAPS[0].id);
+  const [mapId, setMapId] = useState(DEFAULT_MAP_ID);
   const [difficulty, setDifficulty] = useState<AiDifficulty>('normal');
-  const [playerCore, setPlayerCore] = useState<string>(() => pick(PICKABLE));
+  const map = getMap(mapId);
+
+  // Regions with no legal opponent placement can't be chosen at all — they'd
+  // leave nowhere to put the AI. (On Taiwan that's 東勢和平石岡: it sits at the
+  // middle of the mountain-pass network, so nothing is far enough away.)
+  // Recomputed per map, since each has its own graph.
+  const { unpickable, pickable } = useMemo(() => {
+    const bad = new Set(
+      map.regions.filter((r) => validOpponentCores(map, r.id).length === 0).map((r) => r.id),
+    );
+    return { unpickable: bad, pickable: map.regions.filter((r) => !bad.has(r.id)).map((r) => r.id) };
+  }, [map]);
+
+  const [playerCore, setPlayerCore] = useState<string>(() => pick(pickable));
 
   // Re-rolled whenever the player's pick changes, so the shown opponent
   // position is always the one the match will actually start with.
   const opponentCore = useMemo(() => {
-    const candidates = validOpponentCores(playerCore);
+    const candidates = validOpponentCores(map, playerCore);
     return candidates.length > 0 ? pick(candidates) : null;
-  }, [playerCore]);
+  }, [map, playerCore]);
 
-  const selectRandom = () => setPlayerCore(pick(PICKABLE));
+  const selectRandom = () => setPlayerCore(pick(pickable));
 
   return (
     <div className="screen screen-centered">
@@ -61,11 +64,12 @@ export function PveSetup({ playerColor, opponentColor, onBegin, onBack }: PveSet
         <div className="field-label">{t('pve.startRegion')}</div>
         <p className="hint-text">{t('pve.startRegionHint')}</p>
         <MapPicker
+          map={map}
           selectedId={playerCore}
           opponentId={opponentCore}
-          disabledIds={UNPICKABLE}
+          disabledIds={unpickable}
           onSelect={(id) => {
-            if (!UNPICKABLE.has(id)) setPlayerCore(id);
+            if (!unpickable.has(id)) setPlayerCore(id);
           }}
           playerColor={playerColor}
           opponentColor={opponentColor}
@@ -73,12 +77,12 @@ export function PveSetup({ playerColor, opponentColor, onBegin, onBack }: PveSet
         <div className="picker-footer">
           <span>
             <span className="swatch" style={{ background: playerColor }} />
-            {t('pve.selected')}：{getRegion(playerCore).name}
+            {t('pve.selected')}：{map.region(playerCore).name}
             {opponentCore && (
               <>
                 {'　'}
                 <span className="swatch" style={{ background: opponentColor }} />
-                {t('game.ai')}：{getRegion(opponentCore).name}
+                {t('game.ai')}：{map.region(opponentCore).name}
               </>
             )}
           </span>

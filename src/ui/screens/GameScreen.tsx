@@ -122,6 +122,7 @@ export function GameScreen({
             gameState={engine.state}
             players={players}
             selectedRegionId={selectedRegionId}
+            map={engine.map}
             marchRoute={
               pickingMarch && selectedRegionId && marchTarget
                 ? engine.marchRoute(selectedRegionId, marchTarget, humanPlayerId)

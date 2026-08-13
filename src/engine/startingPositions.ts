@@ -1,4 +1,4 @@
-import { regionsAtLeastApart } from './pathfinding';
+import type { GameMap } from './maps';
 
 /**
  * Minimum hops required between the two starting cores.
@@ -12,14 +12,17 @@ import { regionsAtLeastApart } from './pathfinding';
  */
 export const MIN_CORE_DISTANCE = 6;
 
+// Keyed by map as well as region: two maps may reuse a region id, and the
+// answer is only valid for the graph it was computed on.
 const cache = new Map<string, string[]>();
 
 /** Regions far enough from `playerCore` to host the opposing core. */
-export function validOpponentCores(playerCore: string): string[] {
-  let cached = cache.get(playerCore);
+export function validOpponentCores(map: GameMap, playerCore: string): string[] {
+  const key = `${map.id}:${playerCore}`;
+  let cached = cache.get(key);
   if (!cached) {
-    cached = regionsAtLeastApart(playerCore, MIN_CORE_DISTANCE);
-    cache.set(playerCore, cached);
+    cached = map.regionsAtLeastApart(playerCore, MIN_CORE_DISTANCE);
+    cache.set(key, cached);
   }
   return cached;
 }

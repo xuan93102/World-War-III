@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { getRegion } from '../engine/regions';
 import { UNITS, UNIT_ORDER, totalUnits, type UnitCounts, type UnitType } from '../engine/units';
 import { useSettings } from '../settings/useSettings';
 import type { TranslationKey } from '../settings/translations';
@@ -71,7 +70,7 @@ export function MarchPanel({
       ) : (
         <>
           <div className="march-targets">
-            {getRegion(regionId).neighbors.map((id) => {
+            {engine.map.region(regionId).neighbors.map((id) => {
               // Judge the destination on its own terms, not on the current
               // (possibly empty) selection, so the list reads the same before
               // you've picked any troops.
@@ -92,7 +91,7 @@ export function MarchPanel({
                     setNearby(id);
                   }}
                 >
-                  <span className="march-target-name">{getRegion(id).name}</span>
+                  <span className="march-target-name">{engine.map.region(id).name}</span>
                   {isAttack && <span className="march-target-attack">{t('march.attack')}</span>}
                   <span className="march-target-time">{engine.marchSeconds(regionId, id)}s</span>
                 </button>
@@ -142,7 +141,7 @@ export function MarchPanel({
           {target && route && (
             <p className="march-route">
               {t('march.routeSummary')
-                .replace('{to}', getRegion(target).name)
+                .replace('{to}', engine.map.region(target).name)
                 .replace('{hops}', String(route.length))
                 .replace('{n}', String(totalSeconds))}
             </p>
@@ -164,7 +163,7 @@ export function MarchPanel({
             }}
           >
             {target && route
-              ? `${t('march.depart')}・${getRegion(target).name}（${totalSeconds}s）`
+              ? `${t('march.depart')}・${engine.map.region(target).name}（${totalSeconds}s）`
               : t('march.pickTarget')}
           </button>
           <p className="hint-text">{t('march.hint')}</p>

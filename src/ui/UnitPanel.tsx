@@ -1,5 +1,4 @@
 import { UNITS, UNIT_ORDER, totalUnits, type UnitType } from '../engine/units';
-import { getRegion } from '../engine/regions';
 import { useSettings } from '../settings/useSettings';
 import type { GameEngine } from '../engine/GameEngine';
 
@@ -48,7 +47,7 @@ export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: Un
                 .map((type) => `${t(UNITS[type].nameKey)} ×${march.units[type]}`)
                 .join('、')}
               {outbound ? ' → ' : ' ← '}
-              {getRegion(outbound ? march.to : march.from).name}
+              {engine.map.region(outbound ? march.to : march.from).name}
             </span>
             <span className="unit-transit-eta">
               {t('march.eta').replace('{n}', String(Math.ceil(march.remainingSeconds)))}

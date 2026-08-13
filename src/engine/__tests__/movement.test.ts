@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { MARCH_SECONDS_PER_HOP, MARCH_SECONDS_VIA_PASS, marchSeconds } from '../movement';
 import { totalUnits } from '../units';
+import { TAIWAN } from '../maps';
 
 // taipei-1 is p1's core; taipei-2 is adjacent to it and, being one hop from a
 // core, sits in the ungarrisoned safe zone (docs 3.3).
@@ -33,12 +34,12 @@ function withTroops(g: GameEngine, count = 5) {
 
 describe('march timing', () => {
   it('is one flat rate per hop', () => {
-    expect(marchSeconds(CORE, NEXT_DOOR)).toBe(MARCH_SECONDS_PER_HOP);
+    expect(marchSeconds(TAIWAN, CORE, NEXT_DOOR)).toBe(MARCH_SECONDS_PER_HOP);
     expect(MARCH_SECONDS_PER_HOP).toBe(20);
   });
 
   it('charges far more to cross the range', () => {
-    expect(marchSeconds(PASS_FROM, PASS_TO)).toBe(MARCH_SECONDS_VIA_PASS);
+    expect(marchSeconds(TAIWAN, PASS_FROM, PASS_TO)).toBe(MARCH_SECONDS_VIA_PASS);
     expect(MARCH_SECONDS_VIA_PASS / MARCH_SECONDS_PER_HOP, '30x a flat hop').toBe(30);
   });
 });

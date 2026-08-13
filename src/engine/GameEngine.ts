@@ -21,7 +21,7 @@ import {
   type MarchRejection,
 } from './movement';
 import { COMBAT_ROUND_SECONDS, MUTINY_MILITIA, resolveRound } from './combat';
-import { REGIONS, getRegion } from './regions';
+import { DEFAULT_MAP_ID, getMap, type GameMap } from './maps';
 import type {
   AiDifficulty,
   Battle,
@@ -102,7 +102,11 @@ export interface PlayerEconomy {
 export class GameEngine {
   state: GameState;
 
-  constructor(setups: PlayerSetup[]) {
+  /** The map this match is played on. */
+  readonly map: GameMap;
+
+  constructor(setups: PlayerSetup[], mapId: string = DEFAULT_MAP_ID) {
+    this.map = getMap(mapId);
     const players: Record<PlayerId, PlayerState> = {};
     for (const setup of setups) {
       players[setup.id] = {
@@ -120,9 +124,9 @@ export class GameEngine {
 
     // Neutral land is garrisoned by militia scaled to its size, except within
     // the safe zone around each core (docs/game-design.md 3.3).
-    const safeZone = safeZoneAround(setups.map((s) => s.coreRegionId));
+    const safeZone = safeZoneAround(this.map, setups.map((s) => s.coreRegionId));
     const regions: GameState['regions'] = {};
-    for (const region of REGIONS) {
+    for (const region of this.map.regions) {
       regions[region.id] = {
         owner: null,
         isCore: false,
@@ -151,7 +155,7 @@ export class GameEngine {
 
   /** Seconds a hop between these two regions takes. */
   marchSeconds(from: string, to: string): number {
-    return marchSeconds(from, to);
+    return marchSeconds(this.map, from, to);
   }
 
   /**
@@ -178,10 +182,11 @@ export class GameEngine {
   /** The route a march would take, or null if there's no legal way through. */
   marchRoute(from: string, to: string, playerId: PlayerId): string[] | null {
     return findPath(
+      this.map,
       from,
       to,
       (id) => this.canEnter(id, playerId),
-      (a, b) => terrainRejection(a, b) === null,
+      (a, b) => terrainRejection(this.map, a, b) === null,
     );
   }
 
@@ -190,7 +195,7 @@ export class GameEngine {
     let total = 0;
     let at = from;
     for (const step of route) {
-      total += marchSeconds(at, step);
+      total += marchSeconds(this.map, at, step);
       at = step;
     }
     return total;
@@ -209,7 +214,7 @@ export class GameEngine {
     if (this.marchRoute(from, to, playerId) !== null) return null;
     // No route. Say which wall they hit: a sealed pass reads very differently
     // from "there's no way through", and both are actionable.
-    if (terrainRejection(from, to) === 'passLocked') return 'passLocked';
+    if (terrainRejection(this.map, from, to) === 'passLocked') return 'passLocked';
     return 'noRoute';
   }
 
@@ -224,7 +229,7 @@ export class GameEngine {
     const origin = this.state.regions[from];
     origin.units = subtractUnits(origin.units, units);
     const [next, ...rest] = route;
-    const seconds = marchSeconds(from, next);
+    const seconds = marchSeconds(this.map, from, next);
     const march: March = {
       id: `m${this.nextMarchId++}`,
       playerId,
@@ -351,7 +356,7 @@ export class GameEngine {
   retreat(regionId: string, playerId: PlayerId): boolean {
     if (this.retreatRejection(regionId, playerId) !== null) return false;
     const battle = this.battleAt(regionId)!;
-    const seconds = marchSeconds(battle.regionId, battle.attackerFrom);
+    const seconds = marchSeconds(this.map, battle.regionId, battle.attackerFrom);
     this.state.marches.push({
       id: `m${this.nextMarchId++}`,
       playerId,
@@ -404,7 +409,7 @@ export class GameEngine {
     march.from = march.to;
     march.to = next;
     march.route = march.route.slice(1);
-    march.totalSeconds = marchSeconds(march.from, march.to);
+    march.totalSeconds = marchSeconds(this.map, march.from, march.to);
     // Carry the overshoot into the next leg so a long march doesn't gain a
     // fraction of a second at every stop.
     march.remainingSeconds += march.totalSeconds;
@@ -425,7 +430,7 @@ export class GameEngine {
   /** Base food per minute from land, before farm bonuses. */
   baseFoodPerMin(playerId: PlayerId): number {
     return this.ownedRegionIds(playerId).reduce(
-      (sum, id) => sum + FOOD_PER_MIN_BY_SIZE[landSizeOf(getRegion(id).landArea)],
+      (sum, id) => sum + FOOD_PER_MIN_BY_SIZE[landSizeOf(this.map.region(id).landArea)],
       0,
     );
   }

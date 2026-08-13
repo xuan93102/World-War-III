@@ -1,5 +1,4 @@
-import { REGIONS } from './regions';
-import { regionDistance } from './pathfinding';
+import type { GameMap } from './maps';
 
 /**
  * Land is graded into four sizes rather than scaled linearly by area: the
@@ -59,11 +58,11 @@ export const MILITIA_HP = 10;
 export const SAFE_ZONE_HOPS = 1;
 
 /** Region ids within SAFE_ZONE_HOPS of any of `coreIds`. */
-export function safeZoneAround(coreIds: string[]): Set<string> {
+export function safeZoneAround(map: GameMap, coreIds: string[]): Set<string> {
   const safe = new Set<string>();
-  for (const region of REGIONS) {
+  for (const region of map.regions) {
     for (const core of coreIds) {
-      if (regionDistance(core, region.id) <= SAFE_ZONE_HOPS) {
+      if (map.distance(core, region.id) <= SAFE_ZONE_HOPS) {
         safe.add(region.id);
         break;
       }

@@ -1,9 +1,10 @@
-import { MAP_BOUNDS, MOUNTAIN_RANGE_PATH } from '../engine/mapData.generated';
-import { REGIONS } from '../engine/regions';
+import type { GameMap } from '../engine/maps';
 import { useSettings } from '../settings/useSettings';
 import { THEMES } from '../settings/types';
 
 interface MapPickerProps {
+  /** The map to draw and pick a starting region from. */
+  map: GameMap;
   selectedId: string | null;
   /** Regions that can't be picked (no valid opponent placement). */
   disabledIds: Set<string>;
@@ -15,14 +16,9 @@ interface MapPickerProps {
 }
 
 const PADDING = 12;
-const VIEW_BOX = [
-  MAP_BOUNDS.minX - PADDING,
-  MAP_BOUNDS.minY - PADDING,
-  MAP_BOUNDS.maxX - MAP_BOUNDS.minX + PADDING * 2,
-  MAP_BOUNDS.maxY - MAP_BOUNDS.minY + PADDING * 2,
-].join(' ');
 
 export function MapPicker({
+  map,
   selectedId,
   disabledIds,
   onSelect,
@@ -32,10 +28,17 @@ export function MapPicker({
 }: MapPickerProps) {
   const { settings } = useSettings();
   const colors = THEMES[settings.theme];
+  // Derived per map rather than once per module — each map has its own extent.
+  const viewBox = [
+    map.bounds.minX - PADDING,
+    map.bounds.minY - PADDING,
+    map.bounds.maxX - map.bounds.minX + PADDING * 2,
+    map.bounds.maxY - map.bounds.minY + PADDING * 2,
+  ].join(' ');
 
   return (
-    <svg viewBox={VIEW_BOX} className="map-picker" role="group" aria-label="map">
-      {REGIONS.map((region) => {
+    <svg viewBox={viewBox} className="map-picker" role="group" aria-label="map">
+      {map.regions.map((region) => {
         const isSelected = region.id === selectedId;
         const isOpponent = region.id === opponentId;
         const isDisabled = disabledIds.has(region.id);
@@ -56,7 +59,7 @@ export function MapPicker({
         );
       })}
       <path
-        d={MOUNTAIN_RANGE_PATH}
+        d={map.ridgePath}
         fill="none"
         stroke="#8b6b4a"
         strokeWidth={2}

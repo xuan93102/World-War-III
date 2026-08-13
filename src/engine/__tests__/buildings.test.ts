@@ -6,9 +6,8 @@ import { describe, expect, it } from 'vitest';
 import { GameEngine, STARTING_MONEY } from '../GameEngine';
 import { BASE_FOOD_CAP, BUILDINGS, GRANARY_FOOD_CAP, WONDER_HOLD_SECONDS } from '../buildings';
 import { FOOD_PER_MIN_BY_SIZE, MILITIA_BY_SIZE, SAFE_ZONE_HOPS, landSizeOf } from '../land';
-import { getRegion } from '../regions';
+import { TAIWAN } from '../maps';
 import { totalUnits } from '../units';
-import { regionDistance } from '../pathfinding';
 
 function newGame() {
   return new GameEngine([
@@ -132,7 +131,7 @@ describe('building system', () => {
   const g = newGame();
   const before = g.economy('p1').foodPerMin;
   g.setRegionOwner('taipei-2', 'p1');
-  const added = FOOD_PER_MIN_BY_SIZE[landSizeOf(getRegion('taipei-2').landArea)];
+  const added = FOOD_PER_MIN_BY_SIZE[landSizeOf(TAIWAN.region('taipei-2').landArea)];
   expect(g.economy('p1').foodPerMin, 'gains exactly that region’s size tier').toBe(before + added);
 });
 
@@ -551,8 +550,8 @@ describe('land: garrisons and size', () => {
     const g = newGame();
     for (const [id, region] of Object.entries(g.state.regions)) {
       const nearACore =
-        regionDistance('taipei-1', id) <= SAFE_ZONE_HOPS ||
-        regionDistance('kaohsiung-1', id) <= SAFE_ZONE_HOPS;
+        TAIWAN.distance('taipei-1', id) <= SAFE_ZONE_HOPS ||
+        TAIWAN.distance('kaohsiung-1', id) <= SAFE_ZONE_HOPS;
       if (nearACore) {
         expect(totalUnits(region.units), `${id} is in a safe zone`).toBe(0);
       }
@@ -564,11 +563,11 @@ describe('land: garrisons and size', () => {
     let checked = 0;
     for (const [id, region] of Object.entries(g.state.regions)) {
       const nearACore =
-        regionDistance('taipei-1', id) <= SAFE_ZONE_HOPS ||
-        regionDistance('kaohsiung-1', id) <= SAFE_ZONE_HOPS;
+        TAIWAN.distance('taipei-1', id) <= SAFE_ZONE_HOPS ||
+        TAIWAN.distance('kaohsiung-1', id) <= SAFE_ZONE_HOPS;
       if (nearACore || region.isCore) continue;
       expect(totalUnits(region.units), `${id} garrison matches its size`).toBe(
-        MILITIA_BY_SIZE[landSizeOf(getRegion(id).landArea)],
+        MILITIA_BY_SIZE[landSizeOf(TAIWAN.region(id).landArea)],
       );
       checked++;
     }

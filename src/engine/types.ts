@@ -21,6 +21,11 @@ export interface MountainPass {
   from: string;
   to: string;
   name: string;
+  /** Midpoint of the two regions' real shared border, where the map draws it. */
+  x: number;
+  y: number;
+  /** Crossing direction in degrees (perpendicular to the border there). */
+  angle: number;
 }
 
 export interface RegionState {

@@ -1,5 +1,6 @@
-import { getRegion, hasMountainRoad, isMountainPass } from './regions';
+import { hasMountainRoad } from './regions';
 import { totalUnits, type UnitCounts } from './units';
+import type { GameMap } from './maps';
 
 /**
  * March timing (docs/game-design.md 8). Everything moves region to region over
@@ -25,23 +26,23 @@ export type MarchRejection =
   | 'noRoute';
 
 /** Seconds for one hop between two adjacent regions. */
-export function marchSeconds(from: string, to: string): number {
-  return isMountainPass(from, to) ? MARCH_SECONDS_VIA_PASS : MARCH_SECONDS_PER_HOP;
+export function marchSeconds(map: GameMap, from: string, to: string): number {
+  return map.isPass(from, to) ? MARCH_SECONDS_VIA_PASS : MARCH_SECONDS_PER_HOP;
 }
 
-export function areAdjacent(from: string, to: string): boolean {
-  return getRegion(from).neighbors.includes(to);
+export function areAdjacent(map: GameMap, from: string, to: string): boolean {
+  return map.region(from).neighbors.includes(to);
 }
 
 /**
  * Whether a hop is legal on the ground alone — ownership and troop checks live
  * in the engine, which is the thing that knows who holds what.
  */
-export function terrainRejection(from: string, to: string): MarchRejection | null {
-  if (!areAdjacent(from, to)) return 'notAdjacent';
+export function terrainRejection(map: GameMap, from: string, to: string): MarchRejection | null {
+  if (!areAdjacent(map, from, to)) return 'notAdjacent';
   // Sealed until the tech exists (docs 3.2). hasMountainRoad() is the single
   // place that question is asked.
-  if (isMountainPass(from, to) && !hasMountainRoad()) return 'passLocked';
+  if (map.isPass(from, to) && !hasMountainRoad()) return 'passLocked';
   return null;
 }
 
@@ -60,6 +61,7 @@ export function terrainRejection(from: string, to: string): MarchRejection | nul
  * that knows who holds what.
  */
 export function findPath(
+  map: GameMap,
   from: string,
   to: string,
   canEnter: (regionId: string) => boolean,
@@ -73,7 +75,7 @@ export function findPath(
   while (frontier.length > 0) {
     const next: string[] = [];
     for (const current of frontier) {
-      for (const neighbor of getRegion(current).neighbors) {
+      for (const neighbor of map.region(current).neighbors) {
         if (seen.has(neighbor)) continue;
         if (!canCross(current, neighbor)) continue;
         // The destination doesn't have to be enterable — marching onto ground
