@@ -76,10 +76,11 @@ export function findPath(
       for (const neighbor of getRegion(current).neighbors) {
         if (seen.has(neighbor)) continue;
         if (!canCross(current, neighbor)) continue;
-        // The destination only has to be enterable, not passable-through —
-        // they're the same test today, but keeping the check here means an
-        // "attack this region" order can relax it later without touching BFS.
-        if (!canEnter(neighbor)) continue;
+        // The destination doesn't have to be enterable — marching onto ground
+        // someone else holds is an *attack*, which is a legal order. Only the
+        // regions passed through on the way have to be clear, so a route never
+        // starts a fight the player didn't ask for.
+        if (neighbor !== to && !canEnter(neighbor)) continue;
         seen.add(neighbor);
         cameFrom.set(neighbor, current);
         if (neighbor === to) {

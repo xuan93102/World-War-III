@@ -20,8 +20,17 @@ import {
   terrainRejection,
   type MarchRejection,
 } from './movement';
+import { COMBAT_ROUND_SECONDS, MUTINY_MILITIA, resolveRound } from './combat';
 import { REGIONS, getRegion } from './regions';
-import type { AiDifficulty, GameState, March, PlayerId, PlayerState, RegionState } from './types';
+import type {
+  AiDifficulty,
+  Battle,
+  GameState,
+  March,
+  PlayerId,
+  PlayerState,
+  RegionState,
+} from './types';
 
 /**
  * Economy model (docs/game-design.md section 4):
@@ -130,6 +139,7 @@ export class GameEngine {
       regions,
       players,
       marches: [],
+      battles: [],
       elapsedSeconds: 0,
       secondsUntilPayout: PAYOUT_INTERVAL_SECONDS,
     };
@@ -158,6 +168,11 @@ export class GameEngine {
     // reinforcements reach the front.
     if (region.owner === null && totalUnits(region.units) > 0) return false;
     return true;
+  }
+
+  /** Whether arriving here would be a peaceful landing rather than an attack. */
+  canMarchInPeace(regionId: string, playerId: PlayerId): boolean {
+    return this.canEnter(regionId, playerId);
   }
 
   /** The route a march would take, or null if there's no legal way through. */
@@ -193,9 +208,8 @@ export class GameEngine {
     if (from === to) return 'notAdjacent';
     if (this.marchRoute(from, to, playerId) !== null) return null;
     // No route. Say which wall they hit: a sealed pass reads very differently
-    // from "there's an army in the way", and both are actionable.
+    // from "there's no way through", and both are actionable.
     if (terrainRejection(from, to) === 'passLocked') return 'passLocked';
-    if (!this.canEnter(to, playerId)) return 'contested';
     return 'noRoute';
   }
 
@@ -235,11 +249,122 @@ export class GameEngine {
     return this.state.marches.filter((m) => m.from === regionId || m.to === regionId);
   }
 
-  /** Troops this player has on the road, by unit type. */
+  /** Troops this player has on the road or committed to an attack. */
   marchingUnits(playerId: PlayerId): number {
-    return this.state.marches
+    const onRoad = this.state.marches
       .filter((m) => m.playerId === playerId)
       .reduce((sum, m) => sum + totalUnits(m.units), 0);
+    // Attackers in a battle have left their region but haven't taken the one
+    // they're fighting for, so like marching troops they'd otherwise fall out
+    // of the population count entirely.
+    const fighting = this.state.battles
+      .filter((b) => b.attackerId === playerId)
+      .reduce((sum, b) => sum + totalUnits(b.attackerUnits), 0);
+    return onRoad + fighting;
+  }
+
+  // ---- combat (docs/game-design.md 6.2) ----------------------------------
+
+  battleAt(regionId: string): Battle | undefined {
+    return this.state.battles.find((b) => b.regionId === regionId);
+  }
+
+  /**
+   * Throws an army at a region someone else holds. Joining a fight already in
+   * progress just adds to the attacking stack — the reinforcements take effect
+   * from the next round, since the round clock keeps running.
+   */
+  private engage(regionId: string, attackerId: PlayerId, units: UnitCounts, from: string): void {
+    const existing = this.battleAt(regionId);
+    if (existing && existing.attackerId === attackerId) {
+      existing.attackerUnits = addUnits(existing.attackerUnits, units);
+      return;
+    }
+    if (existing) {
+      // Someone else's fight. Third parties aren't modelled in a 1v1, so the
+      // newcomer reinforces whichever side it isn't at war with rather than
+      // opening a second front.
+      existing.attackerUnits = addUnits(existing.attackerUnits, units);
+      return;
+    }
+    const region = this.state.regions[regionId];
+    this.state.battles.push({
+      regionId,
+      attackerId,
+      attackerUnits: { ...units },
+      attackerCarry: 0,
+      attackerFrom: from,
+      defenderId: region.owner,
+      defenderCarry: 0,
+      secondsUntilRound: COMBAT_ROUND_SECONDS,
+      roundsFought: 0,
+    });
+  }
+
+  /** Runs one exchange and settles the battle if it ended. Returns true when over. */
+  private fightRound(battle: Battle): boolean {
+    const region = this.state.regions[battle.regionId];
+    const outcome = resolveRound(
+      battle.attackerUnits,
+      battle.attackerCarry,
+      region.units,
+      battle.defenderCarry,
+    );
+    battle.attackerUnits = outcome.attacker.units;
+    battle.attackerCarry = outcome.attacker.carry;
+    region.units = outcome.defender.units;
+    battle.defenderCarry = outcome.defender.carry;
+    battle.roundsFought += 1;
+
+    if (!outcome.attackerWiped && !outcome.defenderWiped) return false;
+
+    if (outcome.attackerWiped && outcome.defenderWiped) {
+      // Both gone. The ground belongs to nobody, and a remnant holds it — so
+      // mutual annihilation doesn't quietly hand the region to the defender.
+      this.setRegionOwner(battle.regionId, null);
+      region.units = { militia: MUTINY_MILITIA };
+      return true;
+    }
+    if (outcome.defenderWiped) {
+      this.setRegionOwner(battle.regionId, battle.attackerId);
+      region.units = battle.attackerUnits;
+      return true;
+    }
+    // Attacker wiped: the defender holds, with whatever survived.
+    return true;
+  }
+
+  /**
+   * Whether this player can break off the attack on a region. An attack has to
+   * stand for at least one exchange before it can withdraw (6.2), and there
+   * has to be somewhere to withdraw to.
+   */
+  retreatRejection(regionId: string, playerId: PlayerId): 'noBattle' | 'tooSoon' | 'cutOff' | null {
+    const battle = this.battleAt(regionId);
+    if (!battle || battle.attackerId !== playerId) return 'noBattle';
+    if (battle.roundsFought < 1) return 'tooSoon';
+    if (!this.canEnter(battle.attackerFrom, playerId)) return 'cutOff';
+    return null;
+  }
+
+  /** Pulls the survivors out, marching them back the way they came. */
+  retreat(regionId: string, playerId: PlayerId): boolean {
+    if (this.retreatRejection(regionId, playerId) !== null) return false;
+    const battle = this.battleAt(regionId)!;
+    const seconds = marchSeconds(battle.regionId, battle.attackerFrom);
+    this.state.marches.push({
+      id: `m${this.nextMarchId++}`,
+      playerId,
+      from: battle.regionId,
+      to: battle.attackerFrom,
+      route: [],
+      destination: battle.attackerFrom,
+      units: battle.attackerUnits,
+      totalSeconds: seconds,
+      remainingSeconds: seconds,
+    });
+    this.state.battles = this.state.battles.filter((b) => b !== battle);
+    return true;
   }
 
   /**
@@ -253,6 +378,16 @@ export class GameEngine {
    */
   private completeHop(march: March): boolean {
     const target = this.state.regions[march.to];
+
+    // Walking into ground someone else holds starts a fight rather than a
+    // landing. This is also how interception works: a route is planned around
+    // hostile ground, so if an enemy has moved into the column's path since it
+    // set out, it walks straight into them.
+    if (!this.canEnter(march.to, march.playerId)) {
+      this.engage(march.to, march.playerId, march.units, march.from);
+      return true;
+    }
+
     // Walking into empty neutral land takes it — that's the capture rule from
     // docs 3.3. setRegionOwner clears the region's units, so claim first and
     // land the army after.
@@ -261,9 +396,7 @@ export class GameEngine {
     }
 
     const next = march.route[0];
-    // Journey over, or the road ahead closed while we were walking (someone
-    // took the next region). Either way the army stops here.
-    if (next === undefined || !this.canEnter(next, march.playerId)) {
+    if (next === undefined) {
       target.units = addUnits(target.units, march.units);
       return true;
     }
@@ -619,6 +752,28 @@ export class GameEngine {
   tick(deltaSeconds: number): void {
     this.state.elapsedSeconds += deltaSeconds;
     const minutes = deltaSeconds / 60;
+
+    // Battles resolve BEFORE marches, and the order matters: a march landing
+    // this tick starts a battle, and that battle must not then be handed the
+    // whole tick's elapsed time. Fighting first means a fresh engagement waits
+    // for its first proper round instead of retroactively grinding through
+    // several the instant it begins.
+    //
+    // The inner loop covers a delta wide enough to span several rounds, which
+    // tests and long stalls can produce.
+    if (this.state.battles.length > 0) {
+      const ongoing: Battle[] = [];
+      for (const battle of this.state.battles) {
+        battle.secondsUntilRound -= deltaSeconds;
+        let over = false;
+        while (!over && battle.secondsUntilRound <= 0) {
+          battle.secondsUntilRound += COMBAT_ROUND_SECONDS;
+          over = this.fightRound(battle);
+        }
+        if (!over) ongoing.push(battle);
+      }
+      this.state.battles = ongoing;
+    }
 
     // Advance every march, landing the ones that arrive. Iterated over a copy
     // so arrival can't disturb the list being walked.

@@ -62,6 +62,9 @@ const MODEL_OUTLINE = '#12161c';
 const MARCH_MARKER_PX = 20;
 // The dashed line previewing where a march would go.
 const ROUTE_COLOR = '#ffd54a';
+// A fight in progress.
+const BATTLE_COLOR = '#d9342b';
+const BATTLE_MARKER_PX = 24;
 const PASS_COLOR = '#e08a3d';
 
 const WORLD_PADDING = 20;
@@ -745,6 +748,35 @@ export function MapView({
               })}
             </g>
           )}
+
+          {/* Fights in progress (docs 6.2), so a contested region is obvious
+              from the map rather than only from the panel. */}
+          {gameState.battles.map((battle) => {
+            const region = getRegion(battle.regionId);
+            const p = project(region.cx, region.cy);
+            const r = BATTLE_MARKER_PX / transform.k / 2;
+            return (
+              <g key={`battle-${battle.regionId}`}>
+                <circle
+                  cx={p.x}
+                  cy={p.y}
+                  r={r}
+                  fill={BATTLE_COLOR}
+                  stroke={MODEL_OUTLINE}
+                  strokeWidth={1.4 / transform.k}
+                />
+                <text
+                  x={p.x}
+                  y={p.y + r * 0.58}
+                  textAnchor="middle"
+                  fontSize={(BATTLE_MARKER_PX * 0.78) / transform.k}
+                  fill="#fff"
+                >
+                  ⚔
+                </text>
+              </g>
+            );
+          })}
 
           {/* Armies on the road (docs 8). Drawn at the point they've actually
               reached between the two regions, so march time is something you

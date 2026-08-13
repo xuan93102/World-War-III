@@ -96,7 +96,7 @@ const zhTW = {
   'help.rulesMountain': '中央山脈把東西部隔開，只有5個穿山點可以通行。',
   'help.rulesWonder': '蓋出奇觀並守住3分鐘即可獲勝。',
 
-  'help.notImplemented': '尚未實作：戰鬥結算、資重、科技樹、偵查與PVP連線。行軍已可使用，但路上的攔截尚未實作。目前可用面板下方的 debug 按鈕直接指定地塊歸屬，以便測試。',
+  'help.notImplemented': '尚未實作：資重、科技樹、偵查與PVP連線。目前可用面板下方的 debug 按鈕直接指定地塊歸屬，以便測試。',
 
   'game.regions': '區塊',
   'game.population': '人口',
@@ -218,6 +218,17 @@ const zhTW = {
   'march.pickFar': '選擇遠方目的地…',
   'march.pickingOnMap': '請在地圖上點選目的地（再按一次取消）',
   'march.routeSummary': '前往 {to}：{hops} 格，共 {n} 秒',
+  'march.reject.noRoute': '沒有可通行的路線——沿途被敵軍或中立守軍擋住',
+  'march.attack': '進攻',
+  'battle.section': '戰鬥中',
+  'battle.attacker': '進攻方',
+  'battle.defender': '防守方',
+  'battle.rounds': '已交戰 {n} 回合',
+  'battle.nextRound': '{n} 秒後下一輪',
+  'battle.retreat': '撤退',
+  'battle.retreatTooSoon': '至少要交戰 1 回合才能撤退',
+  'battle.retreatCutOff': '退路已被切斷，只能打下去',
+  'battle.hint': '雙方每 5 秒同時互相扣血。傷亡從最弱的兵種開始，精銳留到最後。',
 };
 
 const zhCN: Record<keyof typeof zhTW, string> = {
@@ -316,7 +327,7 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'help.rulesMountain': '中央山脉把东西部隔开，只有5个穿山点可以通行。',
   'help.rulesWonder': '盖出奇观并守住3分钟即可获胜。',
 
-  'help.notImplemented': '尚未实作：战斗结算、资重、科技树、侦查与PVP连线。行军已可使用，但路上的拦截尚未实作。目前可用面板下方的 debug 按钮直接指定地块归属，以便测试。',
+  'help.notImplemented': '尚未实作：资重、科技树、侦查与PVP连线。目前可用面板下方的 debug 按钮直接指定地块归属，以便测试。',
 
   'game.regions': '区块',
   'game.population': '人口',
@@ -438,6 +449,17 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'march.pickFar': '选择远方目的地…',
   'march.pickingOnMap': '请在地图上点选目的地（再按一次取消）',
   'march.routeSummary': '前往 {to}：{hops} 格，共 {n} 秒',
+  'march.reject.noRoute': '没有可通行的路线——沿途被敌军或中立守军挡住',
+  'march.attack': '进攻',
+  'battle.section': '战斗中',
+  'battle.attacker': '进攻方',
+  'battle.defender': '防守方',
+  'battle.rounds': '已交战 {n} 回合',
+  'battle.nextRound': '{n} 秒后下一轮',
+  'battle.retreat': '撤退',
+  'battle.retreatTooSoon': '至少要交战 1 回合才能撤退',
+  'battle.retreatCutOff': '退路已被切断，只能打下去',
+  'battle.hint': '双方每 5 秒同时互相扣血。伤亡从最弱的兵种开始，精锐留到最后。',
 };
 
 const en: Record<keyof typeof zhTW, string> = {
@@ -536,7 +558,7 @@ const en: Record<keyof typeof zhTW, string> = {
   'help.rulesMountain': 'The Central Mountain Range splits east from west — only 5 passes cross it.',
   'help.rulesWonder': 'Build a wonder and hold it for 3 minutes to win.',
 
-  'help.notImplemented': 'Not yet built: combat resolution, supply, the tech tree, scouting and PvP networking. Marching works, but armies on the road cannot be intercepted yet. For now the debug buttons at the bottom of the side panel set region ownership directly, for testing.',
+  'help.notImplemented': 'Not yet built: supply, the tech tree, scouting and PvP networking. For now the debug buttons at the bottom of the side panel set region ownership directly, for testing.',
 
   'game.regions': 'Regions',
   'game.population': 'Pop',
@@ -658,6 +680,17 @@ const en: Record<keyof typeof zhTW, string> = {
   'march.pickFar': 'Pick a distant target…',
   'march.pickingOnMap': 'Click a region on the map (click again to cancel)',
   'march.routeSummary': 'To {to}: {hops} hops, {n}s total',
+  'march.reject.noRoute': 'No way through — enemies or neutral garrisons block every route',
+  'march.attack': 'Attack',
+  'battle.section': 'Battle',
+  'battle.attacker': 'Attacker',
+  'battle.defender': 'Defender',
+  'battle.rounds': '{n} rounds fought',
+  'battle.nextRound': 'next round in {n}s',
+  'battle.retreat': 'Withdraw',
+  'battle.retreatTooSoon': 'An attack must stand one round before it can withdraw',
+  'battle.retreatCutOff': 'Cut off — there is nowhere to fall back to',
+  'battle.hint': 'Both sides trade damage every 5s. Losses come off the weakest units first, so the elite core survives longest.',
 };
 
 export type TranslationKey = keyof typeof zhTW;

@@ -20,7 +20,7 @@ interface MarchPanelProps {
 /** Only the reasons worth explaining — the rest can't be shown to the user. */
 const REJECTION_KEY: Partial<Record<MarchRejection, TranslationKey>> = {
   passLocked: 'march.reject.passLocked',
-  contested: 'march.reject.contested',
+  noRoute: 'march.reject.noRoute',
 };
 
 export function MarchPanel({
@@ -78,10 +78,13 @@ export function MarchPanel({
               const reason = engine.marchRejection(regionId, id, playerId, { militia: 1 });
               const blocked = reason !== null && reason !== 'noUnits';
               const key = reason ? REJECTION_KEY[reason] : undefined;
+              // Marching onto ground someone else holds is a legal order — it
+              // starts a fight. Flag it so nobody attacks by accident.
+              const isAttack = !blocked && !engine.canMarchInPeace(id, playerId);
               return (
                 <button
                   key={id}
-                  className={`march-target${target === id ? ' is-selected' : ''}`}
+                  className={`march-target${target === id ? ' is-selected' : ''}${isAttack ? ' is-attack' : ''}`}
                   disabled={blocked}
                   title={key ? t(key) : undefined}
                   onClick={() => {
@@ -90,6 +93,7 @@ export function MarchPanel({
                   }}
                 >
                   <span className="march-target-name">{getRegion(id).name}</span>
+                  {isAttack && <span className="march-target-attack">{t('march.attack')}</span>}
                   <span className="march-target-time">{engine.marchSeconds(regionId, id)}s</span>
                 </button>
               );
@@ -145,7 +149,7 @@ export function MarchPanel({
           )}
           {target && !route && (
             <p className="hint-text">
-              {t(rejection === 'passLocked' ? 'march.reject.passLocked' : 'march.reject.contested')}
+              {t(rejection === 'passLocked' ? 'march.reject.passLocked' : 'march.reject.noRoute')}
             </p>
           )}
 

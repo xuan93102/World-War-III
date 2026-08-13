@@ -1136,3 +1136,65 @@
   border: 1px solid var(--border);
   background: var(--bg);
 }
+
+/* ---------- battle ---------- */
+
+.battle-section {
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.battle-side {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 7px 9px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+/* Your own side, so which way the fight is going is readable at a glance. */
+.battle-side.is-mine {
+  border-color: var(--accent);
+}
+
+.battle-side-label {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+.battle-side-units {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.battle-side-stats {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.battle-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+/* An attack order, distinguished from a peaceful move. */
+.march-target.is-attack {
+  border-color: #b3453d;
+}
+
+.march-target-attack {
+  font-size: 0.62rem;
+  color: #ff8a80;
+}

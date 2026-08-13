@@ -4,6 +4,7 @@ import { FOOD_PER_MIN_BY_SIZE, landSizeOf, type LandSize } from '../engine/land'
 import { totalUnits, type UnitCounts, type UnitType } from '../engine/units';
 import { UnitPanel } from './UnitPanel';
 import { MarchPanel } from './MarchPanel';
+import { BattlePanel } from './BattlePanel';
 import { getRegion } from '../engine/regions';
 import { useSettings } from '../settings/useSettings';
 import type { TranslationKey } from '../settings/translations';
@@ -23,6 +24,7 @@ interface RegionPanelProps {
   marchTarget: string | null;
   pickingMarch: boolean;
   onPickMarch: (picking: boolean) => void;
+  onRetreat: (regionId: string) => void;
   onCancelBuild: (regionId: string) => void;
   onDemolish: (regionId: string) => void;
 }
@@ -55,6 +57,7 @@ export function RegionPanel({
   marchTarget,
   pickingMarch,
   onPickMarch,
+  onRetreat,
   onCancelBuild,
   onDemolish,
 }: RegionPanelProps) {
@@ -107,6 +110,14 @@ export function RegionPanel({
         playerId={humanPlayerId}
         onTrain={onTrain}
         onUpgrade={onUpgrade}
+      />
+
+      <BattlePanel
+        engine={engine}
+        regionId={selectedRegionId}
+        playerId={humanPlayerId}
+        players={players}
+        onRetreat={onRetreat}
       />
 
       <MarchPanel

@@ -73,11 +73,12 @@ describe('march orders', () => {
     expect(g.marchRejection(CORE, FAR, 'p1', { militia: 3 })).toBeNull();
   });
 
-  it('finds no way through ground that would have to be fought for', () => {
+  it('will not route a march *through* ground that would have to be fought for', () => {
     const g = withTroops(newGame());
-    // The enemy core is walled off by garrisoned neutral land in every
-    // direction, so there's simply no legal route to it yet.
-    expect(g.marchRejection(CORE, 'kaohsiung-1', 'p1', { militia: 1 })).toBe('contested');
+    // Attacking what's next to you is fine, but a column can't bulldoze its
+    // way across the island: every path to the far core runs through
+    // garrisoned neutral land, so there's no route.
+    expect(g.marchRejection(CORE, 'kaohsiung-1', 'p1', { militia: 1 })).toBe('noRoute');
   });
 
   it('seals mountain passes until the road tech exists', () => {
@@ -88,15 +89,14 @@ describe('march orders', () => {
     expect(g.marchRejection(PASS_FROM, PASS_TO, 'p1', { militia: 1 })).toBe('passLocked');
   });
 
-  it('will not walk into ground that would have to be fought for', () => {
+  it('allows marching onto held ground — that order is an attack', () => {
     const g = withTroops(newGame());
-    // A garrison on the far side makes it contested — combat isn't built yet.
     g.state.regions[NEXT_DOOR].units = { militia: 3 };
-    expect(g.marchRejection(CORE, NEXT_DOOR, 'p1', { militia: 2 })).toBe('contested');
+    expect(g.marchRejection(CORE, NEXT_DOOR, 'p1', { militia: 2 }), 'garrisoned neutral').toBeNull();
 
     g.state.regions[NEXT_DOOR].units = {};
     g.setRegionOwner(NEXT_DOOR, 'p2');
-    expect(g.marchRejection(CORE, NEXT_DOOR, 'p1', { militia: 2 }), 'enemy-held').toBe('contested');
+    expect(g.marchRejection(CORE, NEXT_DOOR, 'p1', { militia: 2 }), 'enemy-held').toBeNull();
   });
 
   it('takes the troops off the map the moment they set out', () => {
@@ -179,17 +179,21 @@ describe('arrival', () => {
     expect(g.state.marches).toHaveLength(0);
   });
 
-  it('halts where it stands if the road ahead closes mid-march', () => {
+  // This is interception: the route was planned around hostile ground, so if
+  // an enemy moves into the column's path after it sets off, the column walks
+  // straight into them.
+  it('walks into a fight if someone occupies the path mid-march', () => {
     const g = withTroops(newGame(), 3);
     g.state.regions[FAR].units = {};
     const route = g.marchRoute(CORE, FAR, 'p1')!;
     g.startMarch(CORE, FAR, 'p1', { militia: 3 });
-    // Someone garrisons the destination while the column is still walking.
-    g.state.regions[FAR].units = { militia: 2 };
+    // Someone garrisons the very next stop while the column is still walking.
+    g.state.regions[route[0]].units = { militia: 2 };
+    g.state.regions[route[0]].owner = 'p2';
 
     g.tick(MARCH_SECONDS_PER_HOP);
-    expect(g.state.marches, 'stopped short rather than walking into it').toHaveLength(0);
-    expect(totalUnits(g.state.regions[route[0]].units), 'holds where it got to').toBe(3);
+    expect(g.state.marches, 'the march ends where it was stopped').toHaveLength(0);
+    expect(g.battleAt(route[0]), 'a battle started there').toBeDefined();
   });
 
   it('lands mixed stacks intact', () => {

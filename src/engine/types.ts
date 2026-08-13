@@ -88,11 +88,35 @@ export interface March {
   remainingSeconds: number;
 }
 
+/**
+ * A fight in progress over one region (docs/game-design.md 6.2). Rounds are
+ * traded every few seconds rather than the whole thing resolving on contact,
+ * so reinforcements can join and an attacker can break off.
+ *
+ * The defender's troops are the region's own garrison — a battle doesn't copy
+ * them out, it just tracks the attacking force and the round clock.
+ */
+export interface Battle {
+  regionId: string;
+  attackerId: PlayerId;
+  attackerUnits: UnitCounts;
+  attackerCarry: number;
+  /** Where the attack came from, so breaking off has somewhere to go back to. */
+  attackerFrom: string;
+  /** null when the defender is a neutral garrison. */
+  defenderId: PlayerId | null;
+  defenderCarry: number;
+  secondsUntilRound: number;
+  roundsFought: number;
+}
+
 export interface GameState {
   regions: Record<string, RegionState>;
   players: Record<PlayerId, PlayerState>;
   /** Armies currently on the road. */
   marches: March[];
+  /** Fights in progress, at most one per region. */
+  battles: Battle[];
   elapsedSeconds: number;
   /**
    * Seconds until the next gold payout. Gold arrives in whole-minute

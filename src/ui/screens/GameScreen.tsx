@@ -166,6 +166,10 @@ export function GameScreen({
             engine.upgradeUnits(regionId, humanPlayerId, type, count);
             forceRender((n) => n + 1);
           }}
+          onRetreat={(regionId) => {
+            engine.retreat(regionId, humanPlayerId);
+            forceRender((n) => n + 1);
+          }}
           onMarch={(from, to, units) => {
             engine.startMarch(from, to, humanPlayerId, units);
             setPickingMarch(false);
