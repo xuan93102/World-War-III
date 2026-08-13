@@ -3,6 +3,7 @@ import { GameEngine, type PlayerSetup } from '../../engine/GameEngine';
 import { useSettings } from '../../settings/useSettings';
 import { HUD } from '../HUD';
 import { MapView } from '../MapView';
+import { TechPanel } from '../TechPanel';
 import { MatchClock } from '../MatchClock';
 import { Modal } from '../Modal';
 import { RegionPanel } from '../RegionPanel';
@@ -39,6 +40,7 @@ export function GameScreen({
   // destination would navigate away from the panel issuing the order.
   const [marchTarget, setMarchTarget] = useState<string | null>(null);
   const [pickingMarch, setPickingMarch] = useState(false);
+  const [showTech, setShowTech] = useState(false);
   const [paused, setPaused] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const lastTimeRef = useRef<number>(performance.now());
@@ -95,6 +97,11 @@ export function GameScreen({
           }}
         />
         <div className="topbar-actions">
+          <button className="btn btn-sm" onClick={() => setShowTech(true)} disabled={isOver}>
+            {t('tech.section')}
+            {engine.state.players[humanPlayerId].research.length > 0 &&
+              `・${engine.state.players[humanPlayerId].research.length}`}
+          </button>
           {wonder && (
             <span className="wonder-countdown" style={{ color: engine.state.players[wonder.playerId]?.color }}>
               {t('game.wonderCountdown')} {Math.ceil(wonder.secondsLeft)}s
@@ -187,6 +194,15 @@ export function GameScreen({
           }}
         />
       </div>
+
+      {showTech && !isOver && (
+        <TechPanel
+          engine={engine}
+          playerId={humanPlayerId}
+          onClose={() => setShowTech(false)}
+          onChanged={() => forceRender((n) => n + 1)}
+        />
+      )}
 
       {confirmQuit && !isOver && (
         <Modal

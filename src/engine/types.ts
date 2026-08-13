@@ -1,4 +1,5 @@
 import type { BuildingType } from './buildings';
+import type { TechId } from './tech';
 import type { UnitCounts } from './units';
 
 export type PlayerId = string;
@@ -64,6 +65,24 @@ export interface PlayerState {
   /** Present for AI-controlled seats; omitted for human players. */
   aiDifficulty?: AiDifficulty;
   coreRegionId: string;
+
+  // ---- research (docs/game-design.md 10 and 11) ----
+  /** Gates which tier of tech can be researched. Starts at 1. */
+  coreLevel: number;
+  /** In-progress core upgrade, if any. */
+  coreUpgrade?: { toLevel: number; remainingSeconds: number; totalSeconds: number };
+  /** Completed techs. */
+  techs: TechId[];
+  /** Techs currently being researched — at most RESEARCH_SLOTS of them. */
+  research: { techId: TechId; remainingSeconds: number; totalSeconds: number }[];
+  /**
+   * Trained researchers. They shorten research time and occupy population,
+   * but unlike the design doc's "convert population" wording they don't take
+   * villagers away — they cost gold and time of their own.
+   */
+  researchers: number;
+  /** A researcher being trained, if any. */
+  researcherTraining?: { remainingSeconds: number; totalSeconds: number };
 }
 
 /**

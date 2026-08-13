@@ -21,6 +21,23 @@ import {
   type MarchRejection,
 } from './movement';
 import { COMBAT_ROUND_SECONDS, MUTINY_MILITIA, resolveRound } from './combat';
+import {
+  CORE_UPGRADE,
+  MAX_CORE_LEVEL,
+  MAX_RESEARCHERS,
+  RESEARCHER_SECONDS,
+  RESEARCH_SLOTS,
+  TECHS,
+  attackMultiplier,
+  damageTakenMultiplier,
+  foodTechMultiplier,
+  marchTimeMultiplier,
+  moneyTechMultiplier,
+  populationCapFromTech,
+  researchTimeMultiplier,
+  researcherCost,
+  type TechId,
+} from './tech';
 import { DEFAULT_MAP_ID, getMap, type GameMap } from './maps';
 import type {
   AiDifficulty,
@@ -82,6 +99,16 @@ export interface PlayerSetup {
   aiDifficulty?: AiDifficulty;
 }
 
+export type ResearchRejection =
+  | 'done'
+  | 'inProgress'
+  | 'notImplemented'
+  | 'needsLab'
+  | 'needsCoreLevel'
+  | 'needsPrereq'
+  | 'slotsFull'
+  | 'cannotAfford';
+
 export type BuildRejection =
   | 'notOwner'
   | 'occupied'
@@ -119,6 +146,10 @@ export class GameEngine {
         food: 0,
         aiDifficulty: setup.aiDifficulty,
         coreRegionId: setup.coreRegionId,
+        coreLevel: 1,
+        techs: [],
+        research: [],
+        researchers: 0,
       };
     }
 
@@ -154,8 +185,14 @@ export class GameEngine {
   private nextMarchId = 1;
 
   /** Seconds a hop between these two regions takes. */
-  marchSeconds(from: string, to: string): number {
-    return marchSeconds(this.map, from, to);
+  marchSeconds(from: string, to: string, playerId?: PlayerId): number {
+    const base = marchSeconds(this.map, from, to);
+    if (!playerId) return base;
+    // Rapid reaction only helps on ground you already hold, so it rewards
+    // defending a front rather than pushing into one.
+    const onOwnGround =
+      this.state.regions[from]?.owner === playerId && this.state.regions[to]?.owner === playerId;
+    return base * marchTimeMultiplier(this.ownedTechs(playerId), onOwnGround);
   }
 
   /**
@@ -186,16 +223,16 @@ export class GameEngine {
       from,
       to,
       (id) => this.canEnter(id, playerId),
-      (a, b) => terrainRejection(this.map, a, b) === null,
+      (a, b) => terrainRejection(this.map, a, b, this.hasMountainRoad(playerId)) === null,
     );
   }
 
   /** Total seconds for a whole route, summing each hop. */
-  routeSeconds(from: string, route: string[]): number {
+  routeSeconds(from: string, route: string[], playerId?: PlayerId): number {
     let total = 0;
     let at = from;
     for (const step of route) {
-      total += marchSeconds(this.map, at, step);
+      total += this.marchSeconds(at, step, playerId);
       at = step;
     }
     return total;
@@ -214,7 +251,8 @@ export class GameEngine {
     if (this.marchRoute(from, to, playerId) !== null) return null;
     // No route. Say which wall they hit: a sealed pass reads very differently
     // from "there's no way through", and both are actionable.
-    if (terrainRejection(this.map, from, to) === 'passLocked') return 'passLocked';
+    if (terrainRejection(this.map, from, to, this.hasMountainRoad(playerId)) === 'passLocked')
+      return 'passLocked';
     return 'noRoute';
   }
 
@@ -229,7 +267,7 @@ export class GameEngine {
     const origin = this.state.regions[from];
     origin.units = subtractUnits(origin.units, units);
     const [next, ...rest] = route;
-    const seconds = marchSeconds(this.map, from, next);
+    const seconds = this.marchSeconds(from, next, playerId);
     const march: March = {
       id: `m${this.nextMarchId++}`,
       playerId,
@@ -266,6 +304,99 @@ export class GameEngine {
       .filter((b) => b.attackerId === playerId)
       .reduce((sum, b) => sum + totalUnits(b.attackerUnits), 0);
     return onRoad + fighting;
+  }
+
+  // ---- research (docs/game-design.md 10 and 11) --------------------------
+
+  ownedTechs(playerId: PlayerId): Set<TechId> {
+    return new Set(this.state.players[playerId].techs);
+  }
+
+  hasTech(playerId: PlayerId, techId: TechId): boolean {
+    return this.state.players[playerId].techs.includes(techId);
+  }
+
+  /** Whether this player has a finished research institute anywhere. */
+  private hasLab(playerId: PlayerId): boolean {
+    return this.ownedRegions(playerId).some((r) => r.building?.type === 'research');
+  }
+
+  researchRejection(playerId: PlayerId, techId: TechId): ResearchRejection | null {
+    const player = this.state.players[playerId];
+    const def = TECHS[techId];
+    if (player.techs.includes(techId)) return 'done';
+    if (player.research.some((r) => r.techId === techId)) return 'inProgress';
+    if (!def.implemented) return 'notImplemented';
+    if (!this.hasLab(playerId)) return 'needsLab';
+    if (player.coreLevel < def.coreLevel) return 'needsCoreLevel';
+    if (!def.requires.every((id) => player.techs.includes(id))) return 'needsPrereq';
+    if (player.research.length >= RESEARCH_SLOTS) return 'slotsFull';
+    if (player.money < def.costMoney) return 'cannotAfford';
+    return null;
+  }
+
+  /** Puts a tech into the research queue, charging for it up front. */
+  startResearch(playerId: PlayerId, techId: TechId): boolean {
+    if (this.researchRejection(playerId, techId) !== null) return false;
+    const player = this.state.players[playerId];
+    const def = TECHS[techId];
+    player.money -= def.costMoney;
+    // Researchers shorten the clock, so the duration is fixed at the moment
+    // research starts rather than floating as more of them are trained.
+    const seconds = def.seconds * researchTimeMultiplier(player.researchers);
+    player.research.push({ techId, remainingSeconds: seconds, totalSeconds: seconds });
+    return true;
+  }
+
+  researcherRejection(playerId: PlayerId): 'full' | 'training' | 'needsSchool' | 'noPopulationRoom' | 'cannotAfford' | null {
+    const player = this.state.players[playerId];
+    if (player.researchers >= MAX_RESEARCHERS) return 'full';
+    if (player.researcherTraining) return 'training';
+    if (!this.ownedRegions(playerId).some((r) => r.building?.type === 'school')) return 'needsSchool';
+    if (this.populationRoom(playerId) < 1) return 'noPopulationRoom';
+    if (player.money < researcherCost(player.researchers)) return 'cannotAfford';
+    return null;
+  }
+
+  trainResearcher(playerId: PlayerId): boolean {
+    if (this.researcherRejection(playerId) !== null) return false;
+    const player = this.state.players[playerId];
+    player.money -= researcherCost(player.researchers);
+    player.researcherTraining = {
+      remainingSeconds: RESEARCHER_SECONDS,
+      totalSeconds: RESEARCHER_SECONDS,
+    };
+    return true;
+  }
+
+  coreUpgradeRejection(playerId: PlayerId): 'maxed' | 'inProgress' | 'cannotAfford' | null {
+    const player = this.state.players[playerId];
+    if (player.coreLevel >= MAX_CORE_LEVEL) return 'maxed';
+    if (player.coreUpgrade) return 'inProgress';
+    const next = (player.coreLevel + 1) as 2 | 3;
+    const cost = CORE_UPGRADE[next];
+    if (player.money < cost.costMoney || player.food < cost.costFood) return 'cannotAfford';
+    return null;
+  }
+
+  startCoreUpgrade(playerId: PlayerId): boolean {
+    if (this.coreUpgradeRejection(playerId) !== null) return false;
+    const player = this.state.players[playerId];
+    const next = (player.coreLevel + 1) as 2 | 3;
+    const cost = CORE_UPGRADE[next];
+    player.money -= cost.costMoney;
+    player.food -= cost.costFood;
+    player.coreUpgrade = {
+      toLevel: next,
+      remainingSeconds: cost.seconds,
+      totalSeconds: cost.seconds,
+    };
+    return true;
+  }
+
+  /** Whether this player's infantry can cross a mountain pass yet (docs 3.2). */
+  hasMountainRoad(playerId: PlayerId): boolean {
+    return this.hasTech(playerId, 'mountainRoad');
   }
 
   // ---- combat (docs/game-design.md 6.2) ----------------------------------
@@ -309,11 +440,23 @@ export class GameEngine {
   /** Runs one exchange and settles the battle if it ended. Returns true when over. */
   private fightRound(battle: Battle): boolean {
     const region = this.state.regions[battle.regionId];
+    // Tech scales both what a side deals and what it soaks. A neutral
+    // garrison has no research, so it fights at flat values.
+    const attackerTechs = this.ownedTechs(battle.attackerId);
+    const defenderTechs = battle.defenderId
+      ? this.ownedTechs(battle.defenderId)
+      : new Set<TechId>();
     const outcome = resolveRound(
       battle.attackerUnits,
       battle.attackerCarry,
       region.units,
       battle.defenderCarry,
+      {
+        attackerAttack: attackMultiplier(attackerTechs),
+        defenderAttack: attackMultiplier(defenderTechs),
+        attackerTaken: damageTakenMultiplier(attackerTechs),
+        defenderTaken: damageTakenMultiplier(defenderTechs),
+      },
     );
     battle.attackerUnits = outcome.attacker.units;
     battle.attackerCarry = outcome.attacker.carry;
@@ -356,7 +499,7 @@ export class GameEngine {
   retreat(regionId: string, playerId: PlayerId): boolean {
     if (this.retreatRejection(regionId, playerId) !== null) return false;
     const battle = this.battleAt(regionId)!;
-    const seconds = marchSeconds(this.map, battle.regionId, battle.attackerFrom);
+    const seconds = this.marchSeconds(battle.regionId, battle.attackerFrom, playerId);
     this.state.marches.push({
       id: `m${this.nextMarchId++}`,
       playerId,
@@ -409,7 +552,7 @@ export class GameEngine {
     march.from = march.to;
     march.to = next;
     march.route = march.route.slice(1);
-    march.totalSeconds = marchSeconds(this.map, march.from, march.to);
+    march.totalSeconds = this.marchSeconds(march.from, march.to, march.playerId);
     // Carry the overshoot into the next leg so a long march doesn't gain a
     // fraction of a second at every stop.
     march.remainingSeconds += march.totalSeconds;
@@ -474,7 +617,10 @@ export class GameEngine {
    */
   population(playerId: PlayerId): number {
     const player = this.state.players[playerId];
-    return (player?.villagers ?? 0) + this.troopCount(playerId);
+    // Researchers take a slot each, the same as troops do — one being trained
+    // included, since its slot is already spoken for.
+    const researchers = (player?.researchers ?? 0) + (player?.researcherTraining ? 1 : 0);
+    return (player?.villagers ?? 0) + this.troopCount(playerId) + researchers;
   }
 
   /** Population slots still free under the cap. */
@@ -616,14 +762,24 @@ export class GameEngine {
     const housingCount = Math.min(counts.housing ?? 0, BUILDING_LIMITS.housing ?? Infinity);
     const housingMult = 1 + STACK_BONUS * housingCount;
 
+    // Tech multiplies on top of buildings rather than replacing them, and the
+    // homestead line raises the base ceiling that housing then multiplies.
+    const techs = this.ownedTechs(playerId);
+    const baseCap = populationCapFromTech(techs, DEFAULT_POPULATION_CAP);
+
     return {
       // Gold comes from villagers, not territory.
       // Only villagers earn — population doing other jobs (soldiers,
       // researchers) contributes nothing.
-      moneyPerMin: (player?.villagers ?? 0) * GOLD_PER_VILLAGER_PER_MIN * shopMult * aiMult,
-      foodPerMin: this.baseFoodPerMin(playerId) * farmMult * aiMult,
+      moneyPerMin:
+        (player?.villagers ?? 0) *
+        GOLD_PER_VILLAGER_PER_MIN *
+        shopMult *
+        moneyTechMultiplier(techs) *
+        aiMult,
+      foodPerMin: this.baseFoodPerMin(playerId) * farmMult * foodTechMultiplier(techs) * aiMult,
       foodCap: BASE_FOOD_CAP + GRANARY_FOOD_CAP * (counts.granary ?? 0),
-      populationCap: Math.floor(DEFAULT_POPULATION_CAP * housingMult),
+      populationCap: Math.floor(baseCap * housingMult),
       buildingCounts: counts,
     };
   }
@@ -662,6 +818,10 @@ export class GameEngine {
 
     const def = BUILDINGS[type];
     if (!def.implemented) return 'notImplemented';
+    // A separate gate from `implemented`: the building is real, it just has to
+    // be earned. Reported as the same rejection so the UI shows the def's own
+    // reason either way.
+    if (def.requiresTech && !this.hasTech(playerId, def.requiresTech)) return 'notImplemented';
 
     const limit = BUILDING_LIMITS[type];
     if (limit !== undefined) {
@@ -808,6 +968,34 @@ export class GameEngine {
       }
       if (region.building?.type === 'wonder' && region.owner) {
         region.wonderHeldSeconds = (region.wonderHeldSeconds ?? 0) + deltaSeconds;
+      }
+    }
+
+    // Research, researcher training and core upgrades all just run down a
+    // clock. Charged up front, so finishing only has to hand over the result.
+    for (const player of Object.values(this.state.players)) {
+      if (player.research.length > 0) {
+        const stillRunning: typeof player.research = [];
+        for (const job of player.research) {
+          job.remainingSeconds -= deltaSeconds;
+          if (job.remainingSeconds <= 0) player.techs.push(job.techId);
+          else stillRunning.push(job);
+        }
+        player.research = stillRunning;
+      }
+      if (player.researcherTraining) {
+        player.researcherTraining.remainingSeconds -= deltaSeconds;
+        if (player.researcherTraining.remainingSeconds <= 0) {
+          player.researcherTraining = undefined;
+          player.researchers += 1;
+        }
+      }
+      if (player.coreUpgrade) {
+        player.coreUpgrade.remainingSeconds -= deltaSeconds;
+        if (player.coreUpgrade.remainingSeconds <= 0) {
+          player.coreLevel = player.coreUpgrade.toLevel;
+          player.coreUpgrade = undefined;
+        }
       }
     }
 

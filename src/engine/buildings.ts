@@ -1,4 +1,5 @@
 import type { TranslationKey } from '../settings/translations';
+import type { TechId } from './tech';
 
 export type BuildingType =
   | 'shop'
@@ -37,6 +38,12 @@ export interface BuildingDef {
    */
   implemented: boolean;
   lockedReasonKey?: TranslationKey;
+  /**
+   * A tech that must be researched first. Unlike `implemented: false` this is
+   * an in-game gate, not a "we haven't built it" gate — the building is real,
+   * you just have to earn it.
+   */
+  requiresTech?: TechId;
 }
 
 // Costs / build times / HP come straight from docs/game-design.md 5.4.
@@ -121,8 +128,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     costFood: 0,
     buildSeconds: 45,
     hp: 250,
-    implemented: false,
-    lockedReasonKey: 'building.locked.tech',
+    // Unlocked now that research exists: this is where researchers come from.
+    implemented: true,
   },
   research: {
     type: 'research',
@@ -133,8 +140,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     costFood: 0,
     buildSeconds: 45,
     hp: 250,
-    implemented: false,
-    lockedReasonKey: 'building.locked.tech',
+    // Unlocked now that there is a tech tree to research.
+    implemented: true,
   },
   fortress: {
     type: 'fortress',
@@ -145,7 +152,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     costFood: 300,
     buildSeconds: 60,
     hp: 1000,
-    implemented: false,
+    // A real building gated on research rather than on missing systems.
+    implemented: true,
+    requiresTech: 'fieldworks',
     lockedReasonKey: 'building.locked.fortress',
   },
   wonder: {

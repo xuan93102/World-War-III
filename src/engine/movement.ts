@@ -1,4 +1,3 @@
-import { hasMountainRoad } from './regions';
 import { totalUnits, type UnitCounts } from './units';
 import type { GameMap } from './maps';
 
@@ -38,11 +37,15 @@ export function areAdjacent(map: GameMap, from: string, to: string): boolean {
  * Whether a hop is legal on the ground alone — ownership and troop checks live
  * in the engine, which is the thing that knows who holds what.
  */
-export function terrainRejection(map: GameMap, from: string, to: string): MarchRejection | null {
+export function terrainRejection(
+  map: GameMap,
+  from: string,
+  to: string,
+  /** Whether this player has researched 山地公路 (docs 3.2 / 11). */
+  hasRoad: boolean,
+): MarchRejection | null {
   if (!areAdjacent(map, from, to)) return 'notAdjacent';
-  // Sealed until the tech exists (docs 3.2). hasMountainRoad() is the single
-  // place that question is asked.
-  if (map.isPass(from, to) && !hasMountainRoad()) return 'passLocked';
+  if (map.isPass(from, to) && !hasRoad) return 'passLocked';
   return null;
 }
 

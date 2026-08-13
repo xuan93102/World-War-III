@@ -1192,3 +1192,109 @@
   font-size: 0.62rem;
   color: #ff8a80;
 }
+
+/* ---------- tech tree ---------- */
+
+.tech-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.tech-stat {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 5px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.tech-stat strong {
+  font-size: 1.3rem;
+}
+
+.tech-tier {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.tech-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+/* Finished techs stay listed but recede — the tree should read as a record of
+   what you've taken, not just a menu. */
+.tech-row.is-done {
+  opacity: 0.55;
+}
+
+.tech-row-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tech-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.tech-row-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.tech-row-cost {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+}
+
+.tech-row-desc {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.tech-row-req {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+.tech-row-status {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The tree is long, so let the modal body scroll rather than the page. */
+.modal .tech-tier:last-of-type {
+  margin-bottom: 4px;
+}
+
+/* The tech tree is far bigger than a confirmation dialog, so the modal that
+   holds it gets room and scrolls internally rather than growing off-screen. */
+.modal:has(.tech-header) {
+  max-width: 720px;
+  max-height: 82vh;
+  overflow-y: auto;
+}

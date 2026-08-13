@@ -73,6 +73,25 @@ export interface RoundOutcome {
 }
 
 /**
+ * Tech multipliers for one exchange (docs 11). Defaults are the flat values a
+ * side with no research fights at — which is also how a neutral garrison
+ * always fights.
+ */
+export interface CombatMods {
+  attackerAttack: number;
+  defenderAttack: number;
+  attackerTaken: number;
+  defenderTaken: number;
+}
+
+const NO_MODS: CombatMods = {
+  attackerAttack: 1,
+  defenderAttack: 1,
+  attackerTaken: 1,
+  defenderTaken: 1,
+};
+
+/**
  * One exchange. Both sides' attacks are measured *before* either takes
  * casualties, so the trade is genuinely simultaneous — a side that dies this
  * round still lands its blow, which is what allows mutual annihilation.
@@ -82,9 +101,12 @@ export function resolveRound(
   attackerCarry: number,
   defenderUnits: UnitCounts,
   defenderCarry: number,
+  mods: CombatMods = NO_MODS,
 ): RoundOutcome {
-  const incomingToDefender = stackAtk(attackerUnits);
-  const incomingToAttacker = stackAtk(defenderUnits);
+  // Attack tech scales what a side deals; armour tech scales what the side on
+  // the receiving end soaks. Both apply to the same blow.
+  const incomingToDefender = stackAtk(attackerUnits) * mods.attackerAttack * mods.defenderTaken;
+  const incomingToAttacker = stackAtk(defenderUnits) * mods.defenderAttack * mods.attackerTaken;
 
   const attacker = applyDamage(attackerUnits, incomingToAttacker, attackerCarry);
   const defender = applyDamage(defenderUnits, incomingToDefender, defenderCarry);
