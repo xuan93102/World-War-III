@@ -3,7 +3,7 @@ import { select } from 'd3-selection';
 import 'd3-transition'; // side-effect: adds .transition() to d3-selection Selection
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomTransform } from 'd3-zoom';
 import { MAP_BOUNDS, MOUNTAIN_RANGE_PATH } from '../engine/mapData.generated';
-import { REGIONS, MOUNTAIN_PASSES, hasMountainRoad } from '../engine/regions';
+import { REGIONS, MOUNTAIN_PASSES, getRegion, hasMountainRoad } from '../engine/regions';
 import { totalUnits } from '../engine/units';
 import { BuildingBadge, BuildingSolid, GROUND_Y, type IconKey } from './buildingIcons';
 import { shade } from './colors';
@@ -54,6 +54,8 @@ const PASS_DARK = '#9c5a20';
 const PASS_LOCKED = '#767c85';
 const PASS_LOCKED_DARK = '#41464d';
 const MODEL_OUTLINE = '#12161c';
+// On-screen diameter of the counter marking an army in transit.
+const MARCH_MARKER_PX = 20;
 const PASS_COLOR = '#e08a3d';
 
 const WORLD_PADDING = 20;
@@ -698,6 +700,36 @@ export function MapView({ gameState, players, selectedRegionId, onSelectRegion }
                   style={{ paintOrder: 'stroke', stroke: labelHalo, strokeWidth: 2.5 / transform.k, strokeOpacity: 0.7 }}
                 >
                   {pass.name}
+                </text>
+              </g>
+            );
+          })}
+
+          {/* Armies on the road (docs 8). Drawn at the point they've actually
+              reached between the two regions, so march time is something you
+              watch rather than a number in a panel. */}
+          {gameState.marches.map((march) => {
+            const from = getRegion(march.from);
+            const to = getRegion(march.to);
+            const progress = 1 - march.remainingSeconds / march.totalSeconds;
+            const p = project(
+              from.cx + (to.cx - from.cx) * progress,
+              from.cy + (to.cy - from.cy) * progress,
+            );
+            const r = MARCH_MARKER_PX / transform.k / 2;
+            const color = colorByPlayer[march.playerId] ?? MILITIA_COLOR;
+            return (
+              <g key={march.id}>
+                <circle cx={p.x} cy={p.y} r={r} fill={color} stroke={MODEL_OUTLINE} strokeWidth={1.2 / transform.k} />
+                <text
+                  x={p.x}
+                  y={p.y + r * 0.62}
+                  textAnchor="middle"
+                  fontSize={(MARCH_MARKER_PX * 0.62) / transform.k}
+                  fill="#fff"
+                  fontWeight={700}
+                >
+                  {totalUnits(march.units)}
                 </text>
               </g>
             );

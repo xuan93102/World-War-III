@@ -61,9 +61,27 @@ export interface PlayerState {
   coreRegionId: string;
 }
 
+/**
+ * An army on the road between two regions (docs/game-design.md 8). Troops in
+ * transit belong to no region — they've left `from` and haven't reached `to` —
+ * which is what makes interception, ambush and mid-battle reinforcement
+ * possible later. They still count against their owner's population.
+ */
+export interface March {
+  id: string;
+  playerId: PlayerId;
+  from: string;
+  to: string;
+  units: UnitCounts;
+  totalSeconds: number;
+  remainingSeconds: number;
+}
+
 export interface GameState {
   regions: Record<string, RegionState>;
   players: Record<PlayerId, PlayerState>;
+  /** Armies currently on the road. */
+  marches: March[];
   elapsedSeconds: number;
   /**
    * Seconds until the next gold payout. Gold arrives in whole-minute

@@ -10,9 +10,17 @@ import {
   type BuildingType,
 } from './buildings';
 import { FOOD_PER_MIN_BY_SIZE, MILITIA_BY_SIZE, landSizeOf, safeZoneAround } from './land';
-import { UNITS, totalUnits, type UnitType } from './units';
+import { UNITS, totalUnits, type UnitCounts, type UnitType } from './units';
+import {
+  addUnits,
+  marchSeconds,
+  stackContains,
+  subtractUnits,
+  terrainRejection,
+  type MarchRejection,
+} from './movement';
 import { REGIONS, getRegion } from './regions';
-import type { AiDifficulty, GameState, PlayerId, PlayerState, RegionState } from './types';
+import type { AiDifficulty, GameState, March, PlayerId, PlayerState, RegionState } from './types';
 
 /**
  * Economy model (docs/game-design.md section 4):
@@ -120,9 +128,82 @@ export class GameEngine {
     this.state = {
       regions,
       players,
+      marches: [],
       elapsedSeconds: 0,
       secondsUntilPayout: PAYOUT_INTERVAL_SECONDS,
     };
+  }
+
+  // ---- marching (docs/game-design.md 8) ----------------------------------
+
+  private nextMarchId = 1;
+
+  /** Seconds a hop between these two regions takes. */
+  marchSeconds(from: string, to: string): number {
+    return marchSeconds(from, to);
+  }
+
+  marchRejection(
+    from: string,
+    to: string,
+    playerId: PlayerId,
+    units: UnitCounts,
+  ): MarchRejection | null {
+    const origin = this.state.regions[from];
+    if (!origin || origin.owner !== playerId) return 'notOwner';
+    if (!stackContains(origin.units, units)) return 'noUnits';
+    const terrain = terrainRejection(from, to);
+    if (terrain) return terrain;
+    // Arriving where someone would have to be fought isn't possible yet:
+    // combat resolution (docs 6.2) is the next piece of work. Until it lands,
+    // marching is limited to your own ground and to empty neutral land, which
+    // is exactly the capture loop and nothing more.
+    const target = this.state.regions[to];
+    const hostile =
+      // Someone else's ground, or neutral ground with a garrison standing on
+      // it. Your own regions are always open, garrison or not — that's how
+      // reinforcements reach the front.
+      (target.owner !== null && target.owner !== playerId) ||
+      (target.owner === null && totalUnits(target.units) > 0);
+    if (hostile) return 'contested';
+    return null;
+  }
+
+  /** Sends part of a region's garrison to an adjacent one. Returns the order. */
+  startMarch(from: string, to: string, playerId: PlayerId, units: UnitCounts): March | null {
+    if (this.marchRejection(from, to, playerId, units) !== null) return null;
+    const origin = this.state.regions[from];
+    origin.units = subtractUnits(origin.units, units);
+    const seconds = marchSeconds(from, to);
+    const march: March = {
+      id: `m${this.nextMarchId++}`,
+      playerId,
+      from,
+      to,
+      units: { ...units },
+      totalSeconds: seconds,
+      remainingSeconds: seconds,
+    };
+    this.state.marches.push(march);
+    return march;
+  }
+
+  /** Troops this player has on the road, by unit type. */
+  marchingUnits(playerId: PlayerId): number {
+    return this.state.marches
+      .filter((m) => m.playerId === playerId)
+      .reduce((sum, m) => sum + totalUnits(m.units), 0);
+  }
+
+  private arrive(march: March): void {
+    const target = this.state.regions[march.to];
+    // Walking into empty neutral land takes it — that's the capture rule from
+    // docs 3.3, now reachable for the first time. setRegionOwner clears the
+    // region's units, so claim first and land the army after.
+    if (target.owner === null && totalUnits(target.units) === 0) {
+      this.setRegionOwner(march.to, march.playerId);
+    }
+    target.units = addUnits(target.units, march.units);
   }
 
   ownedRegions(playerId: PlayerId): RegionState[] {
@@ -166,9 +247,15 @@ export class GameEngine {
 
   // ---- population -------------------------------------------------------
 
-  /** Troops a player has stationed anywhere. */
+  /**
+   * Troops a player has stationed anywhere, plus any on the road. Marching
+   * troops belong to no region, so without the second term an army would drop
+   * out of the population count the moment it set off — and marching everyone
+   * out would free up headroom to recruit a second army for nothing.
+   */
   troopCount(playerId: PlayerId): number {
-    return this.ownedRegions(playerId).reduce((sum, r) => sum + totalUnits(r.units), 0);
+    const garrisoned = this.ownedRegions(playerId).reduce((sum, r) => sum + totalUnits(r.units), 0);
+    return garrisoned + this.marchingUnits(playerId);
   }
 
   /**
@@ -460,6 +547,18 @@ export class GameEngine {
   tick(deltaSeconds: number): void {
     this.state.elapsedSeconds += deltaSeconds;
     const minutes = deltaSeconds / 60;
+
+    // Advance every march, landing the ones that arrive. Iterated over a copy
+    // so arrival can't disturb the list being walked.
+    if (this.state.marches.length > 0) {
+      const stillMoving: March[] = [];
+      for (const march of this.state.marches) {
+        march.remainingSeconds -= deltaSeconds;
+        if (march.remainingSeconds <= 0) this.arrive(march);
+        else stillMoving.push(march);
+      }
+      this.state.marches = stillMoving;
+    }
 
     for (const region of Object.values(this.state.regions)) {
       if (region.construction) {

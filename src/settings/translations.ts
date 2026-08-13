@@ -203,6 +203,17 @@ const zhTW = {
   'unit.noSourceUnits': '沒有可升級的下階部隊',
   'unit.noPopulationRoom': '人口已滿',
   'unit.populationNote': '部隊佔用人口，與村民共用上限——養兵會壓低你的收入天花板。',
+
+  'march.section': '行軍',
+  'march.noTroops': '此地沒有可調動的部隊',
+  'march.pickTarget': '請先選擇目的地',
+  'march.depart': '出發',
+  'march.all': '全部',
+  'march.hint': '部隊在路上時仍佔用人口。走進沒有守軍的中立地塊即完成佔領。',
+  'march.reject.passLocked': '穿山點尚未開通，需要「山地公路」科技',
+  'march.reject.contested': '該地有敵軍或中立守軍——戰鬥系統尚未實作',
+  'march.inTransit': '行軍中',
+  'march.eta': '{n}秒後抵達',
 };
 
 const zhCN: Record<keyof typeof zhTW, string> = {
@@ -408,6 +419,17 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'unit.noSourceUnits': '没有可升级的下阶部队',
   'unit.noPopulationRoom': '人口已满',
   'unit.populationNote': '部队占用人口，与村民共用上限——养兵会压低你的收入天花板。',
+
+  'march.section': '行军',
+  'march.noTroops': '此地没有可调动的部队',
+  'march.pickTarget': '请先选择目的地',
+  'march.depart': '出发',
+  'march.all': '全部',
+  'march.hint': '部队在路上时仍占用人口。走进没有守军的中立地块即完成占领。',
+  'march.reject.passLocked': '穿山点尚未开通，需要「山地公路」科技',
+  'march.reject.contested': '该地有敌军或中立守军——战斗系统尚未实作',
+  'march.inTransit': '行军中',
+  'march.eta': '{n}秒后抵达',
 };
 
 const en: Record<keyof typeof zhTW, string> = {
@@ -613,6 +635,17 @@ const en: Record<keyof typeof zhTW, string> = {
   'unit.noSourceUnits': 'No lower-tier units here to upgrade',
   'unit.noPopulationRoom': 'Population is full',
   'unit.populationNote': 'Troops take population, sharing the cap with villagers — an army lowers your income ceiling.',
+
+  'march.section': 'March',
+  'march.noTroops': 'No troops here to move',
+  'march.pickTarget': 'Pick a destination',
+  'march.depart': 'March to',
+  'march.all': 'All',
+  'march.hint': 'Troops on the road still take population. Walking into ungarrisoned neutral land captures it.',
+  'march.reject.passLocked': 'The pass is sealed until Mountain Highway is researched',
+  'march.reject.contested': 'Enemies or a neutral garrison hold it — combat isn’t built yet',
+  'march.inTransit': 'On the march',
+  'march.eta': 'arrives in {n}s',
 };
 
 export type TranslationKey = keyof typeof zhTW;

@@ -803,13 +803,86 @@
   color: #7ddc9a;
 }
 
-.unit-section {
+.unit-section,
+.march-section {
   border-top: 1px solid var(--border);
   padding-top: 10px;
   margin-top: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Destinations: one chip per neighbour, with the hop's cost on it. */
+.march-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.march-target {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.march-target:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.march-target.is-selected {
+  border-color: var(--accent, #4f8ef7);
+  background: color-mix(in srgb, var(--accent, #4f8ef7) 22%, transparent);
+}
+
+.march-target-time {
+  color: var(--text-dim);
+  font-size: 0.66rem;
+}
+
+.march-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.march-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.march-row-name {
+  font-size: 0.76rem;
+}
+
+.march-row-have {
+  color: var(--text-dim);
+  font-style: normal;
+  margin-left: 5px;
+}
+
+.march-stepper {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Fixed width so the row doesn't jog as the number changes. */
+.march-count {
+  min-width: 1.6em;
+  text-align: center;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .unit-stationed {

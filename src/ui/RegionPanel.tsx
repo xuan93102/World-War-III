@@ -1,8 +1,9 @@
 import { BUILDINGS, BUILDING_ORDER, type BuildingType } from '../engine/buildings';
 import { BuildingIcon } from './buildingIcons';
 import { FOOD_PER_MIN_BY_SIZE, landSizeOf, type LandSize } from '../engine/land';
-import { totalUnits, type UnitType } from '../engine/units';
+import { totalUnits, type UnitCounts, type UnitType } from '../engine/units';
 import { UnitPanel } from './UnitPanel';
+import { MarchPanel } from './MarchPanel';
 import { getRegion } from '../engine/regions';
 import { useSettings } from '../settings/useSettings';
 import type { TranslationKey } from '../settings/translations';
@@ -18,6 +19,7 @@ interface RegionPanelProps {
   onBuild: (regionId: string, type: BuildingType) => void;
   onTrain: (regionId: string, type: UnitType, count: number) => void;
   onUpgrade: (regionId: string, type: UnitType, count: number) => void;
+  onMarch: (from: string, to: string, units: UnitCounts) => void;
   onCancelBuild: (regionId: string) => void;
   onDemolish: (regionId: string) => void;
 }
@@ -46,6 +48,7 @@ export function RegionPanel({
   onBuild,
   onTrain,
   onUpgrade,
+  onMarch,
   onCancelBuild,
   onDemolish,
 }: RegionPanelProps) {
@@ -98,6 +101,13 @@ export function RegionPanel({
         playerId={humanPlayerId}
         onTrain={onTrain}
         onUpgrade={onUpgrade}
+      />
+
+      <MarchPanel
+        engine={engine}
+        regionId={selectedRegionId}
+        playerId={humanPlayerId}
+        onMarch={onMarch}
       />
 
       {isMine && (
