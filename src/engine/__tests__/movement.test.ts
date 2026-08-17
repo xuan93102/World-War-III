@@ -9,6 +9,23 @@ import { garrisonAt } from '../regions';
 import { totalUnits } from '../units';
 import { TAIWAN } from '../maps';
 
+/** Puts troops on ground `playerId` already holds, as their legion there. */
+function station(
+  g: GameEngine,
+  regionId: string,
+  playerId: string,
+  units: Record<string, number>,
+) {
+  g.state.legions = g.state.legions.filter((l) => l.regionId !== regionId);
+  g.state.legions.push({
+    id: `test-${regionId}`,
+    playerId,
+    units,
+    supply: 1,
+    regionId,
+  });
+}
+
 // taipei-1 is p1's core; taipei-2 is adjacent to it and, being one hop from a
 // core, sits in the ungarrisoned safe zone (docs 3.3).
 const CORE = 'taipei-1';
@@ -87,7 +104,7 @@ describe('march orders', () => {
     const g = newGame();
     g.state.players.p1.money = 1000;
     g.setRegionOwner(PASS_FROM, 'p1');
-    g.state.regions[PASS_FROM].units = { militia: 3 };
+    station(g, PASS_FROM, 'p1', { militia: 3 });
     expect(g.marchRejection(PASS_FROM, PASS_TO, 'p1', { militia: 1 })).toBe('passLocked');
   });
 
@@ -201,7 +218,7 @@ describe('arrival', () => {
   it('lands mixed stacks intact', () => {
     const g = newGame();
     g.state.players.p1.money = 1000;
-    g.state.regions[CORE].units = { militia: 4, conscript: 2 };
+    station(g, CORE, 'p1', { militia: 4, conscript: 2 });
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 1, conscript: 2 });
     g.tick(MARCH_SECONDS_PER_HOP);
     expect(garrisonAt(g.state, NEXT_DOOR)).toEqual({ militia: 1, conscript: 2 });

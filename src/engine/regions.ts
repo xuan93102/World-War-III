@@ -9,7 +9,21 @@ import type { UnitCounts } from './units';
  * that where those troops are actually stored stays the engine's business.
  */
 export function garrisonAt(state: GameState, regionId: string): UnitCounts {
-  return state.regions[regionId].units;
+  const region = state.regions[regionId];
+  if (!region) return {};
+  // Unclaimed ground keeps its garrison on the region itself; a player's
+  // troops live in legions, which is where their supply bar hangs.
+  if (region.owner === null) return region.units;
+
+  const marching = new Set(state.marches.map((m) => m.legionId));
+  const combined: UnitCounts = {};
+  for (const legion of state.legions) {
+    if (legion.regionId !== regionId || marching.has(legion.id)) continue;
+    for (const [type, n] of Object.entries(legion.units) as [keyof UnitCounts, number][]) {
+      if (n > 0) combined[type] = (combined[type] ?? 0) + n;
+    }
+  }
+  return combined;
 }
 
 /**

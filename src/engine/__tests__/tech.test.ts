@@ -12,6 +12,23 @@ import {
 } from '../tech';
 import { garrisonAt } from '../regions';
 
+/** Puts troops on ground `playerId` already holds, as their legion there. */
+function station(
+  g: GameEngine,
+  regionId: string,
+  playerId: string,
+  units: Record<string, number>,
+) {
+  g.state.legions = g.state.legions.filter((l) => l.regionId !== regionId);
+  g.state.legions.push({
+    id: `test-${regionId}`,
+    playerId,
+    units,
+    supply: 1,
+    regionId,
+  });
+}
+
 const CORE = 'taipei-1';
 const LAB = 'taipei-2';
 
@@ -176,7 +193,7 @@ describe('tech effects', () => {
     const g = newGame();
     g.state.players.p1.money = 1000;
     g.setRegionOwner('newtaipei-5', 'p1');
-    g.state.regions['newtaipei-5'].units = { militia: 3 };
+    station(g, 'newtaipei-5', 'p1', { militia: 3 });
     expect(g.marchRejection('newtaipei-5', 'yilan-2', 'p1', { militia: 1 })).toBe('passLocked');
 
     g.state.players.p1.techs.push('mountainRoad');

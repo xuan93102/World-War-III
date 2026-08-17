@@ -6,6 +6,23 @@ import { GameEngine } from '../GameEngine';
 import { garrisonAt } from '../regions';
 import { UNITS, stackAtk, stackHp, totalUnits } from '../units';
 
+/** Puts troops on ground `playerId` already holds, as their legion there. */
+function station(
+  g: GameEngine,
+  regionId: string,
+  playerId: string,
+  units: Record<string, number>,
+) {
+  g.state.legions = g.state.legions.filter((l) => l.regionId !== regionId);
+  g.state.legions.push({
+    id: `test-${regionId}`,
+    playerId,
+    units,
+    supply: 1,
+    regionId,
+  });
+}
+
 function newGame() {
   return new GameEngine([
     { id: 'p1', name: 'A', color: '#00f', coreRegionId: 'taipei-1' },
@@ -97,12 +114,14 @@ describe('the upgrade chain', () => {
     const academy = withAcademy(g);
     g.trainUnits(academy, 'p1', 'conscript', 2);
 
+    // A unit type that's been used up drops out of the stack entirely rather
+    // than lingering as a zero — same convention subtractUnits follows.
     expect(g.upgradeUnits(academy, 'p1', 'volunteer', 2), 'both promoted').toBe(2);
-    expect(garrisonAt(g.state, academy).conscript, 'sources consumed').toBe(0);
+    expect(garrisonAt(g.state, academy).conscript ?? 0, 'sources consumed').toBe(0);
     expect(garrisonAt(g.state, academy).volunteer).toBe(2);
 
     expect(g.upgradeUnits(academy, 'p1', 'marine', 2)).toBe(2);
-    expect(garrisonAt(g.state, academy).volunteer).toBe(0);
+    expect(garrisonAt(g.state, academy).volunteer ?? 0).toBe(0);
     expect(garrisonAt(g.state, academy).marine).toBe(2);
   });
 
@@ -143,8 +162,8 @@ describe('the upgrade chain', () => {
     // Move them to a plain region: the upgrade is refused there.
     const plain = 'taipei-3';
     g.setRegionOwner(plain, 'p1');
-    g.state.regions[plain].units = { conscript: 2 };
-    g.state.regions[academy].units = {};
+    station(g, plain, 'p1', { conscript: 2 });
+    station(g, academy, 'p1', {});
     expect(g.upgradeRejection(plain, 'p1', 'volunteer'), 'no academy here').toBe('needsAcademy');
   });
 

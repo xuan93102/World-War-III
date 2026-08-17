@@ -39,9 +39,11 @@ import {
   type TechId,
 } from './tech';
 import { DEFAULT_MAP_ID, getMap, type GameMap } from './maps';
+import { garrisonAt } from './regions';
 import type {
   AiDifficulty,
   Battle,
+  Legion,
   GameState,
   March,
   PlayerId,
@@ -70,6 +72,8 @@ import type {
 // Bigger ground feeds more, which is what makes taking it worthwhile now
 // that gold comes from villagers rather than territory.
 const DEFAULT_POPULATION_CAP = 200;
+/** Legions start full; spending supply is the next piece of work (docs 7). */
+const FULL_SUPPLY = 1;
 /** Starting gold: buys 10 villagers, i.e. one minute of compounding. */
 export const STARTING_MONEY = 10;
 /**
@@ -173,6 +177,7 @@ export class GameEngine {
     this.state = {
       regions,
       players,
+      legions: [],
       marches: [],
       battles: [],
       elapsedSeconds: 0,
@@ -180,9 +185,48 @@ export class GameEngine {
     };
   }
 
-  // ---- marching (docs/game-design.md 8) ----------------------------------
+  // ---- legions (docs/game-design.md 7) -----------------------------------
 
   private nextMarchId = 1;
+  private nextLegionId = 1;
+
+  /** Legions standing in a region — ones out on the road are excluded. */
+  legionsAt(regionId: string): Legion[] {
+    const marching = new Set(this.state.marches.map((m) => m.legionId));
+    return this.state.legions.filter((l) => l.regionId === regionId && !marching.has(l.id));
+  }
+
+  /** What is standing here — see garrisonAt() in regions.ts. */
+  garrisonAt(regionId: string): UnitCounts {
+    return garrisonAt(this.state, regionId);
+  }
+
+  /**
+   * This player's legion in a region, created empty if they have none there.
+   * One per region per player, so reinforcements merge rather than piling up
+   * as separate stacks — which keeps "the defender" a single target.
+   */
+  private legionFor(regionId: string, playerId: PlayerId): Legion {
+    const existing = this.legionsAt(regionId).find((l) => l.playerId === playerId);
+    if (existing) return existing;
+    const legion: Legion = {
+      id: `l${this.nextLegionId++}`,
+      playerId,
+      units: {},
+      supply: FULL_SUPPLY,
+      regionId,
+    };
+    this.state.legions.push(legion);
+    return legion;
+  }
+
+  /** Forgets emptied legions, unless they're still out on a march. */
+  private pruneLegions(): void {
+    const marching = new Set(this.state.marches.map((m) => m.legionId));
+    this.state.legions = this.state.legions.filter(
+      (l) => totalUnits(l.units) > 0 || marching.has(l.id),
+    );
+  }
 
   /** Seconds a hop between these two regions takes. */
   marchSeconds(from: string, to: string, playerId?: PlayerId): number {
@@ -207,7 +251,7 @@ export class GameEngine {
     if (region.owner !== null && region.owner !== playerId) return false;
     // Your own regions are always open, garrison or not — that's how
     // reinforcements reach the front.
-    if (region.owner === null && totalUnits(region.units) > 0) return false;
+    if (region.owner === null && totalUnits(this.garrisonAt(regionId)) > 0) return false;
     return true;
   }
 
@@ -246,7 +290,7 @@ export class GameEngine {
   ): MarchRejection | null {
     const origin = this.state.regions[from];
     if (!origin || origin.owner !== playerId) return 'notOwner';
-    if (!stackContains(origin.units, units)) return 'noUnits';
+    if (!stackContains(this.garrisonAt(from), units)) return 'noUnits';
     if (from === to) return 'notAdjacent';
     if (this.marchRoute(from, to, playerId) !== null) return null;
     // No route. Say which wall they hit: a sealed pass reads very differently
@@ -264,8 +308,18 @@ export class GameEngine {
     if (this.marchRejection(from, to, playerId, units) !== null) return null;
     const route = this.marchRoute(from, to, playerId);
     if (!route || route.length === 0) return null;
-    const origin = this.state.regions[from];
-    origin.units = subtractUnits(origin.units, units);
+    // The column becomes a legion of its own, inheriting the garrison's
+    // supply — what marches out and what stays behind each keep their own bar.
+    const garrison = this.legionFor(from, playerId);
+    garrison.units = subtractUnits(garrison.units, units);
+    const column: Legion = {
+      id: `l${this.nextLegionId++}`,
+      playerId,
+      units: { ...units },
+      supply: garrison.supply,
+      regionId: from,
+    };
+    this.state.legions.push(column);
     const [next, ...rest] = route;
     const seconds = this.marchSeconds(from, next, playerId);
     const march: March = {
@@ -278,8 +332,10 @@ export class GameEngine {
       units: { ...units },
       totalSeconds: seconds,
       remainingSeconds: seconds,
+      legionId: column.id,
     };
     this.state.marches.push(march);
+    this.pruneLegions();
     return march;
   }
 
@@ -446,10 +502,13 @@ export class GameEngine {
     const defenderTechs = battle.defenderId
       ? this.ownedTechs(battle.defenderId)
       : new Set<TechId>();
+    const defenderLegion = battle.defenderId
+      ? this.legionFor(battle.regionId, battle.defenderId)
+      : null;
     const outcome = resolveRound(
       battle.attackerUnits,
       battle.attackerCarry,
-      region.units,
+      defenderLegion ? defenderLegion.units : region.units,
       battle.defenderCarry,
       {
         attackerAttack: attackMultiplier(attackerTechs),
@@ -460,7 +519,8 @@ export class GameEngine {
     );
     battle.attackerUnits = outcome.attacker.units;
     battle.attackerCarry = outcome.attacker.carry;
-    region.units = outcome.defender.units;
+    if (defenderLegion) defenderLegion.units = outcome.defender.units;
+    else region.units = outcome.defender.units;
     battle.defenderCarry = outcome.defender.carry;
     battle.roundsFought += 1;
 
@@ -471,11 +531,14 @@ export class GameEngine {
       // mutual annihilation doesn't quietly hand the region to the defender.
       this.setRegionOwner(battle.regionId, null);
       region.units = { militia: MUTINY_MILITIA };
+      this.pruneLegions();
       return true;
     }
     if (outcome.defenderWiped) {
       this.setRegionOwner(battle.regionId, battle.attackerId);
-      region.units = battle.attackerUnits;
+      // The victors become the new garrison, as a legion of their own.
+      this.legionFor(battle.regionId, battle.attackerId).units = battle.attackerUnits;
+      this.pruneLegions();
       return true;
     }
     // Attacker wiped: the defender holds, with whatever survived.
@@ -500,7 +563,16 @@ export class GameEngine {
     if (this.retreatRejection(regionId, playerId) !== null) return false;
     const battle = this.battleAt(regionId)!;
     const seconds = this.marchSeconds(battle.regionId, battle.attackerFrom, playerId);
+    const column: Legion = {
+      id: `l${this.nextLegionId++}`,
+      playerId,
+      units: { ...battle.attackerUnits },
+      supply: FULL_SUPPLY,
+      regionId: battle.regionId,
+    };
+    this.state.legions.push(column);
     this.state.marches.push({
+      legionId: column.id,
       id: `m${this.nextMarchId++}`,
       playerId,
       from: battle.regionId,
@@ -533,22 +605,37 @@ export class GameEngine {
     // set out, it walks straight into them.
     if (!this.canEnter(march.to, march.playerId)) {
       this.engage(march.to, march.playerId, march.units, march.from);
+      this.state.legions = this.state.legions.filter((l) => l.id !== march.legionId);
       return true;
     }
 
     // Walking into empty neutral land takes it — that's the capture rule from
     // docs 3.3. setRegionOwner clears the region's units, so claim first and
     // land the army after.
-    if (target.owner === null && totalUnits(target.units) === 0) {
+    if (target.owner === null && totalUnits(this.garrisonAt(march.to)) === 0) {
       this.setRegionOwner(march.to, march.playerId);
     }
 
     const next = march.route[0];
     if (next === undefined) {
-      target.units = addUnits(target.units, march.units);
+      // Land the column: it merges into whatever this player already has here,
+      // supply averaging by headcount so relief actually relieves.
+      const column = this.state.legions.find((l) => l.id === march.legionId);
+      const garrison = this.legionFor(march.to, march.playerId);
+      if (column && column !== garrison) {
+        const had = totalUnits(garrison.units);
+        const joining = totalUnits(column.units);
+        if (had + joining > 0) {
+          garrison.supply = (garrison.supply * had + column.supply * joining) / (had + joining);
+        }
+        garrison.units = addUnits(garrison.units, column.units);
+        this.state.legions = this.state.legions.filter((l) => l !== column);
+      }
       return true;
     }
 
+    const walking = this.state.legions.find((l) => l.id === march.legionId);
+    if (walking) walking.regionId = march.to;
     march.from = march.to;
     march.to = next;
     march.route = march.route.slice(1);
@@ -593,7 +680,7 @@ export class GameEngine {
     const region = this.state.regions[regionId];
     if (!region || region.owner !== null) return 'notNeutral';
     if (soldiers <= 0) return 'needsSoldiers';
-    if (totalUnits(region.units) > 0) return 'garrisoned';
+    if (totalUnits(this.garrisonAt(regionId)) > 0) return 'garrisoned';
     void playerId;
     return null;
   }
@@ -607,8 +694,16 @@ export class GameEngine {
    * out would free up headroom to recruit a second army for nothing.
    */
   troopCount(playerId: PlayerId): number {
-    const garrisoned = this.ownedRegions(playerId).reduce((sum, r) => sum + totalUnits(r.units), 0);
-    return garrisoned + this.marchingUnits(playerId);
+    // Legions cover garrisons and columns on the road alike — a marching
+    // legion is still a legion. Only troops committed to a battle sit outside
+    // the list, so they're counted separately.
+    const inLegions = this.state.legions
+      .filter((l) => l.playerId === playerId)
+      .reduce((sum, l) => sum + totalUnits(l.units), 0);
+    const fighting = this.state.battles
+      .filter((b) => b.attackerId === playerId)
+      .reduce((sum, b) => sum + totalUnits(b.attackerUnits), 0);
+    return inLegions + fighting;
   }
 
   /**
@@ -678,8 +773,8 @@ export class GameEngine {
     if (affordable <= 0) return 0;
 
     player.money -= affordable * def.trainCost;
-    const units = this.state.regions[regionId].units;
-    units[type] = (units[type] ?? 0) + affordable;
+    const legion = this.legionFor(regionId, playerId);
+    legion.units[type] = (legion.units[type] ?? 0) + affordable;
     return affordable;
   }
 
@@ -695,7 +790,7 @@ export class GameEngine {
     if (!region || region.owner !== playerId) return 'needsAcademy';
     // Upgrades happen at an academy, so troops have to march back to one.
     if (region.building?.type !== 'academy') return 'needsAcademy';
-    if ((region.units[def.upgradeFrom] ?? 0) < count) return 'noSourceUnits';
+    if ((this.garrisonAt(regionId)[def.upgradeFrom] ?? 0) < count) return 'noSourceUnits';
     if (this.state.players[playerId].money < def.upgradeCost * count) return 'cannotAfford';
     return null;
   }
@@ -709,18 +804,18 @@ export class GameEngine {
     if (def.upgradeFrom === null || def.upgradeCost === null) return 0;
     if (this.upgradeRejection(regionId, playerId, type, 1) !== null) return 0;
 
-    const region = this.state.regions[regionId];
     const player = this.state.players[playerId];
+    const legion = this.legionFor(regionId, playerId);
     const upgradable = Math.min(
       count,
-      region.units[def.upgradeFrom] ?? 0,
+      legion.units[def.upgradeFrom] ?? 0,
       Math.floor(player.money / def.upgradeCost),
     );
     if (upgradable <= 0) return 0;
 
     player.money -= upgradable * def.upgradeCost;
-    region.units[def.upgradeFrom] = (region.units[def.upgradeFrom] ?? 0) - upgradable;
-    region.units[type] = (region.units[type] ?? 0) + upgradable;
+    legion.units[def.upgradeFrom] = (legion.units[def.upgradeFrom] ?? 0) - upgradable;
+    legion.units[type] = (legion.units[type] ?? 0) + upgradable;
     return upgradable;
   }
 
@@ -734,6 +829,11 @@ export class GameEngine {
     // land handed the winner the loser's units *and* their population.
     // The attacking army arrives via the movement system instead.
     region.units = {};
+    // Legions don't change sides with the ground either. Ones out on the road
+    // are left alone — they're not standing here to be captured.
+    this.state.legions = this.state.legions.filter(
+      (l) => l.regionId !== regionId || this.state.marches.some((m) => m.legionId === l.id),
+    );
     // A change of hands interrupts any build in progress and resets the
     // wonder hold clock — you have to hold it yourself to win with it.
     region.construction = undefined;

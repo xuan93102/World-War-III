@@ -33,9 +33,9 @@ export interface RegionState {
   owner: PlayerId | null;
   isCore: boolean;
   /**
-   * Troops stationed here. On neutral land this is the garrison, which is
-   * only ever militia and is sized by land area; on owned land it's whatever
-   * the owner has trained or moved in.
+   * The *neutral* garrison: only ever militia, sized by land area. A player's
+   * troops don't live here — they live in legions, so ask garrisonAt() for
+   * "who is standing on this ground".
    */
   units: UnitCounts;
   /** Completed building, if any. One per region (docs/game-design.md 5). */
@@ -110,6 +110,36 @@ export interface March {
   /** Duration of the current hop. */
   totalSeconds: number;
   remainingSeconds: number;
+  /** The legion doing the marching. */
+  legionId: string;
+}
+
+/**
+ * A body of troops with an identity of its own (docs/game-design.md 7).
+ *
+ * Troops used to be a bare count on a region, which was enough for marching
+ * and fighting but leaves supply nowhere to live: §7 gives each *army* a
+ * supply bar, and "the army" has to be a thing before it can carry one. A
+ * legion keeps its identity as it marches and garrisons, so the column that
+ * walked three regions into enemy ground is the one that runs dry.
+ *
+ * Invariant: **at most one standing legion per region per player.** Anything
+ * arriving merges into the one already there, which keeps "the defender" a
+ * single target in combat. A marching legion is separate until it lands.
+ *
+ * Neutral garrisons are not legions — they belong to no player and never move.
+ */
+export interface Legion {
+  id: string;
+  playerId: PlayerId;
+  units: UnitCounts;
+  /**
+   * Supply, 0..1. Carried but not yet spent — the drain, the logistics safe
+   * zone and the combat penalties are the next piece of work.
+   */
+  supply: number;
+  /** Where it stands, or the region it set out from while marching. */
+  regionId: string;
 }
 
 /**
@@ -137,7 +167,9 @@ export interface Battle {
 export interface GameState {
   regions: Record<string, RegionState>;
   players: Record<PlayerId, PlayerState>;
-  /** Armies currently on the road. */
+  /** Every player-owned body of troops, standing or on the road. */
+  legions: Legion[];
+  /** Armies currently on the road. Each belongs to a legion. */
   marches: March[];
   /** Fights in progress, at most one per region. */
   battles: Battle[];
