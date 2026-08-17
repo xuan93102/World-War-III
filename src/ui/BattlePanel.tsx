@@ -1,5 +1,6 @@
 import { UNITS, UNIT_ORDER, stackAtk, totalUnits, type UnitCounts } from '../engine/units';
 import { garrisonAt } from '../engine/regions';
+import { SupplyBar } from './SupplyBar';
 import { useSettings } from '../settings/useSettings';
 import type { GameEngine } from '../engine/GameEngine';
 import type { PlayerState } from '../engine/types';
@@ -63,6 +64,9 @@ export function BattlePanel({ engine, regionId, playerId, players, onRetreat }: 
         garrisonAt(engine.state, regionId),
         battle.defenderId === playerId,
       )}
+
+      {/* Both sides fight to their supply as well as their tech (docs 7). */}
+      <SupplyBar supply={battle.attackerSupply} />
 
       <div className="battle-meta">
         <span>{t('battle.rounds').replace('{n}', String(battle.roundsFought))}</span>

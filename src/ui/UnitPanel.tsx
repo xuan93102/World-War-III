@@ -1,5 +1,6 @@
 import { UNITS, UNIT_ORDER, totalUnits, type UnitType } from '../engine/units';
 import { garrisonAt } from '../engine/regions';
+import { SupplyBar } from './SupplyBar';
 import { useSettings } from '../settings/useSettings';
 import type { GameEngine } from '../engine/GameEngine';
 
@@ -16,6 +17,8 @@ export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: Un
   const region = engine.state.regions[regionId];
   const stationed = garrisonAt(engine.state, regionId);
   const isMine = region.owner === playerId;
+  // Supply belongs to the legion, so it only shows on ground you hold.
+  const legion = engine.legionsAt(regionId).find((l) => l.playerId === playerId);
 
   return (
     <section className="unit-section">
@@ -32,6 +35,8 @@ export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: Un
           ))
         )}
       </div>
+
+      {legion && totalUnits(legion.units) > 0 && <SupplyBar supply={legion.supply} />}
 
       {/* Troops that have left here, or are on their way in. They're on the
           road and count for neither region's garrison, so without this the

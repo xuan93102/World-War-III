@@ -155,6 +155,8 @@ export interface Battle {
   attackerId: PlayerId;
   attackerUnits: UnitCounts;
   attackerCarry: number;
+  /** The attacking force’s supply, which scales how well it fights (docs 7). */
+  attackerSupply: number;
   /** Where the attack came from, so breaking off has somewhere to go back to. */
   attackerFrom: string;
   /** null when the defender is a neutral garrison. */

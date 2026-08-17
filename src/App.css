@@ -1298,3 +1298,46 @@
   max-height: 82vh;
   overflow-y: auto;
 }
+
+/* ---------- supply ---------- */
+
+.supply-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.supply-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.supply-state {
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Banded rather than a gradient: the penalties are steps, so the colour
+   should change where the penalty does. */
+.supply-state.is-ok { color: var(--text-dim); }
+.supply-state.is-strained { color: #e8a33d; }
+.supply-state.is-broken { color: #ff8a80; }
+
+.supply-track {
+  height: 5px;
+  border-radius: 3px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.supply-fill {
+  height: 100%;
+  transition: width 0.3s linear;
+}
+
+.supply-fill.is-ok { background: #63b83d; }
+.supply-fill.is-strained { background: #e8a33d; }
+.supply-fill.is-broken { background: #d9534f; }

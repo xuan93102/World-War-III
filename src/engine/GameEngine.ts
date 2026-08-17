@@ -39,6 +39,13 @@ import {
   type TechId,
 } from './tech';
 import { DEFAULT_MAP_ID, getMap, type GameMap } from './maps';
+import {
+  FULL_SUPPLY,
+  logisticsZone,
+  nextSupply,
+  supplyAttackMultiplier,
+  supplyDamageTakenMultiplier,
+} from './supply';
 import { garrisonAt } from './regions';
 import type {
   AiDifficulty,
@@ -72,8 +79,6 @@ import type {
 // Bigger ground feeds more, which is what makes taking it worthwhile now
 // that gold comes from villagers rather than territory.
 const DEFAULT_POPULATION_CAP = 200;
-/** Legions start full; spending supply is the next piece of work (docs 7). */
-const FULL_SUPPLY = 1;
 /** Starting gold: buys 10 villagers, i.e. one minute of compounding. */
 export const STARTING_MONEY = 10;
 /**
@@ -466,7 +471,13 @@ export class GameEngine {
    * progress just adds to the attacking stack — the reinforcements take effect
    * from the next round, since the round clock keeps running.
    */
-  private engage(regionId: string, attackerId: PlayerId, units: UnitCounts, from: string): void {
+  private engage(
+    regionId: string,
+    attackerId: PlayerId,
+    units: UnitCounts,
+    from: string,
+    supply = FULL_SUPPLY,
+  ): void {
     const existing = this.battleAt(regionId);
     if (existing && existing.attackerId === attackerId) {
       existing.attackerUnits = addUnits(existing.attackerUnits, units);
@@ -485,6 +496,7 @@ export class GameEngine {
       attackerId,
       attackerUnits: { ...units },
       attackerCarry: 0,
+      attackerSupply: supply,
       attackerFrom: from,
       defenderId: region.owner,
       defenderCarry: 0,
@@ -511,10 +523,19 @@ export class GameEngine {
       defenderLegion ? defenderLegion.units : region.units,
       battle.defenderCarry,
       {
-        attackerAttack: attackMultiplier(attackerTechs),
-        defenderAttack: attackMultiplier(defenderTechs),
-        attackerTaken: damageTakenMultiplier(attackerTechs),
-        defenderTaken: damageTakenMultiplier(defenderTechs),
+        // A neutral garrison has neither research nor a supply line, so it
+        // always fights at flat values.
+        attackerAttack:
+          attackMultiplier(attackerTechs) * supplyAttackMultiplier(battle.attackerSupply),
+        defenderAttack:
+          attackMultiplier(defenderTechs) *
+          (defenderLegion ? supplyAttackMultiplier(defenderLegion.supply) : 1),
+        attackerTaken:
+          damageTakenMultiplier(attackerTechs) *
+          supplyDamageTakenMultiplier(battle.attackerSupply),
+        defenderTaken:
+          damageTakenMultiplier(defenderTechs) *
+          (defenderLegion ? supplyDamageTakenMultiplier(defenderLegion.supply) : 1),
       },
     );
     battle.attackerUnits = outcome.attacker.units;
@@ -567,7 +588,7 @@ export class GameEngine {
       id: `l${this.nextLegionId++}`,
       playerId,
       units: { ...battle.attackerUnits },
-      supply: FULL_SUPPLY,
+      supply: battle.attackerSupply,
       regionId: battle.regionId,
     };
     this.state.legions.push(column);
@@ -604,7 +625,8 @@ export class GameEngine {
     // hostile ground, so if an enemy has moved into the column's path since it
     // set out, it walks straight into them.
     if (!this.canEnter(march.to, march.playerId)) {
-      this.engage(march.to, march.playerId, march.units, march.from);
+      const column = this.state.legions.find((l) => l.id === march.legionId);
+      this.engage(march.to, march.playerId, march.units, march.from, column?.supply ?? FULL_SUPPLY);
       this.state.legions = this.state.legions.filter((l) => l.id !== march.legionId);
       return true;
     }
@@ -1054,6 +1076,34 @@ export class GameEngine {
         if (!done) stillMoving.push(march);
       }
       this.state.marches = stillMoving;
+    }
+
+    // Supply (docs 7). Troops in the field burn through it; troops inside
+    // their own logistics territory hold and slowly recover. The zone is
+    // computed once per player rather than once per legion.
+    if (this.state.legions.length > 0 || this.state.battles.length > 0) {
+      const zones = new Map<PlayerId, Set<string>>();
+      const zoneFor = (playerId: PlayerId) => {
+        let zone = zones.get(playerId);
+        if (!zone) {
+          zone = logisticsZone(this.map, this.state.regions, playerId);
+          zones.set(playerId, zone);
+        }
+        return zone;
+      };
+
+      for (const legion of this.state.legions) {
+        legion.supply = nextSupply(legion.supply, minutes, zoneFor(legion.playerId).has(legion.regionId));
+      }
+      // Troops committed to an attack are standing on ground they don't hold,
+      // so they drain like anyone else in the field.
+      for (const battle of this.state.battles) {
+        battle.attackerSupply = nextSupply(
+          battle.attackerSupply,
+          minutes,
+          zoneFor(battle.attackerId).has(battle.regionId),
+        );
+      }
     }
 
     for (const region of Object.values(this.state.regions)) {
