@@ -99,6 +99,24 @@ export function HelpScreen({ onBack }: HelpScreenProps) {
             textKey="help.legendConstruction"
           />
           <LegendRow icon={<span className="help-garrison">⚔8</span>} textKey="help.legendGarrison" />
+          <LegendRow
+            icon={
+              <svg width="24" height="24" viewBox="0 0 24 24">
+                <circle cx="8" cy="12" r="5" fill="#4f8ef7" stroke="#12161c" strokeWidth="1.4" />
+                <rect
+                  x="14.5"
+                  y="9"
+                  width="6"
+                  height="6"
+                  rx="1.4"
+                  fill="#4f8ef7"
+                  stroke="#12161c"
+                  strokeWidth="1.4"
+                />
+              </svg>
+            }
+            textKey="help.legendRoad"
+          />
           <LegendRow icon={<RoadSwatch locked />} textKey="help.legendPassLocked" />
           <LegendRow icon={<RoadSwatch locked={false} />} textKey="help.legendPassUnlocked" />
           <LegendRow icon={<RidgeSwatch />} textKey="help.legendRidge" />

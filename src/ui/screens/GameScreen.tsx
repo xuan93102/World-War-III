@@ -178,6 +178,10 @@ export function GameScreen({
             engine.retreat(regionId, humanPlayerId);
             forceRender((n) => n + 1);
           }}
+          onDispatchCart={(from, to, porters) => {
+            engine.dispatchCart(from, to, humanPlayerId, porters);
+            forceRender((n) => n + 1);
+          }}
           onMarch={(from, to, units) => {
             engine.startMarch(from, to, humanPlayerId, units);
             setPickingMarch(false);

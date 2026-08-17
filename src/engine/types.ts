@@ -38,8 +38,13 @@ export interface RegionState {
    * "who is standing on this ground".
    */
   units: UnitCounts;
-  /** Completed building, if any. One per region (docs/game-design.md 5). */
-  building?: { type: BuildingType; hp: number };
+  /**
+   * Completed building, if any. One per region (docs/game-design.md 5).
+   *
+   * `stock` is food a fortress is holding (docs 7): carts deliver it, and any
+   * legion standing here tops its supply up from it. Only fortresses use it.
+   */
+  building?: { type: BuildingType; hp: number; stock?: number };
   /** In-progress build, if any. Mutually exclusive with `building`. */
   construction?: { type: BuildingType; remainingSeconds: number; totalSeconds: number };
   /**
@@ -134,12 +139,44 @@ export interface Legion {
   playerId: PlayerId;
   units: UnitCounts;
   /**
-   * Supply, 0..1. Carried but not yet spent — the drain, the logistics safe
-   * zone and the combat penalties are the next piece of work.
+   * Supply, 0..1. Drains off friendly ground, holds on it, and only a
+   * granary, a farm or a supply cart puts it back (docs 7).
    */
   supply: number;
   /** Where it stands, or the region it set out from while marching. */
   regionId: string;
+}
+
+/**
+ * A supply cart on the road (docs/game-design.md 7).
+ *
+ * Carts are how supply gets *back*, which nothing else does: own land only
+ * holds the bar steady and a granary can't walk to the front. A cart leaves a
+ * granary with a load of food, refills whoever it reaches, and walks home to
+ * be used again — so the number of carts is a real ceiling on how many pushes
+ * you can sustain at once.
+ *
+ * It travels the same way an army does, one hop at a time over ground it
+ * could stand on, and it cannot fight: walking into an enemy loses it.
+ */
+export interface SupplyCart {
+  id: string;
+  playerId: PlayerId;
+  /** The granary it left from, and the one it walks back to. */
+  homeRegionId: string;
+  /** Where this run is headed. Equals `homeRegionId` once returning. */
+  destination: string;
+  /** Villagers pulling it. They stop earning until it gets home. */
+  porters: number;
+  /** Food still aboard. Spent on arrival; the remainder rides home. */
+  load: number;
+  /** true once it has delivered and is on its way back. */
+  returning: boolean;
+  from: string;
+  to: string;
+  route: string[];
+  totalSeconds: number;
+  remainingSeconds: number;
 }
 
 /**
@@ -173,6 +210,8 @@ export interface GameState {
   legions: Legion[];
   /** Armies currently on the road. Each belongs to a legion. */
   marches: March[];
+  /** Supply carts out on a run. Idle carts aren't tracked — they're a count. */
+  carts: SupplyCart[];
   /** Fights in progress, at most one per region. */
   battles: Battle[];
   elapsedSeconds: number;

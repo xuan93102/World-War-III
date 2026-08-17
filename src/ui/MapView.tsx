@@ -62,6 +62,8 @@ const PASS_LOCKED_DARK = '#41464d';
 const MODEL_OUTLINE = '#12161c';
 // On-screen diameter of the counter marking an army in transit.
 const MARCH_MARKER_PX = 20;
+/** Carts are smaller than armies — they're cargo, not a threat. */
+const CART_MARKER_PX = 13;
 // The dashed line previewing where a march would go.
 const ROUTE_COLOR = '#ffd54a';
 // A fight in progress.
@@ -813,6 +815,33 @@ export function MapView({
                   {totalUnits(march.units)}
                 </text>
               </g>
+            );
+          })}
+
+          {/* Supply carts (docs 7). Square, so a convoy never reads as an army,
+              and hollow on the way back when there's nothing left to take. */}
+          {gameState.carts.map((cart) => {
+            const from = map.region(cart.from);
+            const to = map.region(cart.to);
+            const progress = 1 - cart.remainingSeconds / cart.totalSeconds;
+            const p = project(
+              from.cx + (to.cx - from.cx) * progress,
+              from.cy + (to.cy - from.cy) * progress,
+            );
+            const side = CART_MARKER_PX / transform.k;
+            const color = colorByPlayer[cart.playerId] ?? MILITIA_COLOR;
+            return (
+              <rect
+                key={cart.id}
+                x={p.x - side / 2}
+                y={p.y - side / 2}
+                width={side}
+                height={side}
+                rx={side * 0.22}
+                fill={cart.returning ? 'none' : color}
+                stroke={cart.returning ? color : MODEL_OUTLINE}
+                strokeWidth={1.4 / transform.k}
+              />
             );
           })}
 

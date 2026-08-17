@@ -14,6 +14,7 @@ import { UNITS, totalUnits, type UnitCounts, type UnitType } from './units';
 import {
   addUnits,
   findPath,
+  MARCH_SECONDS_VIA_PASS,
   marchSeconds,
   stackContains,
   subtractUnits,
@@ -36,14 +37,18 @@ import {
   populationCapFromTech,
   researchTimeMultiplier,
   researcherCost,
+  supplyCartCap,
   type TechId,
 } from './tech';
 import { DEFAULT_MAP_ID, getMap, type GameMap } from './maps';
 import {
+  CART_FOOD_LOAD,
   FULL_SUPPLY,
+  cartHopSeconds,
   footingAt,
   logisticsZones,
   nextSupply,
+  refillFrom,
   supplyAttackMultiplier,
   supplyDamageTakenMultiplier,
   type LogisticsZones,
@@ -58,6 +63,7 @@ import type {
   PlayerId,
   PlayerState,
   RegionState,
+  SupplyCart,
 } from './types';
 
 /**
@@ -119,6 +125,17 @@ export type ResearchRejection =
   | 'needsPrereq'
   | 'slotsFull'
   | 'cannotAfford';
+
+export type CartRejection =
+  /** Carts only leave from a granary you own (docs 7). */
+  | 'notGranary'
+  | 'noCart'
+  | 'noPorters'
+  | 'noFood'
+  /** Nothing there to supply: no legion of yours, no fortress of yours. */
+  | 'noTarget'
+  | 'passLocked'
+  | 'noRoute';
 
 export type BuildRejection =
   | 'notOwner'
@@ -186,6 +203,7 @@ export class GameEngine {
       players,
       legions: [],
       marches: [],
+      carts: [],
       battles: [],
       elapsedSeconds: 0,
       secondsUntilPayout: PAYOUT_INTERVAL_SECONDS,
@@ -344,6 +362,191 @@ export class GameEngine {
     this.state.marches.push(march);
     this.pruneLegions();
     return march;
+  }
+
+  // ---- supply carts (docs/game-design.md 7) ------------------------------
+
+  private nextCartId = 1;
+
+  /** Carts this player may have out at once, raised by the transport techs. */
+  supplyCartCap(playerId: PlayerId): number {
+    return supplyCartCap(this.ownedTechs(playerId));
+  }
+
+  /** Carts sitting idle at granaries, ready to be sent. */
+  cartsAvailable(playerId: PlayerId): number {
+    const out = this.state.carts.filter((c) => c.playerId === playerId).length;
+    return Math.max(0, this.supplyCartCap(playerId) - out);
+  }
+
+  /** Porters this player has tied up on the road. They're still population. */
+  porterCount(playerId: PlayerId): number {
+    return this.state.carts
+      .filter((c) => c.playerId === playerId)
+      .reduce((sum, c) => sum + c.porters, 0);
+  }
+
+  /** Whether a cart sent here would have anything to do on arrival. */
+  private isCartTarget(regionId: string, playerId: PlayerId): boolean {
+    const region = this.state.regions[regionId];
+    if (!region) return false;
+    if (region.owner === playerId && region.building?.type === 'fortress') return true;
+    return this.legionsAt(regionId).some((l) => l.playerId === playerId);
+  }
+
+  /** Everywhere a cart could usefully be sent from `from`. */
+  cartTargets(from: string, playerId: PlayerId): string[] {
+    return Object.keys(this.state.regions).filter(
+      (id) =>
+        id !== from &&
+        this.isCartTarget(id, playerId) &&
+        this.marchRoute(from, id, playerId) !== null,
+    );
+  }
+
+  cartRejection(
+    from: string,
+    to: string,
+    playerId: PlayerId,
+    porters: number,
+  ): CartRejection | null {
+    const origin = this.state.regions[from];
+    if (!origin || origin.owner !== playerId || origin.building?.type !== 'granary')
+      return 'notGranary';
+    if (this.cartsAvailable(playerId) < 1) return 'noCart';
+    const player = this.state.players[playerId];
+    if (!player) return 'noCart';
+    if (porters < 1 || porters > player.villagers) return 'noPorters';
+    if (player.food < CART_FOOD_LOAD) return 'noFood';
+    if (from === to || !this.isCartTarget(to, playerId)) return 'noTarget';
+    if (this.marchRoute(from, to, playerId) === null) {
+      return terrainRejection(this.map, from, to, this.hasMountainRoad(playerId)) === 'passLocked'
+        ? 'passLocked'
+        : 'noRoute';
+    }
+    return null;
+  }
+
+  /** Seconds a cart with this many porters takes for one hop. */
+  cartSeconds(from: string, to: string, porters: number): number {
+    // A pass is a pass: the mountain, not the manpower, sets the pace there.
+    return this.map.isPass(from, to) ? MARCH_SECONDS_VIA_PASS : cartHopSeconds(porters);
+  }
+
+  /** Seconds for a whole cart route. */
+  cartRouteSeconds(from: string, route: string[], porters: number): number {
+    let total = 0;
+    let at = from;
+    for (const step of route) {
+      total += this.cartSeconds(at, step, porters);
+      at = step;
+    }
+    return total;
+  }
+
+  /**
+   * Sends a loaded cart from a granary. The porters come out of the villager
+   * pool — they stop earning for the whole round trip, which is what a fast
+   * cart actually costs.
+   */
+  dispatchCart(from: string, to: string, playerId: PlayerId, porters: number): SupplyCart | null {
+    if (this.cartRejection(from, to, playerId, porters) !== null) return null;
+    const route = this.marchRoute(from, to, playerId);
+    if (!route || route.length === 0) return null;
+
+    const player = this.state.players[playerId]!;
+    player.villagers -= porters;
+    player.food -= CART_FOOD_LOAD;
+
+    const [next, ...rest] = route;
+    const cart: SupplyCart = {
+      id: `c${this.nextCartId++}`,
+      playerId,
+      homeRegionId: from,
+      destination: to,
+      porters,
+      load: CART_FOOD_LOAD,
+      returning: false,
+      from,
+      to: next,
+      route: rest,
+      totalSeconds: this.cartSeconds(from, next, porters),
+      remainingSeconds: this.cartSeconds(from, next, porters),
+    };
+    this.state.carts.push(cart);
+    return cart;
+  }
+
+  /** Carts leaving from, passing into, or arriving at a region. */
+  cartsInvolving(regionId: string): SupplyCart[] {
+    return this.state.carts.filter((c) => c.from === regionId || c.to === regionId);
+  }
+
+  /**
+   * Unloads onto whatever is here: the legion first, then the fortress store.
+   * Returns the food left aboard.
+   */
+  private unloadCart(cart: SupplyCart): number {
+    const region = this.state.regions[cart.destination];
+    let load = cart.load;
+
+    const legion = this.legionsAt(cart.destination).find((l) => l.playerId === cart.playerId);
+    if (legion) {
+      const { supply, spent } = refillFrom(load, totalUnits(legion.units), legion.supply);
+      legion.supply = supply;
+      load -= spent;
+    }
+
+    if (region?.owner === cart.playerId && region.building?.type === 'fortress') {
+      region.building.stock = (region.building.stock ?? 0) + load;
+      load = 0;
+    }
+
+    return load;
+  }
+
+  /**
+   * Ends a cart's hop. A cart can't fight, so walking into ground it couldn't
+   * stand on loses it: the holder takes the load (奪取) or burns it (燒毀).
+   * Stealing is the default because it's strictly better for whoever did it.
+   */
+  private completeCartHop(cart: SupplyCart): boolean {
+    if (!this.canEnter(cart.to, cart.playerId)) {
+      const taker = this.state.regions[cart.to]?.owner;
+      if (taker && taker !== cart.playerId) this.state.players[taker]!.food += cart.load;
+      // The porters are lost with the cart — that's the risk of a long haul
+      // through ground you don't control.
+      return true;
+    }
+
+    const next = cart.route[0];
+    if (next === undefined) {
+      if (!cart.returning) {
+        cart.load = this.unloadCart(cart);
+        // Head home. If the granary is gone or in enemy hands there's no route
+        // back, and the cart (with its porters) is written off.
+        const back = this.marchRoute(cart.destination, cart.homeRegionId, cart.playerId);
+        if (!back || back.length === 0) return true;
+        cart.returning = true;
+        cart.destination = cart.homeRegionId;
+        cart.route = back.slice(1);
+        cart.from = cart.to;
+        cart.to = back[0];
+        cart.totalSeconds = this.cartSeconds(cart.from, cart.to, cart.porters);
+        cart.remainingSeconds += cart.totalSeconds;
+        return false;
+      }
+      // Home: the porters go back to earning and the cart is free again.
+      this.state.players[cart.playerId]!.villagers += cart.porters;
+      return true;
+    }
+
+    cart.from = cart.to;
+    cart.to = next;
+    cart.route = cart.route.slice(1);
+    cart.totalSeconds = this.cartSeconds(cart.from, cart.to, cart.porters);
+    cart.remainingSeconds += cart.totalSeconds;
+    return false;
   }
 
   /**
@@ -739,7 +942,11 @@ export class GameEngine {
     // Researchers take a slot each, the same as troops do — one being trained
     // included, since its slot is already spoken for.
     const researchers = (player?.researchers ?? 0) + (player?.researcherTraining ? 1 : 0);
-    return (player?.villagers ?? 0) + this.troopCount(playerId) + researchers;
+    // Porters are off the villager roll while hauling, but they are still
+    // people — leaving them out would let you buy replacements for free.
+    return (
+      (player?.villagers ?? 0) + this.troopCount(playerId) + researchers + this.porterCount(playerId)
+    );
   }
 
   /** Population slots still free under the cap. */
@@ -1078,6 +1285,30 @@ export class GameEngine {
         if (!done) stillMoving.push(march);
       }
       this.state.marches = stillMoving;
+    }
+
+    if (this.state.carts.length > 0) {
+      const stillRolling: SupplyCart[] = [];
+      for (const cart of this.state.carts) {
+        cart.remainingSeconds -= deltaSeconds;
+        let done = false;
+        while (!done && cart.remainingSeconds <= 0) {
+          done = this.completeCartHop(cart);
+        }
+        if (!done) stillRolling.push(cart);
+      }
+      this.state.carts = stillRolling;
+    }
+
+    // A fortress hands out what it's holding to whoever is standing on it.
+    for (const [regionId, region] of Object.entries(this.state.regions)) {
+      const stock = region.building?.type === 'fortress' ? (region.building.stock ?? 0) : 0;
+      if (stock <= 0 || !region.owner) continue;
+      const legion = this.legionsAt(regionId).find((l) => l.playerId === region.owner);
+      if (!legion) continue;
+      const { supply, spent } = refillFrom(stock, totalUnits(legion.units), legion.supply);
+      legion.supply = supply;
+      region.building!.stock = stock - spent;
     }
 
     // Supply (docs 7). Troops in the field burn through it, own land holds it,

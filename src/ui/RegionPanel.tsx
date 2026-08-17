@@ -5,6 +5,7 @@ import { totalUnits, type UnitCounts, type UnitType } from '../engine/units';
 import { garrisonAt } from '../engine/regions';
 import { UnitPanel } from './UnitPanel';
 import { MarchPanel } from './MarchPanel';
+import { SupplyCartPanel } from './SupplyCartPanel';
 import { BattlePanel } from './BattlePanel';
 import { useSettings } from '../settings/useSettings';
 import type { TranslationKey } from '../settings/translations';
@@ -21,6 +22,7 @@ interface RegionPanelProps {
   onTrain: (regionId: string, type: UnitType, count: number) => void;
   onUpgrade: (regionId: string, type: UnitType, count: number) => void;
   onMarch: (from: string, to: string, units: UnitCounts) => void;
+  onDispatchCart: (from: string, to: string, porters: number) => void;
   marchTarget: string | null;
   pickingMarch: boolean;
   onPickMarch: (picking: boolean) => void;
@@ -54,6 +56,7 @@ export function RegionPanel({
   onTrain,
   onUpgrade,
   onMarch,
+  onDispatchCart,
   marchTarget,
   pickingMarch,
   onPickMarch,
@@ -128,6 +131,13 @@ export function RegionPanel({
         pickingMarch={pickingMarch}
         onPickMarch={onPickMarch}
         onMarch={onMarch}
+      />
+
+      <SupplyCartPanel
+        engine={engine}
+        regionId={selectedRegionId}
+        playerId={humanPlayerId}
+        onDispatch={onDispatchCart}
       />
 
       {isMine && (

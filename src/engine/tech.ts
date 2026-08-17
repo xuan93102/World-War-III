@@ -63,7 +63,6 @@ export interface TechDef {
   lockedReasonKey?: TranslationKey;
 }
 
-const NEEDS_SUPPLY: TranslationKey = 'tech.locked.supply';
 const NEEDS_VEHICLES: TranslationKey = 'tech.locked.vehicles';
 const NEEDS_SCOUTING: TranslationKey = 'tech.locked.scouting';
 const NEEDS_BUILDING_COMBAT: TranslationKey = 'tech.locked.buildingCombat';
@@ -97,8 +96,7 @@ export const TECHS: Record<TechId, TechDef> = {
   },
   transportCorps1: {
     id: 'transportCorps1', nameKey: 'tech.transportCorps1', descKey: 'tech.transportCorps1.desc',
-    coreLevel: 1, costMoney: 120, seconds: 70, requires: [],
-    implemented: false, lockedReasonKey: NEEDS_SUPPLY,
+    coreLevel: 1, costMoney: 120, seconds: 70, requires: [], implemented: true,
   },
 
   // ---- core level 2 ----
@@ -166,8 +164,7 @@ export const TECHS: Record<TechId, TechDef> = {
   },
   transportCorps2: {
     id: 'transportCorps2', nameKey: 'tech.transportCorps2', descKey: 'tech.transportCorps2.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: ['transportCorps1'],
-    implemented: false, lockedReasonKey: NEEDS_SUPPLY,
+    coreLevel: 2, costMoney: 350, seconds: 150, requires: ['transportCorps1'], implemented: true,
   },
 
   // ---- core level 3 ----
@@ -289,6 +286,11 @@ export function populationCapFromTech(owned: ReadonlySet<TechId>, base: number):
   if (owned.has('townExpansion')) return 700;
   if (owned.has('homesteadAct')) return 400;
   return base;
+}
+
+/** Supply carts a player may have on the road at once (docs 7). */
+export function supplyCartCap(owned: ReadonlySet<TechId>): number {
+  return 1 + (owned.has('transportCorps1') ? 1 : 0) + (owned.has('transportCorps2') ? 1 : 0);
 }
 
 /** March time multiplier. Lower is faster. */
