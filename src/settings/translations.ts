@@ -206,7 +206,7 @@ const zhTW = {
   'supply.ok': '補給充足',
   'supply.strained': '補給吃緊',
   'supply.broken': '補給中斷',
-  'supply.note': '部隊踏出自己的領土後每分鐘消耗資重；在己方地塊上（或己方糧倉往外2格內）會緩慢回復。低於80%造成傷害-20%，低於40%再疊加一次並且受到傷害+40%。',
+  'supply.note': '部隊踏出自己的領土後每分鐘消耗資重；站在己方地塊上（含核心，以及己方糧倉往外2格內）會停止消耗，但只有站在糧倉或糧田上才會回復。低於80%造成傷害-20%，低於40%再疊加一次並且受到傷害+40%。',
 
   'march.section': '行軍',
   'march.noTroops': '此地沒有可調動的部隊',
@@ -524,7 +524,7 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'supply.ok': '补给充足',
   'supply.strained': '补给吃紧',
   'supply.broken': '补给中断',
-  'supply.note': '部队踏出自己的领土后每分钟消耗资重；在己方地块上（或己方粮仓往外2格内）会缓慢回复。低于80%造成伤害-20%，低于40%再叠加一次并且受到伤害+40%。',
+  'supply.note': '部队踏出自己的领土后每分钟消耗资重；站在己方地块上（含核心，以及己方粮仓往外2格内）会停止消耗，但只有站在粮仓或粮田上才会回复。低于80%造成伤害-20%，低于40%再叠加一次并且受到伤害+40%。',
 
   'march.section': '行军',
   'march.noTroops': '此地没有可调动的部队',
@@ -842,7 +842,7 @@ const en: Record<keyof typeof zhTW, string> = {
   'supply.ok': 'Supplied',
   'supply.strained': 'Strained',
   'supply.broken': 'Broken',
-  'supply.note': 'Troops burn supply every minute once off your own territory. On your own ground — or within two hops of your granary — it slowly recovers. Below 80% they deal 20% less; below 40% that doubles and they take 40% more.',
+  'supply.note': 'Troops burn supply every minute once off your own territory. Your own ground — the core included, and two hops out from a granary — stops the drain, but only a granary or a farm puts supply back. Below 80% they deal 20% less; below 40% that doubles and they take 40% more.',
 
   'march.section': 'March',
   'march.noTroops': 'No troops here to move',

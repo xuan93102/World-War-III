@@ -41,10 +41,12 @@ import {
 import { DEFAULT_MAP_ID, getMap, type GameMap } from './maps';
 import {
   FULL_SUPPLY,
-  logisticsZone,
+  footingAt,
+  logisticsZones,
   nextSupply,
   supplyAttackMultiplier,
   supplyDamageTakenMultiplier,
+  type LogisticsZones,
 } from './supply';
 import { garrisonAt } from './regions';
 import type {
@@ -1078,22 +1080,22 @@ export class GameEngine {
       this.state.marches = stillMoving;
     }
 
-    // Supply (docs 7). Troops in the field burn through it; troops inside
-    // their own logistics territory hold and slowly recover. The zone is
-    // computed once per player rather than once per legion.
+    // Supply (docs 7). Troops in the field burn through it, own land holds it,
+    // and only a granary or farm puts it back. The zones are computed once per
+    // player rather than once per legion.
     if (this.state.legions.length > 0 || this.state.battles.length > 0) {
-      const zones = new Map<PlayerId, Set<string>>();
-      const zoneFor = (playerId: PlayerId) => {
+      const zones = new Map<PlayerId, LogisticsZones>();
+      const footing = (playerId: PlayerId, regionId: string) => {
         let zone = zones.get(playerId);
         if (!zone) {
-          zone = logisticsZone(this.map, this.state.regions, playerId);
+          zone = logisticsZones(this.map, this.state.regions, playerId);
           zones.set(playerId, zone);
         }
-        return zone;
+        return footingAt(zone, regionId);
       };
 
       for (const legion of this.state.legions) {
-        legion.supply = nextSupply(legion.supply, minutes, zoneFor(legion.playerId).has(legion.regionId));
+        legion.supply = nextSupply(legion.supply, minutes, footing(legion.playerId, legion.regionId));
       }
       // Troops committed to an attack are standing on ground they don't hold,
       // so they drain like anyone else in the field.
@@ -1101,7 +1103,7 @@ export class GameEngine {
         battle.attackerSupply = nextSupply(
           battle.attackerSupply,
           minutes,
-          zoneFor(battle.attackerId).has(battle.regionId),
+          footing(battle.attackerId, battle.regionId),
         );
       }
     }

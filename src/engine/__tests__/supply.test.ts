@@ -10,7 +10,8 @@ import {
   SUPPLY_DRAIN_PER_MIN,
   SUPPLY_RECOVER_PER_MIN,
   SUPPLY_STRAINED,
-  logisticsZone,
+  footingAt,
+  logisticsZones,
   nextSupply,
   supplyAttackMultiplier,
   supplyDamageTakenMultiplier,
@@ -54,51 +55,59 @@ describe('penalties', () => {
 });
 
 describe('the clock', () => {
-  it('drains in the field and refills in the zone, clamped both ways', () => {
-    expect(nextSupply(1, 1, false)).toBeCloseTo(1 - SUPPLY_DRAIN_PER_MIN, 5);
-    expect(nextSupply(0.5, 1, true)).toBeCloseTo(0.5 + SUPPLY_RECOVER_PER_MIN, 5);
-    expect(nextSupply(1, 10, true), 'never above full').toBe(1);
-    expect(nextSupply(0.01, 10, false), 'never below empty').toBe(0);
+  it('drains in the field, holds on own land, refills on food, clamped both ways', () => {
+    expect(nextSupply(1, 1, 'drain')).toBeCloseTo(1 - SUPPLY_DRAIN_PER_MIN, 5);
+    expect(nextSupply(0.5, 10, 'hold'), 'own land keeps it where it is').toBe(0.5);
+    expect(nextSupply(0.5, 1, 'recover')).toBeCloseTo(0.5 + SUPPLY_RECOVER_PER_MIN, 5);
+    expect(nextSupply(1, 10, 'recover'), 'never above full').toBe(1);
+    expect(nextSupply(0.01, 10, 'drain'), 'never below empty').toBe(0);
   });
 });
 
-describe('the logistics zone', () => {
-  it('covers your own ground and nothing else, before any granary', () => {
+describe('the logistics zones', () => {
+  const footing = (g: GameEngine, regionId: string) =>
+    footingAt(logisticsZones(TAIWAN, g.state.regions, 'p1'), regionId);
+
+  it('holds on your own ground, drains off it, before any granary', () => {
     const g = newGame();
-    const zone = logisticsZone(TAIWAN, g.state.regions, 'p1');
-    expect(zone.has(CORE), 'the core is home').toBe(true);
-    expect(zone.has(NEXT_DOOR), 'neutral ground is the field').toBe(false);
+    expect(footing(g, CORE), 'the core feeds but does not resupply').toBe('hold');
+    expect(footing(g, NEXT_DOOR), 'neutral ground is the field').toBe('drain');
   });
 
-  it('reaches two hops from a granary', () => {
+  it('recovers only on the granary or farm itself', () => {
+    const g = newGame();
+    g.state.players.p1.money = 100000;
+    g.state.players.p1.food = 100000;
+    g.startConstruction(CORE, 'granary', 'p1');
+    g.setRegionOwner(NEXT_DOOR, 'p1');
+    g.startConstruction(NEXT_DOOR, 'farm', 'p1');
+    g.tick(46);
+
+    expect(footing(g, CORE), 'the granary').toBe('recover');
+    expect(footing(g, NEXT_DOOR), 'the farm').toBe('recover');
+
+    // A third region of ours with nothing on it only holds.
+    const bare = TAIWAN.region(CORE).neighbors.find((n) => n !== NEXT_DOOR)!;
+    g.setRegionOwner(bare, 'p1');
+    expect(footing(g, bare)).toBe('hold');
+  });
+
+  it("carries a granary's hold two hops past the border", () => {
     const g = newGame();
     g.state.players.p1.money = 100000;
     g.state.players.p1.food = 100000;
     g.startConstruction(CORE, 'granary', 'p1');
     g.tick(46);
 
-    const zone = logisticsZone(TAIWAN, g.state.regions, 'p1');
-    expect(zone.has(CORE), 'the granary itself').toBe(true);
-    expect(zone.has(NEXT_DOOR), 'one hop').toBe(true);
-    // Somewhere three hops out should be outside it.
-    const far = TAIWAN.regions.find((r) => TAIWAN.distance(CORE, r.id) === 3)!;
-    expect(zone.has(far.id), 'three hops is too far').toBe(false);
-  });
-
-  it('is what a granary projects past the border that matters', () => {
-    const g = newGame();
-    g.state.players.p1.money = 100000;
-    g.state.players.p1.food = 100000;
-    g.startConstruction(CORE, 'granary', 'p1');
-    g.tick(46);
-
-    // Two hops from the core, still neutral — own territory alone wouldn't
-    // reach it, so this is purely the granary's doing.
-    const zone = logisticsZone(TAIWAN, g.state.regions, 'p1');
+    // Two hops out and still neutral: own territory wouldn't reach it, so not
+    // draining there is purely the granary's doing.
     const twoOut = TAIWAN.regions.find(
       (r) => TAIWAN.distance(CORE, r.id) === 2 && g.state.regions[r.id].owner === null,
     )!;
-    expect(zone.has(twoOut.id)).toBe(true);
+    expect(footing(g, twoOut.id), 'within reach, but no food of its own').toBe('hold');
+
+    const far = TAIWAN.regions.find((r) => TAIWAN.distance(CORE, r.id) === 3)!;
+    expect(footing(g, far.id), 'three hops is too far').toBe('drain');
   });
 });
 
@@ -116,15 +125,20 @@ describe('legions in play', () => {
     expect(legion.supply, 'a minute in the field').toBeCloseTo(1 - SUPPLY_DRAIN_PER_MIN, 5);
   });
 
-  it('hold and recover at home', () => {
+  it('sit still at home, and refill on a granary', () => {
     const g = newGame();
     const legion = withLegion(g);
     legion.supply = 0.5;
     g.tick(60);
-    expect(legion.supply, 'the core needs no granary').toBeCloseTo(
-      0.5 + SUPPLY_RECOVER_PER_MIN,
-      5,
-    );
+    expect(legion.supply, 'the bare core holds, it does not resupply').toBe(0.5);
+
+    g.state.players.p1.money = 100000;
+    g.state.players.p1.food = 100000;
+    g.startConstruction(CORE, 'granary', 'p1');
+    g.tick(46);
+    const after = legion.supply;
+    g.tick(60);
+    expect(legion.supply, 'now it climbs').toBeCloseTo(after + SUPPLY_RECOVER_PER_MIN, 5);
   });
 
   it('hand their bar to the column that marches out', () => {
