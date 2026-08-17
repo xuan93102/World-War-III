@@ -179,8 +179,16 @@ describe('interception', () => {
 
     const cart = g.dispatchCart(CORE, NEXT_DOOR, 'p1', 5)!;
     const enemyFoodBefore = g.state.players.p2.food;
-    // The enemy takes the ground the cart is walking into, mid-run.
+    // An enemy column moves into the cart's path mid-run. Troops are what
+    // intercepts it — empty ground, however owned, it would just roll across.
     g.setRegionOwner(NEXT_DOOR, 'p2');
+    g.state.legions.push({
+      id: 'raiders',
+      playerId: 'p2',
+      units: { militia: 4 },
+      supply: 1,
+      regionId: NEXT_DOOR,
+    });
     g.tick(cart.totalSeconds + 1);
 
     expect(g.state.carts.length, 'the cart is gone').toBe(0);

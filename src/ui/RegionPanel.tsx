@@ -22,6 +22,7 @@ interface RegionPanelProps {
   onTrain: (regionId: string, type: UnitType, count: number) => void;
   onUpgrade: (regionId: string, type: UnitType, count: number) => void;
   onMarch: (from: string, to: string, units: UnitCounts) => void;
+  onOccupy: (regionId: string) => void;
   onDispatchCart: (from: string, to: string, porters: number) => void;
   marchTarget: string | null;
   pickingMarch: boolean;
@@ -56,6 +57,7 @@ export function RegionPanel({
   onTrain,
   onUpgrade,
   onMarch,
+  onOccupy,
   onDispatchCart,
   marchTarget,
   pickingMarch,
@@ -78,6 +80,7 @@ export function RegionPanel({
   // A camp only needs an army standing here, so the build menu has to appear on
   // ground that isn't yours.
   const canCamp = engine.buildRejection(selectedRegionId, 'camp', humanPlayerId) !== 'notOwner';
+  const occupyRejection = engine.occupyRejection(selectedRegionId, humanPlayerId);
 
   return (
     <div className="region-panel">
@@ -108,6 +111,23 @@ export function RegionPanel({
 
       {regionState.owner === null && (
         <p className="hint-text">{t('land.captureHint')}</p>
+      )}
+
+      {/* Taking ground is its own order (docs 6.6): fighting through a region
+          doesn't claim it, so the army standing here is offered the choice. */}
+      {occupyRejection !== 'noArmy' && occupyRejection !== 'alreadyYours' && (
+        <section className="occupy-section">
+          <button
+            className="btn btn-sm btn-primary"
+            disabled={occupyRejection !== null}
+            onClick={() => onOccupy(selectedRegionId)}
+          >
+            {t('occupy.action')}
+          </button>
+          <p className="hint-text">
+            {t(occupyRejection === 'contested' ? 'occupy.contested' : 'occupy.hint')}
+          </p>
+        </section>
       )}
 
       <UnitPanel

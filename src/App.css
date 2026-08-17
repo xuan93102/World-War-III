@@ -1429,3 +1429,19 @@
   color: var(--text-dim);
   font-style: normal;
 }
+
+/* ---------- occupying (docs 6.6) ---------- */
+
+.occupy-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px dashed var(--accent, #4f8ef7);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--accent, #4f8ef7) 10%, transparent);
+}
+
+.occupy-section .btn {
+  align-self: flex-start;
+}

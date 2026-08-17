@@ -105,15 +105,23 @@ describe('battles in play', () => {
     expect(totalUnits(garrisonAt(g.state, NEXT_DOOR))).toBe(3);
   });
 
-  it('hands the region over when the defenders are wiped out', () => {
+  it('clears the ground without taking it when the defenders are wiped out', () => {
     const g = newGame();
     g.state.regions[NEXT_DOOR].units = { militia: 3 };
     attackNextDoor(g, 8);
 
     g.tick(COMBAT_ROUND_SECONDS * 10);
     expect(g.battleAt(NEXT_DOOR), 'over').toBeUndefined();
+    // Winning is not taking: occupying is a separate order (docs 6.6).
+    expect(g.state.regions[NEXT_DOOR].owner, 'still unclaimed').toBe(null);
+    expect(totalUnits(garrisonAt(g.state, NEXT_DOOR)), 'survivors stand on it').toBeGreaterThan(0);
+
+    expect(g.occupyRejection(NEXT_DOOR, 'p1')).toBe(null);
+    expect(g.occupy(NEXT_DOOR, 'p1')).toBe(true);
     expect(g.state.regions[NEXT_DOOR].owner).toBe('p1');
-    expect(totalUnits(garrisonAt(g.state, NEXT_DOOR)), 'survivors hold it').toBeGreaterThan(0);
+    expect(totalUnits(garrisonAt(g.state, NEXT_DOOR)), 'and keep standing on it').toBeGreaterThan(
+      0,
+    );
   });
 
   it('leaves the ground to nobody when both sides are wiped out', () => {
@@ -190,7 +198,19 @@ describe('breaking off', () => {
   it('is refused when there is nowhere left to fall back to', () => {
     const g = engagedGame();
     g.tick(COMBAT_ROUND_SECONDS);
+    // Losing the ground behind you isn't enough — empty ground can be walked
+    // back onto (docs 6.6). It takes enemy troops standing on it to cut a
+    // retreat off.
     g.setRegionOwner(CORE, 'p2');
+    expect(g.retreatRejection(NEXT_DOOR, 'p1'), 'empty, so still a way home').toBe(null);
+
+    g.state.legions.push({
+      id: 'blockers',
+      playerId: 'p2',
+      units: { militia: 4 },
+      supply: 1,
+      regionId: CORE,
+    });
     expect(g.retreatRejection(NEXT_DOOR, 'p1'), 'cut off').toBe('cutOff');
   });
 });

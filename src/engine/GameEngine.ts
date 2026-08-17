@@ -137,6 +137,13 @@ export type CartRejection =
   | 'passLocked'
   | 'noRoute';
 
+export type OccupyRejection =
+  /** No army of yours standing there. */
+  | 'noArmy'
+  /** A fight is still on, or someone else's troops are still on their feet. */
+  | 'contested'
+  | 'alreadyYours';
+
 export type BuildRejection =
   | 'notOwner'
   | 'occupied'
@@ -265,19 +272,29 @@ export class GameEngine {
   }
 
   /**
-   * Whether an army of `playerId` can stand in this region. Enemy ground and
-   * garrisoned neutral ground would both have to be fought for, and combat
-   * resolution (docs 6.2) doesn't exist yet — so for now a march routes around
-   * them rather than into them.
+   * Troops here that `playerId` would have to beat before standing on this
+   * ground: a neutral militia garrison, or anyone else's legion.
    */
-  private canEnter(regionId: string, playerId: PlayerId): boolean {
+  private hostileForceAt(regionId: string, playerId: PlayerId): boolean {
     const region = this.state.regions[regionId];
     if (!region) return false;
-    if (region.owner !== null && region.owner !== playerId) return false;
-    // Your own regions are always open, garrison or not — that's how
-    // reinforcements reach the front.
-    if (region.owner === null && totalUnits(this.garrisonAt(regionId)) > 0) return false;
-    return true;
+    if (totalUnits(region.units) > 0) return true;
+    return this.legionsAt(regionId).some(
+      (l) => l.playerId !== playerId && totalUnits(l.units) > 0,
+    );
+  }
+
+  /**
+   * Whether an army of `playerId` can walk into this region without a fight.
+   *
+   * Only the troops standing there decide it, not the deed: docs 6.6 says you
+   * reach a region by moving there, with no need to own the route or the
+   * target. So undefended enemy ground is walked onto — you're standing on it,
+   * you just don't hold it until you occupy it.
+   */
+  private canEnter(regionId: string, playerId: PlayerId): boolean {
+    if (!this.state.regions[regionId]) return false;
+    return !this.hostileForceAt(regionId, playerId);
   }
 
   /** Whether arriving here would be a peaceful landing rather than an attack. */
@@ -523,8 +540,13 @@ export class GameEngine {
    */
   private completeCartHop(cart: SupplyCart): boolean {
     if (!this.canEnter(cart.to, cart.playerId)) {
-      const taker = this.state.regions[cart.to]?.owner;
-      if (taker && taker !== cart.playerId) this.state.players[taker]!.food += cart.load;
+      // Whoever is actually standing in the way takes the load; a neutral
+      // militia has no larder to put it in, so it's simply lost.
+      const blocking = this.legionsAt(cart.to).find(
+        (l) => l.playerId !== cart.playerId && totalUnits(l.units) > 0,
+      );
+      const taker = blocking?.playerId;
+      if (taker) this.state.players[taker]!.food += cart.load;
       // The porters are lost with the cart — that's the risk of a long haul
       // through ground you don't control.
       return true;
@@ -706,7 +728,12 @@ export class GameEngine {
       existing.attackerUnits = addUnits(existing.attackerUnits, units);
       return;
     }
-    const region = this.state.regions[regionId];
+    // The defender is whoever is standing here, which since docs 6.6 need not
+    // be the landowner — an army can hold ground it hasn't occupied. No legion
+    // means it's a neutral militia garrison, which belongs to nobody.
+    const holder = this.legionsAt(regionId).find(
+      (l) => l.playerId !== attackerId && totalUnits(l.units) > 0,
+    );
     this.state.battles.push({
       regionId,
       attackerId,
@@ -714,7 +741,7 @@ export class GameEngine {
       attackerCarry: 0,
       attackerSupply: supply,
       attackerFrom: from,
-      defenderId: region.owner,
+      defenderId: holder?.playerId ?? null,
       defenderCarry: 0,
       secondsUntilRound: COMBAT_ROUND_SECONDS,
       roundsFought: 0,
@@ -772,9 +799,13 @@ export class GameEngine {
       return true;
     }
     if (outcome.defenderWiped) {
-      this.setRegionOwner(battle.regionId, battle.attackerId);
-      // The victors become the new garrison, as a legion of their own.
-      this.legionFor(battle.regionId, battle.attackerId).units = battle.attackerUnits;
+      // Winning clears the ground; it does not take it. Occupying is a second,
+      // optional order (docs 6.6) — you may fight through and walk on.
+      const victors = this.legionFor(battle.regionId, battle.attackerId);
+      victors.units = battle.attackerUnits;
+      // They keep the bar they fought on. A fresh legion would default to full,
+      // which would make winning a fight a free resupply.
+      victors.supply = battle.attackerSupply;
       this.pruneLegions();
       return true;
     }
@@ -921,6 +952,30 @@ export class GameEngine {
     if (totalUnits(this.garrisonAt(regionId)) > 0) return 'garrisoned';
     void playerId;
     return null;
+  }
+
+  /**
+   * Why `playerId` can't occupy the ground they're standing on, or null if
+   * they can (docs 6.6). Winning a fight clears a region; taking it is this
+   * separate order, so an army can raid through and leave the ground alone.
+   */
+  occupyRejection(regionId: string, playerId: PlayerId): OccupyRejection | null {
+    const region = this.state.regions[regionId];
+    if (!region) return 'noArmy';
+    if (region.owner === playerId) return 'alreadyYours';
+    if (this.battleAt(regionId)) return 'contested';
+    if (this.hostileForceAt(regionId, playerId)) return 'contested';
+    const standing = this.legionsAt(regionId).find(
+      (l) => l.playerId === playerId && totalUnits(l.units) > 0,
+    );
+    return standing ? null : 'noArmy';
+  }
+
+  /** Takes the ground this player's army is standing on. */
+  occupy(regionId: string, playerId: PlayerId): boolean {
+    if (this.occupyRejection(regionId, playerId) !== null) return false;
+    this.setRegionOwner(regionId, playerId);
+    return true;
   }
 
   // ---- population -------------------------------------------------------
@@ -1071,10 +1126,15 @@ export class GameEngine {
     // land handed the winner the loser's units *and* their population.
     // The attacking army arrives via the movement system instead.
     region.units = {};
-    // Legions don't change sides with the ground either. Ones out on the road
-    // are left alone — they're not standing here to be captured.
+    // Legions don't change sides with the ground either. The new owner's own
+    // troops stay put, though — occupying ground you're standing on shouldn't
+    // dissolve the army that took it. Ones out on the road are left alone;
+    // they're not standing here to be captured.
     this.state.legions = this.state.legions.filter(
-      (l) => l.regionId !== regionId || this.state.marches.some((m) => m.legionId === l.id),
+      (l) =>
+        l.regionId !== regionId ||
+        l.playerId === owner ||
+        this.state.marches.some((m) => m.legionId === l.id),
     );
     // Someone else's camp doesn't survive the ground being taken: it's a tent
     // full of their supplies, and whoever walks in burns it (docs 6.3). Other
