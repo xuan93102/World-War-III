@@ -22,10 +22,8 @@ export function SupplyCartPanel({ engine, regionId, playerId, onDispatch }: Supp
 
   const region = engine.state.regions[regionId];
   const isGranary = region.owner === playerId && region.building?.type === 'granary';
-  const stock =
-    region.owner === playerId && region.building?.type === 'fortress'
-      ? (region.building.stock ?? 0)
-      : 0;
+  // A fortress on your ground or your own camp anywhere — both bank food.
+  const stock = engine.supplyDepotAt(regionId, playerId) ? (region.building?.stock ?? 0) : 0;
   const carts = engine.cartsInvolving(regionId).filter((c) => c.playerId === playerId);
 
   if (!isGranary && stock <= 0 && carts.length === 0) return null;

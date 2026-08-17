@@ -386,11 +386,22 @@ export class GameEngine {
       .reduce((sum, c) => sum + c.porters, 0);
   }
 
+  /**
+   * Whether this player has somewhere here that banks food (docs 6.3, 7): a
+   * fortress on their own ground, or their own camp on anyone's ground.
+   */
+  supplyDepotAt(regionId: string, playerId: PlayerId): boolean {
+    const region = this.state.regions[regionId];
+    const building = region?.building;
+    if (!building) return false;
+    if (building.type === 'camp') return building.owner === playerId;
+    return building.type === 'fortress' && region.owner === playerId;
+  }
+
   /** Whether a cart sent here would have anything to do on arrival. */
   private isCartTarget(regionId: string, playerId: PlayerId): boolean {
-    const region = this.state.regions[regionId];
-    if (!region) return false;
-    if (region.owner === playerId && region.building?.type === 'fortress') return true;
+    if (!this.state.regions[regionId]) return false;
+    if (this.supplyDepotAt(regionId, playerId)) return true;
     return this.legionsAt(regionId).some((l) => l.playerId === playerId);
   }
 
@@ -497,7 +508,7 @@ export class GameEngine {
       load -= spent;
     }
 
-    if (region?.owner === cart.playerId && region.building?.type === 'fortress') {
+    if (region?.building && this.supplyDepotAt(cart.destination, cart.playerId)) {
       region.building.stock = (region.building.stock ?? 0) + load;
       load = 0;
     }
@@ -1065,6 +1076,12 @@ export class GameEngine {
     this.state.legions = this.state.legions.filter(
       (l) => l.regionId !== regionId || this.state.marches.some((m) => m.legionId === l.id),
     );
+    // Someone else's camp doesn't survive the ground being taken: it's a tent
+    // full of their supplies, and whoever walks in burns it (docs 6.3). Other
+    // buildings are fixtures and change hands with the land.
+    if (region.building?.type === 'camp' && region.building.owner !== owner) {
+      region.building = undefined;
+    }
     // A change of hands interrupts any build in progress and resets the
     // wonder hold clock — you have to hold it yourself to win with it.
     region.construction = undefined;
@@ -1143,7 +1160,14 @@ export class GameEngine {
     const region = this.state.regions[regionId];
     const player = this.state.players[playerId];
     if (!region || !player) return 'notOwner';
-    if (region.owner !== playerId) return 'notOwner';
+    // A camp is pitched by the army standing there, on anyone's ground
+    // (docs 6.3) — that's what makes it a forward depot rather than a
+    // building. Everything else needs the deed to the land.
+    if (type === 'camp') {
+      if (!this.legionsAt(regionId).some((l) => l.playerId === playerId)) return 'notOwner';
+    } else if (region.owner !== playerId) {
+      return 'notOwner';
+    }
     if (region.building) return 'occupied';
     if (region.construction) return 'building';
 
@@ -1182,6 +1206,7 @@ export class GameEngine {
       type,
       remainingSeconds: def.buildSeconds,
       totalSeconds: def.buildSeconds,
+      builtBy: playerId,
     };
     return true;
   }
@@ -1189,7 +1214,13 @@ export class GameEngine {
   /** Cancels an in-progress build and refunds its full cost. */
   cancelConstruction(regionId: string, playerId: PlayerId): boolean {
     const region = this.state.regions[regionId];
-    if (!region || region.owner !== playerId || !region.construction) return false;
+    if (!region || !region.construction) return false;
+    // A camp answers to whoever pitched it, wherever it stands (docs 6.3).
+    const mine =
+      region.construction.type === 'camp'
+        ? region.construction.builtBy === playerId
+        : region.owner === playerId;
+    if (!mine) return false;
     const def = BUILDINGS[region.construction.type];
     const player = this.state.players[playerId];
     player.money += def.costMoney;
@@ -1201,7 +1232,12 @@ export class GameEngine {
   /** Removes a completed building, freeing the region's single slot. */
   demolish(regionId: string, playerId: PlayerId): boolean {
     const region = this.state.regions[regionId];
-    if (!region || region.owner !== playerId || !region.building) return false;
+    if (!region || !region.building) return false;
+    const mine =
+      region.building.type === 'camp'
+        ? region.building.owner === playerId
+        : region.owner === playerId;
+    if (!mine) return false;
     if (region.isCore) return false; // the core can't be removed (docs 6.7)
     region.building = undefined;
     region.wonderHeldSeconds = undefined;
@@ -1300,15 +1336,20 @@ export class GameEngine {
       this.state.carts = stillRolling;
     }
 
-    // A fortress hands out what it's holding to whoever is standing on it.
+    // A depot hands out what it's holding to its owner's troops standing on it
+    // (docs 6.3, 7). A camp's owner is on the building; a fortress belongs to
+    // whoever holds the ground.
     for (const [regionId, region] of Object.entries(this.state.regions)) {
-      const stock = region.building?.type === 'fortress' ? (region.building.stock ?? 0) : 0;
-      if (stock <= 0 || !region.owner) continue;
-      const legion = this.legionsAt(regionId).find((l) => l.playerId === region.owner);
+      const building = region.building;
+      const stock = building?.stock ?? 0;
+      if (!building || stock <= 0) continue;
+      const depotOwner = building.type === 'camp' ? building.owner : region.owner;
+      if (!depotOwner || !this.supplyDepotAt(regionId, depotOwner)) continue;
+      const legion = this.legionsAt(regionId).find((l) => l.playerId === depotOwner);
       if (!legion) continue;
       const { supply, spent } = refillFrom(stock, totalUnits(legion.units), legion.supply);
       legion.supply = supply;
-      region.building!.stock = stock - spent;
+      building.stock = stock - spent;
     }
 
     // Supply (docs 7). Troops in the field burn through it, own land holds it,
@@ -1343,9 +1384,11 @@ export class GameEngine {
       if (region.construction) {
         region.construction.remainingSeconds -= deltaSeconds;
         if (region.construction.remainingSeconds <= 0) {
-          const type = region.construction.type;
+          const { type, builtBy } = region.construction;
           region.construction = undefined;
           region.building = { type, hp: BUILDINGS[type].hp };
+          // A camp belongs to the army that pitched it, not to the ground.
+          if (type === 'camp') region.building.owner = builtBy;
           if (type === 'wonder') region.wonderHeldSeconds = 0;
         }
       }

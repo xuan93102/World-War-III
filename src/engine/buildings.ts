@@ -11,7 +11,9 @@ export type BuildingType =
   | 'school'
   | 'research'
   | 'fortress'
-  | 'wonder';
+  | 'wonder'
+  /** A forward depot an army pitches in the field (docs 6.3). */
+  | 'camp';
 
 /**
  * Which of the design doc's three categories a building falls into
@@ -157,6 +159,17 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     requiresTech: 'fieldworks',
     lockedReasonKey: 'building.locked.fortress',
   },
+  camp: {
+    type: 'camp',
+    nameKey: 'building.camp',
+    descKey: 'building.camp.desc',
+    category: 'local',
+    costMoney: 15,
+    costFood: 0,
+    buildSeconds: 20,
+    hp: 200,
+    implemented: true,
+  },
   wonder: {
     type: 'wonder',
     nameKey: 'building.wonder',
@@ -180,6 +193,7 @@ export const BUILDING_ORDER: BuildingType[] = [
   'school',
   'research',
   'fortress',
+  'camp',
   'wonder',
 ];
 

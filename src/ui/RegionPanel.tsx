@@ -75,6 +75,9 @@ export function RegionPanel({
   const owner = regionState.owner ? players.find((p) => p.id === regionState.owner) : null;
   const isMine = regionState.owner === humanPlayerId;
   const garrison = totalUnits(garrisonAt(engine.state, selectedRegionId));
+  // A camp only needs an army standing here, so the build menu has to appear on
+  // ground that isn't yours.
+  const canCamp = engine.buildRejection(selectedRegionId, 'camp', humanPlayerId) !== 'notOwner';
 
   return (
     <div className="region-panel">
@@ -140,7 +143,9 @@ export function RegionPanel({
         onDispatch={onDispatchCart}
       />
 
-      {isMine && (
+      {/* Your own ground gets the whole menu; ground you merely have troops on
+          gets the one thing an army can put up there — a camp (docs 6.3). */}
+      {(isMine || canCamp) && (
         <section className="build-section">
           <div className="field-label">{t('building.section')}</div>
 
@@ -188,7 +193,7 @@ export function RegionPanel({
             </div>
           ) : (
             <div className="build-menu">
-              {BUILDING_ORDER.map((type) => {
+              {(isMine ? BUILDING_ORDER : (['camp'] as BuildingType[])).map((type) => {
                 const def = BUILDINGS[type];
                 const rejection = engine.buildRejection(selectedRegionId, type, humanPlayerId);
                 const lockedReason =
@@ -219,6 +224,7 @@ export function RegionPanel({
                   </button>
                 );
               })}
+              {!isMine && <p className="hint-text">{t('camp.note')}</p>}
             </div>
           )}
         </section>

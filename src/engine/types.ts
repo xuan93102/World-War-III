@@ -41,12 +41,23 @@ export interface RegionState {
   /**
    * Completed building, if any. One per region (docs/game-design.md 5).
    *
-   * `stock` is food a fortress is holding (docs 7): carts deliver it, and any
-   * legion standing here tops its supply up from it. Only fortresses use it.
+   * `stock` is food a supply depot is holding (docs 7): carts deliver it, and
+   * a legion standing here tops its supply up from it. Only fortresses and
+   * camps use it.
+   *
+   * `owner` only matters for a camp, which can stand on ground its builder
+   * doesn't hold (docs 6.3) — every other building belongs to whoever owns the
+   * region. Without it, a camp pitched on neutral land would have no side.
    */
-  building?: { type: BuildingType; hp: number; stock?: number };
+  building?: { type: BuildingType; hp: number; stock?: number; owner?: PlayerId };
   /** In-progress build, if any. Mutually exclusive with `building`. */
-  construction?: { type: BuildingType; remainingSeconds: number; totalSeconds: number };
+  construction?: {
+    type: BuildingType;
+    remainingSeconds: number;
+    totalSeconds: number;
+    /** Who paid for it — the camp it finishes into belongs to them. */
+    builtBy?: PlayerId;
+  };
   /**
    * Seconds the current owner has held a *completed* wonder here. Resets if
    * the wonder is lost or destroyed; at WONDER_HOLD_SECONDS the owner wins.
