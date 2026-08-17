@@ -45,6 +45,7 @@ const REJECTION_KEY: Record<Exclude<BuildRejection, 'notOwner'>, TranslationKey>
   notImplemented: 'building.occupied', // replaced by the def's own reason below
   cannotAfford: 'building.cannotAfford',
   limitReached: 'building.limitReached',
+  unrest: 'unrest.noBuild',
 };
 
 export function RegionPanel({
@@ -81,6 +82,7 @@ export function RegionPanel({
   // ground that isn't yours.
   const canCamp = engine.buildRejection(selectedRegionId, 'camp', humanPlayerId) !== 'notOwner';
   const occupyRejection = engine.occupyRejection(selectedRegionId, humanPlayerId);
+  const unrest = isMine ? engine.unrestAt(selectedRegionId) : 0;
 
   return (
     <div className="region-panel">
@@ -111,6 +113,17 @@ export function RegionPanel({
 
       {regionState.owner === null && (
         <p className="hint-text">{t('land.captureHint')}</p>
+      )}
+
+      {/* Ground just taken off a player: yours, but no use for a while
+          (docs 6.4). */}
+      {unrest > 0 && (
+        <section className="unrest-section">
+          <span className="unrest-label">
+            {t('unrest.label')}・{Math.ceil(unrest)}s
+          </span>
+          <p className="hint-text">{t('unrest.note')}</p>
+        </section>
       )}
 
       {/* Taking ground is its own order (docs 6.6): fighting through a region

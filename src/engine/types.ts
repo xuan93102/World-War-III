@@ -63,6 +63,13 @@ export interface RegionState {
    * the wonder is lost or destroyed; at WONDER_HOLD_SECONDS the owner wins.
    */
   wonderHeldSeconds?: number;
+  /**
+   * Seconds of unrest left after taking this ground off another player
+   * (docs/game-design.md 6.4). While it runs the region is yours but useless:
+   * nothing can be built and no troops can be stationed. Taking neutral land
+   * doesn't cause it.
+   */
+  unrestSeconds?: number;
 }
 
 export interface PlayerState {

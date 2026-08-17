@@ -137,6 +137,12 @@ export type CartRejection =
   | 'passLocked'
   | 'noRoute';
 
+/**
+ * How long ground taken off another player stays in unrest (docs 6.4): yours,
+ * but no building and no garrison until it settles. v1 draft.
+ */
+export const UNREST_SECONDS = 300;
+
 export type OccupyRejection =
   /** No army of yours standing there. */
   | 'noArmy'
@@ -148,6 +154,8 @@ export type BuildRejection =
   | 'notOwner'
   | 'occupied'
   | 'building'
+  /** Taken off another player less than UNREST_SECONDS ago (docs 6.4). */
+  | 'unrest'
   | 'notImplemented'
   | 'cannotAfford'
   | 'limitReached';
@@ -334,6 +342,10 @@ export class GameEngine {
     if (!origin || origin.owner !== playerId) return 'notOwner';
     if (!stackContains(this.garrisonAt(from), units)) return 'noUnits';
     if (from === to) return 'notAdjacent';
+    // Ground in unrest can be crossed but not garrisoned (docs 6.4), so it's
+    // refused as a destination while it settles — including reinforcing the
+    // army that took it. Freshly conquered ground is meant to be hard to hold.
+    if (this.state.regions[to]?.owner === playerId && this.unrestAt(to) > 0) return 'unrest';
     if (this.marchRoute(from, to, playerId) !== null) return null;
     // No route. Say which wall they hit: a sealed pass reads very differently
     // from "there's no way through", and both are actionable.
@@ -974,8 +986,17 @@ export class GameEngine {
   /** Takes the ground this player's army is standing on. */
   occupy(regionId: string, playerId: PlayerId): boolean {
     if (this.occupyRejection(regionId, playerId) !== null) return false;
+    // Ground taken off another player is in unrest for a while (docs 6.4);
+    // beating a neutral militia doesn't leave a population to riot.
+    const takenFromPlayer = this.state.regions[regionId].owner !== null;
     this.setRegionOwner(regionId, playerId);
+    if (takenFromPlayer) this.state.regions[regionId].unrestSeconds = UNREST_SECONDS;
     return true;
+  }
+
+  /** Seconds of unrest left here, or 0 if the region is settled. */
+  unrestAt(regionId: string): number {
+    return this.state.regions[regionId]?.unrestSeconds ?? 0;
   }
 
   // ---- population -------------------------------------------------------
@@ -1045,10 +1066,12 @@ export class GameEngine {
     playerId: PlayerId,
     type: UnitType,
     count = 1,
-  ): 'wrongSite' | 'notTrainable' | 'cannotAfford' | 'noPopulationRoom' | null {
+  ): 'wrongSite' | 'notTrainable' | 'cannotAfford' | 'noPopulationRoom' | 'unrest' | null {
     const def = UNITS[type];
     if (def.trainCost === null || def.trainAt === null) return 'notTrainable';
     if (!this.trainingSites(playerId, type).includes(regionId)) return 'wrongSite';
+    // Ground that hasn't settled raises no troops (docs 6.4).
+    if (this.unrestAt(regionId) > 0) return 'unrest';
     const player = this.state.players[playerId];
     if (player.money < def.trainCost * count) return 'cannotAfford';
     if (this.populationRoom(playerId) < count) return 'noPopulationRoom';
@@ -1080,13 +1103,15 @@ export class GameEngine {
     playerId: PlayerId,
     type: UnitType,
     count = 1,
-  ): 'notUpgradable' | 'needsAcademy' | 'noSourceUnits' | 'cannotAfford' | null {
+  ): 'notUpgradable' | 'needsAcademy' | 'noSourceUnits' | 'cannotAfford' | 'unrest' | null {
     const def = UNITS[type];
     if (def.upgradeFrom === null || def.upgradeCost === null) return 'notUpgradable';
     const region = this.state.regions[regionId];
     if (!region || region.owner !== playerId) return 'needsAcademy';
     // Upgrades happen at an academy, so troops have to march back to one.
     if (region.building?.type !== 'academy') return 'needsAcademy';
+    // A captured academy is no use until the ground settles (docs 6.4).
+    if (this.unrestAt(regionId) > 0) return 'unrest';
     if ((this.garrisonAt(regionId)[def.upgradeFrom] ?? 0) < count) return 'noSourceUnits';
     if (this.state.players[playerId].money < def.upgradeCost * count) return 'cannotAfford';
     return null;
@@ -1146,6 +1171,8 @@ export class GameEngine {
     // wonder hold clock — you have to hold it yourself to win with it.
     region.construction = undefined;
     region.wonderHeldSeconds = undefined;
+    // Unrest belongs to whoever took the ground; occupy() sets a fresh one.
+    region.unrestSeconds = undefined;
   }
 
   /** Completed-building counts for a player, keyed by building type. */
@@ -1230,6 +1257,8 @@ export class GameEngine {
     }
     if (region.building) return 'occupied';
     if (region.construction) return 'building';
+    // Freshly taken ground builds nothing, camps included (docs 6.4).
+    if (this.unrestAt(regionId) > 0) return 'unrest';
 
     const def = BUILDINGS[type];
     if (!def.implemented) return 'notImplemented';
@@ -1454,6 +1483,11 @@ export class GameEngine {
       }
       if (region.building?.type === 'wonder' && region.owner) {
         region.wonderHeldSeconds = (region.wonderHeldSeconds ?? 0) + deltaSeconds;
+      }
+      // Unrest runs down (docs 6.4); at zero the region is a normal holding.
+      if (region.unrestSeconds !== undefined) {
+        region.unrestSeconds -= deltaSeconds;
+        if (region.unrestSeconds <= 0) region.unrestSeconds = undefined;
       }
     }
 

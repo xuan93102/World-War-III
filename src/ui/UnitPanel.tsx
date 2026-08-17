@@ -94,7 +94,13 @@ export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: Un
                     className="btn btn-sm"
                     disabled={trainRejection !== null}
                     onClick={() => onTrain(regionId, type, 1)}
-                    title={trainRejection === 'noPopulationRoom' ? t('unit.noPopulationRoom') : undefined}
+                    title={
+                      trainRejection === 'noPopulationRoom'
+                        ? t('unit.noPopulationRoom')
+                        : trainRejection === 'unrest'
+                          ? t('unrest.noTroops')
+                          : undefined
+                    }
                   >
                     {t('unit.train')} ({def.trainCost})
                   </button>
@@ -104,7 +110,13 @@ export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: Un
                     className="btn btn-sm"
                     disabled={upgradeRejection !== null}
                     onClick={() => onUpgrade(regionId, type, 1)}
-                    title={upgradeRejection === 'noSourceUnits' ? t('unit.noSourceUnits') : undefined}
+                    title={
+                      upgradeRejection === 'noSourceUnits'
+                        ? t('unit.noSourceUnits')
+                        : upgradeRejection === 'unrest'
+                          ? t('unrest.noTroops')
+                          : undefined
+                    }
                   >
                     {t('unit.upgrade')} ({def.upgradeCost})
                   </button>
