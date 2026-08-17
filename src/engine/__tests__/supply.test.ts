@@ -63,9 +63,11 @@ describe('the clock', () => {
 });
 
 describe('the logistics zone', () => {
-  it('is empty without a granary or a farm', () => {
+  it('covers your own ground and nothing else, before any granary', () => {
     const g = newGame();
-    expect(logisticsZone(TAIWAN, g.state.regions, 'p1').size).toBe(0);
+    const zone = logisticsZone(TAIWAN, g.state.regions, 'p1');
+    expect(zone.has(CORE), 'the core is home').toBe(true);
+    expect(zone.has(NEXT_DOOR), 'neutral ground is the field').toBe(false);
   });
 
   it('reaches two hops from a granary', () => {
@@ -83,40 +85,43 @@ describe('the logistics zone', () => {
     expect(zone.has(far.id), 'three hops is too far').toBe(false);
   });
 
-  it('covers a farm wherever it stands', () => {
-    const g = newGame();
-    g.state.players.p1.money = 100000;
-    g.setRegionOwner(NEXT_DOOR, 'p1');
-    g.startConstruction(NEXT_DOOR, 'farm', 'p1');
-    g.tick(31);
-
-    const zone = logisticsZone(TAIWAN, g.state.regions, 'p1');
-    expect(zone.has(NEXT_DOOR)).toBe(true);
-    expect(zone.has(CORE), 'a farm covers only its own ground').toBe(false);
-  });
-});
-
-describe('legions in play', () => {
-  it('start full and run down in the field', () => {
-    const g = newGame();
-    const legion = withLegion(g);
-    expect(legion.supply).toBe(FULL_SUPPLY);
-
-    g.tick(60);
-    expect(legion.supply, 'a minute in the field').toBeCloseTo(1 - SUPPLY_DRAIN_PER_MIN, 5);
-  });
-
-  it('hold and recover inside their own logistics zone', () => {
+  it('is what a granary projects past the border that matters', () => {
     const g = newGame();
     g.state.players.p1.money = 100000;
     g.state.players.p1.food = 100000;
     g.startConstruction(CORE, 'granary', 'p1');
     g.tick(46);
 
+    // Two hops from the core, still neutral — own territory alone wouldn't
+    // reach it, so this is purely the granary's doing.
+    const zone = logisticsZone(TAIWAN, g.state.regions, 'p1');
+    const twoOut = TAIWAN.regions.find(
+      (r) => TAIWAN.distance(CORE, r.id) === 2 && g.state.regions[r.id].owner === null,
+    )!;
+    expect(zone.has(twoOut.id)).toBe(true);
+  });
+});
+
+describe('legions in play', () => {
+  it('start full and run down once off friendly ground', () => {
+    const g = newGame();
+    const legion = withLegion(g);
+    expect(legion.supply).toBe(FULL_SUPPLY);
+
+    // Park them on neutral ground. Walking there would capture it, and a
+    // captured region is friendly again — the drain only exists in the gap
+    // between setting out and taking the place.
+    legion.regionId = NEXT_DOOR;
+    g.tick(60);
+    expect(legion.supply, 'a minute in the field').toBeCloseTo(1 - SUPPLY_DRAIN_PER_MIN, 5);
+  });
+
+  it('hold and recover at home', () => {
+    const g = newGame();
     const legion = withLegion(g);
     legion.supply = 0.5;
     g.tick(60);
-    expect(legion.supply, 'the core is beside its own granary').toBeCloseTo(
+    expect(legion.supply, 'the core needs no granary').toBeCloseTo(
       0.5 + SUPPLY_RECOVER_PER_MIN,
       5,
     );

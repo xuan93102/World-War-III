@@ -45,9 +45,12 @@ export function supplyDamageTakenMultiplier(supply: number): number {
 }
 
 /**
- * Where a player's troops hold their supply instead of burning it: within
- * GRANARY_SUPPLY_HOPS of one of their granaries, or standing on one of their
- * farms.
+ * Where a player's troops hold their supply instead of burning it: any region
+ * they own, plus GRANARY_SUPPLY_HOPS beyond each of their granaries.
+ *
+ * Own territory is safe by itself, so supply only bites on an expedition —
+ * standing on neutral or enemy ground. A granary near the border is what
+ * pushes the zone past your own borders, buying an offensive some room.
  *
  * Walks outward from each granary rather than measuring every region's
  * distance, since this runs every tick and the radius is small.
@@ -60,14 +63,15 @@ export function logisticsZone(
   const zone = new Set<string>();
 
   for (const [id, region] of Object.entries(regions)) {
-    if (region.owner !== playerId) continue;
-    if (region.building?.type === 'farm') zone.add(id);
-    if (region.building?.type !== 'granary') continue;
+    if (region.owner === playerId) zone.add(id);
+  }
+
+  for (const [id, region] of Object.entries(regions)) {
+    if (region.owner !== playerId || region.building?.type !== 'granary') continue;
 
     // Bounded flood fill from the granary. Ground anyone can reach counts —
     // the zone is about how far supply can be carried, not about who holds
     // the intervening land.
-    zone.add(id);
     let frontier = [id];
     for (let hop = 0; hop < GRANARY_SUPPLY_HOPS; hop++) {
       const next: string[] = [];
