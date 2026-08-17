@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { COMBAT_ROUND_SECONDS, MUTINY_MILITIA, applyDamage, resolveRound } from '../combat';
 import { MARCH_SECONDS_PER_HOP } from '../movement';
+import { garrisonAt } from '../regions';
 import { totalUnits } from '../units';
 
 const CORE = 'taipei-1';
@@ -101,7 +102,7 @@ describe('battles in play', () => {
     expect(battle, 'still fighting after one round').toBeDefined();
     expect(battle!.roundsFought).toBe(1);
     // 5 militia deal 5, defenders deal 3 — neither wipes anyone yet.
-    expect(totalUnits(g.state.regions[NEXT_DOOR].units)).toBe(3);
+    expect(totalUnits(garrisonAt(g.state, NEXT_DOOR))).toBe(3);
   });
 
   it('hands the region over when the defenders are wiped out', () => {
@@ -112,7 +113,7 @@ describe('battles in play', () => {
     g.tick(COMBAT_ROUND_SECONDS * 10);
     expect(g.battleAt(NEXT_DOOR), 'over').toBeUndefined();
     expect(g.state.regions[NEXT_DOOR].owner).toBe('p1');
-    expect(totalUnits(g.state.regions[NEXT_DOOR].units), 'survivors hold it').toBeGreaterThan(0);
+    expect(totalUnits(garrisonAt(g.state, NEXT_DOOR)), 'survivors hold it').toBeGreaterThan(0);
   });
 
   it('leaves the ground to nobody when both sides are wiped out', () => {
@@ -124,7 +125,7 @@ describe('battles in play', () => {
     g.tick(COMBAT_ROUND_SECONDS * 20);
     expect(g.battleAt(NEXT_DOOR)).toBeUndefined();
     expect(g.state.regions[NEXT_DOOR].owner, 'neither side took it').toBeNull();
-    expect(g.state.regions[NEXT_DOOR].units, 'a remnant holds it').toEqual({
+    expect(garrisonAt(g.state, NEXT_DOOR), 'a remnant holds it').toEqual({
       militia: MUTINY_MILITIA,
     });
   });
@@ -183,7 +184,7 @@ describe('breaking off', () => {
     expect(g.battleAt(NEXT_DOOR), 'fight abandoned').toBeUndefined();
 
     g.tick(MARCH_SECONDS_PER_HOP);
-    expect(totalUnits(g.state.regions[CORE].units), 'home again, fewer than set out').toBeGreaterThan(0);
+    expect(totalUnits(garrisonAt(g.state, CORE)), 'home again, fewer than set out').toBeGreaterThan(0);
   });
 
   it('is refused when there is nowhere left to fall back to', () => {

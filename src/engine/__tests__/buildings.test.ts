@@ -7,6 +7,7 @@ import { GameEngine, STARTING_MONEY } from '../GameEngine';
 import { BASE_FOOD_CAP, BUILDINGS, GRANARY_FOOD_CAP, WONDER_HOLD_SECONDS } from '../buildings';
 import { FOOD_PER_MIN_BY_SIZE, MILITIA_BY_SIZE, SAFE_ZONE_HOPS, landSizeOf } from '../land';
 import { TAIWAN } from '../maps';
+import { garrisonAt } from '../regions';
 import { totalUnits } from '../units';
 
 function newGame() {
@@ -548,12 +549,12 @@ describe('opening pacing', () => {
 describe('land: garrisons and size', () => {
   it('neutral land within 2 hops of a core starts undefended', () => {
     const g = newGame();
-    for (const [id, region] of Object.entries(g.state.regions)) {
+    for (const id of Object.keys(g.state.regions)) {
       const nearACore =
         TAIWAN.distance('taipei-1', id) <= SAFE_ZONE_HOPS ||
         TAIWAN.distance('kaohsiung-1', id) <= SAFE_ZONE_HOPS;
       if (nearACore) {
-        expect(totalUnits(region.units), `${id} is in a safe zone`).toBe(0);
+        expect(totalUnits(garrisonAt(g.state, id)), `${id} is in a safe zone`).toBe(0);
       }
     }
   });
@@ -566,7 +567,7 @@ describe('land: garrisons and size', () => {
         TAIWAN.distance('taipei-1', id) <= SAFE_ZONE_HOPS ||
         TAIWAN.distance('kaohsiung-1', id) <= SAFE_ZONE_HOPS;
       if (nearACore || region.isCore) continue;
-      expect(totalUnits(region.units), `${id} garrison matches its size`).toBe(
+      expect(totalUnits(garrisonAt(g.state, id)), `${id} garrison matches its size`).toBe(
         MILITIA_BY_SIZE[landSizeOf(TAIWAN.region(id).landArea)],
       );
       checked++;
@@ -590,8 +591,8 @@ describe('land: garrisons and size', () => {
 
   it('cores themselves hold no militia', () => {
     const g = newGame();
-    expect(totalUnits(g.state.regions['taipei-1'].units)).toBe(0);
-    expect(totalUnits(g.state.regions['kaohsiung-1'].units)).toBe(0);
+    expect(totalUnits(garrisonAt(g.state, 'taipei-1'))).toBe(0);
+    expect(totalUnits(garrisonAt(g.state, 'kaohsiung-1'))).toBe(0);
   });
 
   it('neutral land cannot be taken without soldiers', () => {
@@ -600,7 +601,7 @@ describe('land: garrisons and size', () => {
     const safeNeutral = Object.keys(g.state.regions).find(
       (id) =>
         g.state.regions[id].owner === null &&
-        totalUnits(g.state.regions[id].units) === 0,
+        totalUnits(garrisonAt(g.state, id)) === 0,
     )!;
     expect(g.captureRejection(safeNeutral, 'p1', 0), 'no soldiers, no claim').toBe('needsSoldiers');
     expect(g.captureRejection(safeNeutral, 'p1', 5), 'soldiers can claim empty land').toBe(null);
@@ -608,7 +609,7 @@ describe('land: garrisons and size', () => {
 
   it('garrisoned land must be cleared before it can be claimed', () => {
     const g = newGame();
-    const defended = Object.keys(g.state.regions).find((id) => totalUnits(g.state.regions[id].units) > 0)!;
+    const defended = Object.keys(g.state.regions).find((id) => totalUnits(garrisonAt(g.state, id)) > 0)!;
     expect(g.captureRejection(defended, 'p1', 50), 'militia block the claim').toBe('garrisoned');
 
     g.state.regions[defended].units = {};

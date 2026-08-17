@@ -10,6 +10,7 @@ import {
   researchTimeMultiplier,
   researcherCost,
 } from '../tech';
+import { garrisonAt } from '../regions';
 
 const CORE = 'taipei-1';
 const LAB = 'taipei-2';
@@ -215,9 +216,9 @@ describe('tech effects', () => {
     g.startMarch(CORE, LAB, 'p1', { militia: 10 });
     g.tick(20);
 
-    const before = g.state.regions[LAB].units.militia ?? 0;
+    const before = garrisonAt(g.state, LAB).militia ?? 0;
     g.tick(5);
-    const dealt = before - (g.state.regions[LAB].units.militia ?? 0);
+    const dealt = before - (garrisonAt(g.state, LAB).militia ?? 0);
     // 10 militia at ATK 1 with +20% (autoRifles replaces rifles, not adds to
     // it) is 12 damage, which kills one 10hp militia and carries 2.
     expect(dealt, 'one casualty from 12 damage').toBe(1);

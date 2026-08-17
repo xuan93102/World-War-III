@@ -2,6 +2,7 @@ import { BUILDINGS, BUILDING_ORDER, type BuildingType } from '../engine/building
 import { BuildingIcon } from './buildingIcons';
 import { FOOD_PER_MIN_BY_SIZE, landSizeOf, type LandSize } from '../engine/land';
 import { totalUnits, type UnitCounts, type UnitType } from '../engine/units';
+import { garrisonAt } from '../engine/regions';
 import { UnitPanel } from './UnitPanel';
 import { MarchPanel } from './MarchPanel';
 import { BattlePanel } from './BattlePanel';
@@ -70,7 +71,7 @@ export function RegionPanel({
   const regionState = engine.state.regions[selectedRegionId];
   const owner = regionState.owner ? players.find((p) => p.id === regionState.owner) : null;
   const isMine = regionState.owner === humanPlayerId;
-  const garrison = totalUnits(regionState.units);
+  const garrison = totalUnits(garrisonAt(engine.state, selectedRegionId));
 
   return (
     <div className="region-panel">

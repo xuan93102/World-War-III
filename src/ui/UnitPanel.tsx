@@ -1,4 +1,5 @@
 import { UNITS, UNIT_ORDER, totalUnits, type UnitType } from '../engine/units';
+import { garrisonAt } from '../engine/regions';
 import { useSettings } from '../settings/useSettings';
 import type { GameEngine } from '../engine/GameEngine';
 
@@ -13,7 +14,7 @@ interface UnitPanelProps {
 export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: UnitPanelProps) {
   const { t } = useSettings();
   const region = engine.state.regions[regionId];
-  const stationed = region.units;
+  const stationed = garrisonAt(engine.state, regionId);
   const isMine = region.owner === playerId;
 
   return (

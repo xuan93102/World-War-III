@@ -1,4 +1,5 @@
 import { UNITS, UNIT_ORDER, stackAtk, totalUnits, type UnitCounts } from '../engine/units';
+import { garrisonAt } from '../engine/regions';
 import { useSettings } from '../settings/useSettings';
 import type { GameEngine } from '../engine/GameEngine';
 import type { PlayerState } from '../engine/types';
@@ -16,7 +17,6 @@ export function BattlePanel({ engine, regionId, playerId, players, onRetreat }: 
   const battle = engine.battleAt(regionId);
   if (!battle) return null;
 
-  const region = engine.state.regions[regionId];
   const nameOf = (id: string | null) =>
     id === null ? t('game.neutral') : (players.find((p) => p.id === id)?.name ?? id);
 
@@ -60,7 +60,7 @@ export function BattlePanel({ engine, regionId, playerId, players, onRetreat }: 
       {side(
         t('battle.defender'),
         nameOf(battle.defenderId),
-        region.units,
+        garrisonAt(engine.state, regionId),
         battle.defenderId === playerId,
       )}
 

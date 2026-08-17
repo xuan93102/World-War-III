@@ -3,6 +3,7 @@
 // they do occupy population, so an army and an economy compete for one cap.
 import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
+import { garrisonAt } from '../regions';
 import { UNITS, stackAtk, stackHp, totalUnits } from '../units';
 
 function newGame() {
@@ -61,8 +62,8 @@ describe('where units can be produced', () => {
     const academy = withAcademy(g);
     expect(g.trainRejection(academy, 'p1', 'conscript')).toBe(null);
     expect(g.trainUnits(academy, 'p1', 'conscript', 3), 'trained at the academy').toBe(3);
-    expect(g.state.regions[academy].units.conscript).toBe(3);
-    expect(g.state.regions['taipei-1'].units.conscript ?? 0, 'they spawn on the academy tile').toBe(0);
+    expect(garrisonAt(g.state, academy).conscript).toBe(3);
+    expect(garrisonAt(g.state, 'taipei-1').conscript ?? 0, 'they spawn on the academy tile').toBe(0);
   });
 
   it('higher tiers cannot be trained fresh at all', () => {
@@ -97,12 +98,12 @@ describe('the upgrade chain', () => {
     g.trainUnits(academy, 'p1', 'conscript', 2);
 
     expect(g.upgradeUnits(academy, 'p1', 'volunteer', 2), 'both promoted').toBe(2);
-    expect(g.state.regions[academy].units.conscript, 'sources consumed').toBe(0);
-    expect(g.state.regions[academy].units.volunteer).toBe(2);
+    expect(garrisonAt(g.state, academy).conscript, 'sources consumed').toBe(0);
+    expect(garrisonAt(g.state, academy).volunteer).toBe(2);
 
     expect(g.upgradeUnits(academy, 'p1', 'marine', 2)).toBe(2);
-    expect(g.state.regions[academy].units.volunteer).toBe(0);
-    expect(g.state.regions[academy].units.marine).toBe(2);
+    expect(garrisonAt(g.state, academy).volunteer).toBe(0);
+    expect(garrisonAt(g.state, academy).marine).toBe(2);
   });
 
   it('cannot skip a tier', () => {
@@ -160,13 +161,13 @@ describe('troops do not change sides with the ground', () => {
   it('taking neutral land does not hand you its garrison', () => {
     const g = newGame();
     const defended = Object.keys(g.state.regions).find(
-      (id) => totalUnits(g.state.regions[id].units) > 0,
+      (id) => totalUnits(garrisonAt(g.state, id)) > 0,
     )!;
-    const garrison = totalUnits(g.state.regions[defended].units);
+    const garrison = totalUnits(garrisonAt(g.state, defended));
     expect(garrison, 'that region really was defended').toBeGreaterThan(0);
 
     g.setRegionOwner(defended, 'p1');
-    expect(totalUnits(g.state.regions[defended].units), 'garrison is gone, not captured').toBe(0);
+    expect(totalUnits(garrisonAt(g.state, defended)), 'garrison is gone, not captured').toBe(0);
     expect(g.troopCount('p1'), 'and it did not join your army').toBe(0);
     expect(g.population('p1'), 'nor inflate your population').toBe(0);
   });

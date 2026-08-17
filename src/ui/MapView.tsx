@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { select } from 'd3-selection';
 import 'd3-transition'; // side-effect: adds .transition() to d3-selection Selection
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomTransform } from 'd3-zoom';
-import { hasMountainRoad } from '../engine/regions';
+import { garrisonAt, hasMountainRoad } from '../engine/regions';
 import type { GameMap, MapBounds } from '../engine/maps';
 import { totalUnits } from '../engine/units';
 import { BuildingBadge, BuildingSolid, GROUND_Y, type IconKey } from './buildingIcons';
@@ -892,7 +892,7 @@ export function MapView({
                 )}
                 {/* Neutral garrison strength, so contested ground and the
                     undefended land near each core read at a glance. */}
-                {regionState.owner === null && totalUnits(regionState.units) > 0 && (
+                {regionState.owner === null && totalUnits(garrisonAt(gameState, region.id)) > 0 && (
                   <text
                     x={p.x}
                     y={p.y + (showLabels ? 13 : 4) / transform.k}
@@ -901,7 +901,7 @@ export function MapView({
                     fill={MILITIA_COLOR}
                     style={{ paintOrder: 'stroke', stroke: labelHalo, strokeWidth: 2 / transform.k, strokeOpacity: 0.7 }}
                   >
-                    ⚔{totalUnits(regionState.units)}
+                    ⚔{totalUnits(garrisonAt(gameState, region.id))}
                   </text>
                 )}
               </g>

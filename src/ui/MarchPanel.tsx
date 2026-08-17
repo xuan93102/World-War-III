@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { UNITS, UNIT_ORDER, totalUnits, type UnitCounts, type UnitType } from '../engine/units';
+import { garrisonAt } from '../engine/regions';
 import { useSettings } from '../settings/useSettings';
 import type { TranslationKey } from '../settings/translations';
 import type { GameEngine } from '../engine/GameEngine';
@@ -36,7 +37,7 @@ export function MarchPanel({
   const [counts, setCounts] = useState<UnitCounts>({});
 
   const region = engine.state.regions[regionId];
-  const stationed = region.units;
+  const stationed = garrisonAt(engine.state, regionId);
   const available = UNIT_ORDER.filter((type) => (stationed[type] ?? 0) > 0);
 
   if (region.owner !== playerId) return null;

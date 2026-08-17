@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { MARCH_SECONDS_PER_HOP, MARCH_SECONDS_VIA_PASS, marchSeconds } from '../movement';
+import { garrisonAt } from '../regions';
 import { totalUnits } from '../units';
 import { TAIWAN } from '../maps';
 
@@ -103,8 +104,8 @@ describe('march orders', () => {
   it('takes the troops off the map the moment they set out', () => {
     const g = withTroops(newGame(), 5);
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 2 });
-    expect(totalUnits(g.state.regions[CORE].units), 'left behind').toBe(3);
-    expect(totalUnits(g.state.regions[NEXT_DOOR].units), 'not arrived yet').toBe(0);
+    expect(totalUnits(garrisonAt(g.state, CORE)), 'left behind').toBe(3);
+    expect(totalUnits(garrisonAt(g.state, NEXT_DOOR)), 'not arrived yet').toBe(0);
     expect(g.state.marches).toHaveLength(1);
   });
 });
@@ -136,9 +137,9 @@ describe('arrival', () => {
     const g = withTroops(newGame(), 3);
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 3 });
     g.tick(MARCH_SECONDS_PER_HOP - 1);
-    expect(totalUnits(g.state.regions[NEXT_DOOR].units), 'still walking').toBe(0);
+    expect(totalUnits(garrisonAt(g.state, NEXT_DOOR)), 'still walking').toBe(0);
     g.tick(1);
-    expect(totalUnits(g.state.regions[NEXT_DOOR].units), 'arrived').toBe(3);
+    expect(totalUnits(garrisonAt(g.state, NEXT_DOOR)), 'arrived').toBe(3);
   });
 
   it('claims empty neutral land it walks into', () => {
@@ -147,7 +148,7 @@ describe('arrival', () => {
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 3 });
     g.tick(MARCH_SECONDS_PER_HOP);
     expect(g.state.regions[NEXT_DOOR].owner, 'captured on arrival').toBe('p1');
-    expect(totalUnits(g.state.regions[NEXT_DOOR].units), 'garrison stays put').toBe(3);
+    expect(totalUnits(garrisonAt(g.state, NEXT_DOOR)), 'garrison stays put').toBe(3);
   });
 
   it('merges into a garrison already standing there', () => {
@@ -156,7 +157,7 @@ describe('arrival', () => {
     g.tick(MARCH_SECONDS_PER_HOP);
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 3 });
     g.tick(MARCH_SECONDS_PER_HOP);
-    expect(totalUnits(g.state.regions[NEXT_DOOR].units), 'both waves').toBe(6);
+    expect(totalUnits(garrisonAt(g.state, NEXT_DOOR)), 'both waves').toBe(6);
     expect(g.state.marches, 'road is clear').toHaveLength(0);
   });
 
@@ -172,11 +173,11 @@ describe('arrival', () => {
     g.tick(MARCH_SECONDS_PER_HOP);
     expect(g.state.regions[route[0]].owner, 'took the region it passed through').toBe('p1');
     expect(g.state.marches, 'still on the road').toHaveLength(1);
-    expect(totalUnits(g.state.regions[FAR].units), 'not there yet').toBe(0);
+    expect(totalUnits(garrisonAt(g.state, FAR)), 'not there yet').toBe(0);
 
     g.tick(MARCH_SECONDS_PER_HOP);
     expect(g.state.regions[FAR].owner, 'arrived').toBe('p1');
-    expect(totalUnits(g.state.regions[FAR].units)).toBe(3);
+    expect(totalUnits(garrisonAt(g.state, FAR))).toBe(3);
     expect(g.state.marches).toHaveLength(0);
   });
 
@@ -203,7 +204,7 @@ describe('arrival', () => {
     g.state.regions[CORE].units = { militia: 4, conscript: 2 };
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 1, conscript: 2 });
     g.tick(MARCH_SECONDS_PER_HOP);
-    expect(g.state.regions[NEXT_DOOR].units).toEqual({ militia: 1, conscript: 2 });
-    expect(g.state.regions[CORE].units, 'remainder holds the core').toEqual({ militia: 3 });
+    expect(garrisonAt(g.state, NEXT_DOOR)).toEqual({ militia: 1, conscript: 2 });
+    expect(garrisonAt(g.state, CORE), 'remainder holds the core').toEqual({ militia: 3 });
   });
 });
