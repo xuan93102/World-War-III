@@ -1,4 +1,4 @@
-import { UNITS, UNIT_ORDER, totalUnits, type UnitType } from '../engine/units';
+import { UNITS, UNIT_ORDER, isVehicle, totalUnits, type UnitType } from '../engine/units';
 import { SupplyBar } from './SupplyBar';
 import { useSettings } from '../settings/useSettings';
 import type { GameEngine } from '../engine/GameEngine';
@@ -7,11 +7,19 @@ interface UnitPanelProps {
   engine: GameEngine;
   regionId: string;
   playerId: string;
+  onCancelProduction: (index: number) => void;
   onTrain: (regionId: string, type: UnitType, count: number) => void;
   onUpgrade: (regionId: string, type: UnitType, count: number) => void;
 }
 
-export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: UnitPanelProps) {
+export function UnitPanel({
+  engine,
+  regionId,
+  playerId,
+  onTrain,
+  onUpgrade,
+  onCancelProduction,
+}: UnitPanelProps) {
   const { t } = useSettings();
   const region = engine.state.regions[regionId];
   // Only what this player is allowed to know is standing here (docs 9).
@@ -37,6 +45,32 @@ export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: Un
       </div>
 
       {legion && totalUnits(legion.units) > 0 && <SupplyBar supply={legion.supply} />}
+
+      {/* Recruits on the way (docs 6.1): nothing appears the instant it's
+          paid for, and an upgrade takes its unit off the line meanwhile. */}
+      {engine.state.players[playerId].production
+        .map((job, index) => ({ job, index }))
+        .filter(({ job }) => job.regionId === regionId && !isVehicle(job.type))
+        .map(({ job, index }) => (
+          <div key={index} className="arsenal-job">
+            <span className="arsenal-job-name">
+              {t(UNITS[job.type].nameKey)}・{t('train.inProgress')}
+            </span>
+            <div className="progress-track">
+              <div
+                className="progress-fill"
+                style={{ width: `${100 * (1 - job.remainingSeconds / job.totalSeconds)}%` }}
+              />
+            </div>
+            <span className="arsenal-job-meta">
+              {t('train.remaining').replace('{n}', String(job.remaining))}・
+              {Math.ceil(job.remainingSeconds)}s
+            </span>
+            <button className="btn btn-sm" onClick={() => onCancelProduction(index)}>
+              {t('vehicle.cancel')}
+            </button>
+          </div>
+        ))}
 
       {/* Troops that have left here, or are on their way in. They're on the
           road and count for neither region's garrison, so without this the
@@ -96,7 +130,7 @@ export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: Un
                     onClick={() => onTrain(regionId, type, 1)}
                     title={trainRejection === 'noPopulationRoom' ? t('unit.noPopulationRoom') : undefined}
                   >
-                    {t('unit.train')} ({def.trainCost})
+                    {t('unit.train')} ({def.trainCost}・{def.buildSeconds}s)
                   </button>
                 )}
                 {upgradable && (
@@ -106,7 +140,7 @@ export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: Un
                     onClick={() => onUpgrade(regionId, type, 1)}
                     title={upgradeRejection === 'noSourceUnits' ? t('unit.noSourceUnits') : undefined}
                   >
-                    {t('unit.upgrade')} ({def.upgradeCost})
+                    {t('unit.upgrade')} ({def.upgradeCost}・{def.upgradeSeconds}s)
                   </button>
                 )}
               </div>

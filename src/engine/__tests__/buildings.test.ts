@@ -9,6 +9,7 @@ import { FOOD_PER_MIN_BY_SIZE, MILITIA_BY_SIZE, SAFE_ZONE_HOPS, landSizeOf } fro
 import { TAIWAN } from '../maps';
 import { garrisonAt } from '../regions';
 import { totalUnits } from '../units';
+import { trainNow } from './helpers';
 
 function newGame() {
   return new GameEngine([
@@ -339,7 +340,7 @@ describe('population: villagers and troops share one cap', () => {
     g.buyVillagers('p1', 100);
     expect(g.economy('p1').moneyPerMin).toBe(100);
 
-    const trained = g.trainUnits('taipei-1', 'p1', 'militia', 40);
+    const trained = trainNow(g, 'taipei-1', 'p1', 'militia', 40);
     expect(trained, 'militia come out of the core').toBe(40);
     expect(g.state.players.p1.villagers, 'villagers are not converted').toBe(100);
     expect(g.troopCount('p1')).toBe(40);
@@ -350,7 +351,7 @@ describe('population: villagers and troops share one cap', () => {
   it('an army squeezes out villagers by eating the shared cap', () => {
     const g = newGame();
     g.state.players.p1.money = 100000;
-    g.trainUnits('taipei-1', 'p1', 'militia', 150);
+    trainNow(g, 'taipei-1', 'p1', 'militia', 150);
     expect(g.populationRoom('p1'), 'only 50 slots left of 200').toBe(50);
     expect(g.buyVillagers('p1', 999), 'villagers limited by what the army left').toBe(50);
     expect(
@@ -364,7 +365,7 @@ describe('population: villagers and troops share one cap', () => {
     g.state.players.p1.money = 100000;
     g.buyVillagers('p1', 200);
     expect(g.populationRoom('p1')).toBe(0);
-    expect(g.trainUnits('taipei-1', 'p1', 'militia', 5), 'no room for troops either').toBe(0);
+    expect(trainNow(g, 'taipei-1', 'p1', 'militia', 5), 'no room for troops either').toBe(0);
   });
 });
 

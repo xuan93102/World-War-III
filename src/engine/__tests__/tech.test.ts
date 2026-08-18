@@ -11,6 +11,7 @@ import {
   researcherCost,
 } from '../tech';
 import { garrisonAt } from '../regions';
+import { trainNow } from './helpers';
 
 /** Puts troops on ground `playerId` already holds, as their legion there. */
 function station(
@@ -74,13 +75,11 @@ describe('research prerequisites', () => {
     expect(g.researchRejection('p1', 'autoRifles')).toBeNull();
   });
 
-  it('refuses techs whose system does not exist yet', () => {
-    const g = withBuilding(newGame(), 'research');
-    // Training time isn't modelled, so the tech that shortens it can't be had.
-    expect(TECHS.conscriptionDrive.implemented, 'no training time to shorten').toBe(false);
-    g.state.players.p1.coreLevel = 2;
-    expect(g.researchRejection('p1', 'conscriptionDrive')).toBe('notImplemented');
-    expect(g.researchRejection('p1', 'scouts'), 'scouting is built now').toBe(null);
+  it('has nothing left that its system is missing', () => {
+    // Every tech in the tree now points at something that exists. When one
+    // gets added ahead of its system, this is where it should be listed.
+    const unbuilt = Object.values(TECHS).filter((tech) => !tech.implemented);
+    expect(unbuilt.map((t) => t.id)).toEqual([]);
   });
 
   it('allows only two at a time', () => {
@@ -230,7 +229,7 @@ describe('tech effects', () => {
     // A garrisoned neutral region to attack, next door to the core.
     g.state.regions[LAB].units = { militia: 20 };
     g.state.players.p1.money = 1000;
-    g.trainUnits(CORE, 'p1', 'militia', 10);
+    trainNow(g, CORE, 'p1', 'militia', 10);
     g.state.players.p1.techs.push('rifles', 'autoRifles');
     g.startMarch(CORE, LAB, 'p1', { militia: 10 });
     g.tick(20);

@@ -6,6 +6,7 @@ import { COMBAT_ROUND_SECONDS, MUTINY_MILITIA, applyDamage, resolveRound } from 
 import { MARCH_SECONDS_PER_HOP } from '../movement';
 import { garrisonAt } from '../regions';
 import { totalUnits } from '../units';
+import { trainNow } from './helpers';
 
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
@@ -80,7 +81,7 @@ describe('battles in play', () => {
    */
   function attackNextDoor(g: GameEngine, count: number) {
     g.state.players.p1.money = 1000;
-    g.trainUnits(CORE, 'p1', 'militia', count);
+    trainNow(g, CORE, 'p1', 'militia', count);
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: count });
     g.tick(MARCH_SECONDS_PER_HOP);
     g.assault(NEXT_DOOR, 'p1');
@@ -147,7 +148,7 @@ describe('battles in play', () => {
     const g = newGame();
     g.state.regions[NEXT_DOOR].units = { militia: 3 };
     g.state.players.p1.money = 1000;
-    g.trainUnits(CORE, 'p1', 'militia', 5);
+    trainNow(g, CORE, 'p1', 'militia', 5);
     const before = g.population('p1');
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 5 });
     g.tick(MARCH_SECONDS_PER_HOP);
@@ -165,7 +166,7 @@ describe('battles in play', () => {
     g.tick(COMBAT_ROUND_SECONDS);
     const holding = totalUnits(g.battleAt(NEXT_DOOR)!.attackerUnits);
 
-    g.trainUnits(CORE, 'p1', 'militia', 4);
+    trainNow(g, CORE, 'p1', 'militia', 4);
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 4 });
     g.tick(MARCH_SECONDS_PER_HOP);
 
@@ -183,7 +184,7 @@ describe('breaking off', () => {
     const g = newGame();
     g.state.regions[NEXT_DOOR].units = { militia: 30 };
     g.state.players.p1.money = 1000;
-    g.trainUnits(CORE, 'p1', 'militia', 5);
+    trainNow(g, CORE, 'p1', 'militia', 5);
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 5 });
     g.tick(MARCH_SECONDS_PER_HOP);
     g.assault(NEXT_DOOR, 'p1');

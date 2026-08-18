@@ -8,6 +8,7 @@ import { MARCH_SECONDS_PER_HOP, MARCH_SECONDS_VIA_PASS, marchSeconds } from '../
 import { garrisonAt } from '../regions';
 import { totalUnits } from '../units';
 import { TAIWAN } from '../maps';
+import { trainNow } from './helpers';
 
 /** Puts troops on ground `playerId` already holds, as their legion there. */
 function station(
@@ -46,7 +47,7 @@ function newGame() {
 /** Puts `count` militia in p1's core, ready to march. */
 function withTroops(g: GameEngine, count = 5) {
   g.state.players.p1.money = 1000;
-  g.trainUnits(CORE, 'p1', 'militia', count);
+  trainNow(g, CORE, 'p1', 'militia', count);
   return g;
 }
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { UNITS, VEHICLE_TYPES, type UnitType } from '../engine/units';
+import { UNITS, VEHICLE_TYPES, isVehicle, type UnitType } from '../engine/units';
 import { useSettings } from '../settings/useSettings';
 import type { TranslationKey } from '../settings/translations';
 import type { GameEngine, VehicleRejection } from '../engine/GameEngine';
@@ -31,7 +31,9 @@ export function ArsenalPanel({ engine, regionId, playerId, onQueue, onCancel }: 
   const isArsenal = engine.arsenals(playerId).includes(regionId);
   const jobs = engine.state.players[playerId].production
     .map((job, index) => ({ job, index }))
-    .filter(({ job }) => job.regionId === regionId);
+    // Troops in training show up in the unit panel; this section is the
+    // slipway.
+    .filter(({ job }) => job.regionId === regionId && isVehicle(job.type));
   if (!isArsenal && jobs.length === 0) return null;
 
   return (

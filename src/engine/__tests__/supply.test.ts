@@ -17,6 +17,7 @@ import {
   supplyDamageTakenMultiplier,
 } from '../supply';
 import { TAIWAN } from '../maps';
+import { trainNow } from './helpers';
 
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
@@ -31,7 +32,7 @@ function newGame() {
 /** Trains militia at p1's core and returns their legion. */
 function withLegion(g: GameEngine, count = 5) {
   g.state.players.p1.money = 1000;
-  g.trainUnits(CORE, 'p1', 'militia', count);
+  trainNow(g, CORE, 'p1', 'militia', count);
   return g.state.legions.find((l) => l.regionId === CORE)!;
 }
 
@@ -179,7 +180,7 @@ describe('a hungry army fights worse', () => {
       const g = newGame();
       g.state.regions[NEXT_DOOR].units = { militia: 30 };
       g.state.players.p1.money = 1000;
-      g.trainUnits(CORE, 'p1', 'militia', 10);
+      trainNow(g, CORE, 'p1', 'militia', 10);
       g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 10 });
       g.tick(MARCH_SECONDS_PER_HOP);
       g.assault(NEXT_DOOR, 'p1');
@@ -199,7 +200,7 @@ describe('a hungry army fights worse', () => {
     const g = newGame();
     g.state.regions[NEXT_DOOR].units = { militia: 30 };
     g.state.players.p1.money = 1000;
-    g.trainUnits(CORE, 'p1', 'militia', 5);
+    trainNow(g, CORE, 'p1', 'militia', 5);
     g.state.legions.find((l) => l.regionId === CORE)!.supply = 0.6;
 
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 5 });

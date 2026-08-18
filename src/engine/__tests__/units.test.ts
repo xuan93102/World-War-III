@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { garrisonAt } from '../regions';
 import { UNITS, stackAtk, stackHp, totalUnits } from '../units';
+import { trainNow, upgradeNow } from './helpers';
 
 /** Puts troops on ground `playerId` already holds, as their legion there. */
 function station(
@@ -78,7 +79,7 @@ describe('where units can be produced', () => {
 
     const academy = withAcademy(g);
     expect(g.trainRejection(academy, 'p1', 'conscript')).toBe(null);
-    expect(g.trainUnits(academy, 'p1', 'conscript', 3), 'trained at the academy').toBe(3);
+    expect(trainNow(g, academy, 'p1', 'conscript', 3), 'trained at the academy').toBe(3);
     expect(garrisonAt(g.state, academy).conscript).toBe(3);
     expect(garrisonAt(g.state, 'taipei-1').conscript ?? 0, 'they spawn on the academy tile').toBe(0);
   });
@@ -88,14 +89,14 @@ describe('where units can be produced', () => {
     const academy = withAcademy(g);
     expect(g.trainRejection(academy, 'p1', 'volunteer')).toBe('notTrainable');
     expect(g.trainRejection(academy, 'p1', 'marine')).toBe('notTrainable');
-    expect(g.trainUnits(academy, 'p1', 'marine', 1)).toBe(0);
+    expect(trainNow(g, academy, 'p1', 'marine', 1)).toBe(0);
   });
 
   it('training costs gold and nothing else', () => {
     const g = newGame();
     g.state.players.p1.money = 10;
     const before = g.state.players.p1.villagers;
-    expect(g.trainUnits('taipei-1', 'p1', 'militia', 4)).toBe(4);
+    expect(trainNow(g, 'taipei-1', 'p1', 'militia', 4)).toBe(4);
     expect(g.state.players.p1.money, '4 militia at 1 gold each').toBe(6);
     expect(g.state.players.p1.villagers, 'villagers untouched').toBe(before);
   });
@@ -103,7 +104,7 @@ describe('where units can be produced', () => {
   it('training is capped by gold on hand', () => {
     const g = newGame();
     g.state.players.p1.money = 3;
-    expect(g.trainUnits('taipei-1', 'p1', 'militia', 100), 'only what 3 gold buys').toBe(3);
+    expect(trainNow(g, 'taipei-1', 'p1', 'militia', 100), 'only what 3 gold buys').toBe(3);
     expect(g.state.players.p1.money).toBe(0);
   });
 });
@@ -112,15 +113,15 @@ describe('the upgrade chain', () => {
   it('walks conscript -> volunteer -> marine, at the academy', () => {
     const g = newGame();
     const academy = withAcademy(g);
-    g.trainUnits(academy, 'p1', 'conscript', 2);
+    trainNow(g, academy, 'p1', 'conscript', 2);
 
     // A unit type that's been used up drops out of the stack entirely rather
     // than lingering as a zero — same convention subtractUnits follows.
-    expect(g.upgradeUnits(academy, 'p1', 'volunteer', 2), 'both promoted').toBe(2);
+    expect(upgradeNow(g, academy, 'p1', 'volunteer', 2), 'both promoted').toBe(2);
     expect(garrisonAt(g.state, academy).conscript ?? 0, 'sources consumed').toBe(0);
     expect(garrisonAt(g.state, academy).volunteer).toBe(2);
 
-    expect(g.upgradeUnits(academy, 'p1', 'marine', 2)).toBe(2);
+    expect(upgradeNow(g, academy, 'p1', 'marine', 2)).toBe(2);
     expect(garrisonAt(g.state, academy).volunteer ?? 0).toBe(0);
     expect(garrisonAt(g.state, academy).marine).toBe(2);
   });
@@ -128,36 +129,36 @@ describe('the upgrade chain', () => {
   it('cannot skip a tier', () => {
     const g = newGame();
     const academy = withAcademy(g);
-    g.trainUnits(academy, 'p1', 'conscript', 2);
+    trainNow(g, academy, 'p1', 'conscript', 2);
     expect(g.upgradeRejection(academy, 'p1', 'marine'), 'no volunteers to promote').toBe('noSourceUnits');
   });
 
   it('upgrading costs gold per unit', () => {
     const g = newGame();
     const academy = withAcademy(g);
-    g.trainUnits(academy, 'p1', 'conscript', 3);
+    trainNow(g, academy, 'p1', 'conscript', 3);
     const before = g.state.players.p1.money;
-    g.upgradeUnits(academy, 'p1', 'volunteer', 3);
+    upgradeNow(g, academy, 'p1', 'volunteer', 3);
     expect(before - g.state.players.p1.money, '3 upgrades at 2 gold').toBe(6);
   });
 
   it('upgrading never changes headcount, so it needs no population room', () => {
     const g = newGame();
     const academy = withAcademy(g);
-    g.trainUnits(academy, 'p1', 'conscript', 5);
+    trainNow(g, academy, 'p1', 'conscript', 5);
     // Fill every remaining slot with villagers.
     g.buyVillagers('p1', g.maxAffordableVillagers('p1'));
     expect(g.populationRoom('p1'), 'cap is full').toBe(0);
 
     const before = g.population('p1');
-    expect(g.upgradeUnits(academy, 'p1', 'volunteer', 5), 'still allowed at a full cap').toBe(5);
+    expect(upgradeNow(g, academy, 'p1', 'volunteer', 5), 'still allowed at a full cap').toBe(5);
     expect(g.population('p1'), 'headcount unchanged').toBe(before);
   });
 
   it('troops must be at an academy region to upgrade', () => {
     const g = newGame();
     const academy = withAcademy(g);
-    g.trainUnits(academy, 'p1', 'conscript', 2);
+    trainNow(g, academy, 'p1', 'conscript', 2);
 
     // Move them to a plain region: the upgrade is refused there.
     const plain = 'taipei-3';
@@ -194,7 +195,7 @@ describe('troops do not change sides with the ground', () => {
   it('losing a region does not gift your army to the enemy', () => {
     const g = newGame();
     g.state.players.p1.money = 100;
-    g.trainUnits('taipei-1', 'p1', 'militia', 10);
+    trainNow(g, 'taipei-1', 'p1', 'militia', 10);
     expect(g.troopCount('p1')).toBe(10);
 
     g.setRegionOwner('taipei-1', 'p2');

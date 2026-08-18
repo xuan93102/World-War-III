@@ -51,6 +51,7 @@ import {
   researchTimeMultiplier,
   arsenalTimeMultiplier,
   researcherCost,
+  trainTimeMultiplier,
   siegeDamageMultiplier,
   supplyCartCap,
   vehiclesCrossPasses,
@@ -486,8 +487,31 @@ export class GameEngine {
     return Math.max(0, this.supplyCartCap(playerId) - out);
   }
 
-  /** Vehicles paid for and still on the slipway (docs 6.5). */
-  queuedVehicles(playerId: PlayerId): number {
+  /** How much research shortens a job at this kind of site. */
+  private productionSpeed(playerId: PlayerId, site: 'core' | 'academy' | 'arsenal' | null): number {
+    const techs = this.ownedTechs(playerId);
+    if (site === 'arsenal') return arsenalTimeMultiplier(techs);
+    // 徵兵效率 is written as an academy tech, so the core's militia miss out.
+    if (site === 'academy') return trainTimeMultiplier(techs);
+    return 1;
+  }
+
+  private enqueue(
+    playerId: PlayerId,
+    job: { type: UnitType; regionId: string; seconds: number; count: number; fromType?: UnitType },
+  ): void {
+    this.state.players[playerId].production.push({
+      type: job.type,
+      regionId: job.regionId,
+      remainingSeconds: job.seconds,
+      totalSeconds: job.seconds,
+      remaining: job.count,
+      fromType: job.fromType,
+    });
+  }
+
+  /** Units paid for and still in production, wherever they're being made. */
+  queuedUnits(playerId: PlayerId): number {
     return (this.state.players[playerId]?.production ?? []).reduce(
       (sum, job) => sum + job.remaining,
       0,
@@ -1111,6 +1135,14 @@ export class GameEngine {
 
   // ---- vehicles (docs/game-design.md 6.5) --------------------------------
 
+  /** Whether this region is still a working site for that unit. */
+  private canProduceAt(regionId: string, playerId: PlayerId, type: UnitType): boolean {
+    // Upgrades finish at an academy, the same place the tiers above militia
+    // are trained.
+    const asked = UNITS[type].trainAt === null ? 'conscript' : type;
+    return this.trainingSites(playerId, asked).includes(regionId);
+  }
+
   /** Arsenals this player owns and could build vehicles at. */
   arsenals(playerId: PlayerId): string[] {
     return Object.entries(this.state.regions)
@@ -1155,12 +1187,20 @@ export class GameEngine {
     return true;
   }
 
-  /** Cancels a queued batch, refunding what hasn't been built yet. */
+  /** Cancels a queued batch, refunding what hasn't been produced yet. */
   cancelProduction(playerId: PlayerId, index: number): boolean {
     const player = this.state.players[playerId];
     const job = player.production[index];
     if (!job) return false;
-    player.money += (UNITS[job.type].trainCost ?? 0) * job.remaining;
+    const def = UNITS[job.type];
+    if (job.fromType) {
+      // An upgrade pulled its recruits off the line; give them back as they were.
+      player.money += (def.upgradeCost ?? 0) * job.remaining;
+      this.legionFor(job.regionId, playerId).units[job.fromType] =
+        (this.ownGarrisonAt(job.regionId, playerId)[job.fromType] ?? 0) + job.remaining;
+    } else {
+      player.money += (def.trainCost ?? 0) * job.remaining;
+    }
     player.production.splice(index, 1);
     return true;
   }
@@ -1436,7 +1476,7 @@ export class GameEngine {
       this.troopCount(playerId) +
       researchers +
       this.porterCount(playerId) +
-      this.queuedVehicles(playerId)
+      this.queuedUnits(playerId)
     );
   }
 
@@ -1457,9 +1497,10 @@ export class GameEngine {
       const core = this.state.players[playerId]?.coreRegionId;
       return core && this.state.regions[core]?.owner === playerId ? [core] : [];
     }
-    if (def.trainAt === 'academy') {
+    if (def.trainAt === 'academy' || def.trainAt === 'arsenal') {
+      const building = def.trainAt;
       return this.ownedRegionIds(playerId).filter(
-        (id) => this.state.regions[id].building?.type === 'academy',
+        (id) => this.state.regions[id].building?.type === building,
       );
     }
     return [];
@@ -1473,8 +1514,11 @@ export class GameEngine {
   ): 'wrongSite' | 'notTrainable' | 'cannotAfford' | 'noPopulationRoom' | null {
     const def = UNITS[type];
     if (def.trainCost === null || def.trainAt === null) return 'notTrainable';
-    if (def.requiresTech && !this.hasTech(playerId, def.requiresTech)) return 'notTrainable';
+    // Wrong place first: the panel hides a row that can't be produced *here*
+    // at all, and "you're at the core, not an arsenal" is the reason for that
+    // — not "you haven't researched it".
     if (!this.trainingSites(playerId, type).includes(regionId)) return 'wrongSite';
+    if (def.requiresTech && !this.hasTech(playerId, def.requiresTech)) return 'notTrainable';
     const player = this.state.players[playerId];
     if (player.money < def.trainCost * count) return 'cannotAfford';
     if (this.populationRoom(playerId) < count) return 'noPopulationRoom';
@@ -1496,8 +1540,12 @@ export class GameEngine {
     if (affordable <= 0) return 0;
 
     player.money -= affordable * def.trainCost;
-    const legion = this.legionFor(regionId, playerId);
-    legion.units[type] = (legion.units[type] ?? 0) + affordable;
+    this.enqueue(playerId, {
+      type,
+      regionId,
+      seconds: def.buildSeconds * this.productionSpeed(playerId, def.trainAt),
+      count: affordable,
+    });
     return affordable;
   }
 
@@ -1537,8 +1585,17 @@ export class GameEngine {
     if (upgradable <= 0) return 0;
 
     player.money -= upgradable * def.upgradeCost;
+    // The recruits come off the line for the duration — docs 6.1's "升級期間
+    // 那支部隊不在前線" only means something if they actually leave it.
     legion.units[def.upgradeFrom] = (legion.units[def.upgradeFrom] ?? 0) - upgradable;
-    legion.units[type] = (legion.units[type] ?? 0) + upgradable;
+    this.pruneLegions();
+    this.enqueue(playerId, {
+      type,
+      regionId,
+      seconds: def.upgradeSeconds * this.productionSpeed(playerId, 'academy'),
+      count: upgradable,
+      fromType: def.upgradeFrom,
+    });
     return upgradable;
   }
 
@@ -1831,18 +1888,18 @@ export class GameEngine {
       this.state.carts = stillRolling;
     }
 
-    // Arsenals (docs 6.5): one vehicle at a time, rolling out where they were
-    // built. A batch keeps its clock running until the last one is done.
+    // Production (docs 6.1, 6.5): one unit at a time, wherever it's made —
+    // the core, an academy or an arsenal. A batch keeps its clock running
+    // until the last one is done.
     for (const player of Object.values(this.state.players)) {
       if (player.production.length === 0) continue;
       const stillBuilding: typeof player.production = [];
       for (const job of player.production) {
         job.remainingSeconds -= deltaSeconds;
         while (job.remaining > 0 && job.remainingSeconds <= 0) {
-          const region = this.state.regions[job.regionId];
-          // An arsenal that's been lost or flattened stops delivering; what
-          // hasn't rolled out yet is written off with it.
-          if (region?.owner !== player.id || region.building?.type !== 'arsenal') {
+          // A site that's been lost or flattened stops delivering; whatever
+          // hasn't come off the line is written off with it.
+          if (!this.canProduceAt(job.regionId, player.id, job.type)) {
             job.remaining = 0;
             break;
           }

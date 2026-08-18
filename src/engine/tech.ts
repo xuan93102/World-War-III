@@ -5,8 +5,7 @@ import type { TranslationKey } from '../settings/translations';
  *
  * Core level gates which techs can be researched at all; techs then pay out in
  * flat multipliers, unlocks, or raised ceilings. A good many of them point at
- * systems that don't exist yet (scouting, training time, building defence), so
- * those carry `implemented: false` and can't be started — the same treatment the
+ * systems that don't exist yet, so those carry `implemented: false` and can't be started — the same treatment the
  * build menu gives a building whose system isn't built. The tree is complete
  * and browsable either way; nobody spends 400 gold on nothing.
  */
@@ -63,7 +62,6 @@ export interface TechDef {
   lockedReasonKey?: TranslationKey;
 }
 
-const NEEDS_TRAIN_TIME: TranslationKey = 'tech.locked.trainTime';
 
 export const TECHS: Record<TechId, TechDef> = {
   // ---- core level 1 ----
@@ -119,8 +117,7 @@ export const TECHS: Record<TechId, TechDef> = {
   },
   conscriptionDrive: {
     id: 'conscriptionDrive', nameKey: 'tech.conscriptionDrive', descKey: 'tech.conscriptionDrive.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: [],
-    implemented: false, lockedReasonKey: NEEDS_TRAIN_TIME,
+    coreLevel: 2, costMoney: 350, seconds: 150, requires: [], implemented: true,
   },
   reinforcedFortress: {
     id: 'reinforcedFortress', nameKey: 'tech.reinforcedFortress', descKey: 'tech.reinforcedFortress.desc',
@@ -273,6 +270,11 @@ export function populationCapFromTech(owned: ReadonlySet<TechId>, base: number):
   if (owned.has('townExpansion')) return 700;
   if (owned.has('homesteadAct')) return 400;
   return base;
+}
+
+/** Academy training and upgrade time — lower is faster (docs 11, 徵兵效率). */
+export function trainTimeMultiplier(owned: ReadonlySet<TechId>): number {
+  return owned.has('conscriptionDrive') ? 1 / 1.3 : 1;
 }
 
 /** Arsenal build time multiplier — lower is faster (docs 6.5, 軍工擴編). */

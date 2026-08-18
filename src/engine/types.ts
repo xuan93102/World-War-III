@@ -126,6 +126,8 @@ export interface PlayerState {
     totalSeconds: number;
     /** How many are still to come, the one under construction included. */
     remaining: number;
+    /** Set for an upgrade: the tier the recruits came off, for refunds. */
+    fromType?: UnitType;
   }[];
 }
 

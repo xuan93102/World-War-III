@@ -5,6 +5,7 @@ import { GameEngine, UNREST_SECONDS } from '../GameEngine';
 import { MARCH_SECONDS_PER_HOP } from '../movement';
 import { totalUnits } from '../units';
 import { garrisonAt } from '../regions';
+import { trainNow } from './helpers';
 
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
@@ -23,7 +24,7 @@ function newGame() {
 function takeNextDoorFrom(g: GameEngine, from: 'p2' | null) {
   if (from) g.setRegionOwner(NEXT_DOOR, from);
   else g.state.regions[NEXT_DOOR].units = {};
-  g.trainUnits(CORE, 'p1', 'militia', 5);
+  trainNow(g, CORE, 'p1', 'militia', 5);
   g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 5 });
   g.tick(MARCH_SECONDS_PER_HOP + 1);
   if (from) g.occupy(NEXT_DOOR, 'p1');
@@ -90,7 +91,7 @@ describe('what it blocks', () => {
     expect(g.trainRejection(NEXT_DOOR, 'p1', 'conscript', 1)).toBe(null);
     expect(g.upgradeRejection(NEXT_DOOR, 'p1', 'volunteer', 1)).toBe('noSourceUnits');
 
-    g.trainUnits(CORE, 'p1', 'militia', 4);
+    trainNow(g, CORE, 'p1', 'militia', 4);
     expect(g.marchRejection(CORE, NEXT_DOOR, 'p1', { militia: 4 })).toBe(null);
     expect(g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 4 })).not.toBe(null);
   });

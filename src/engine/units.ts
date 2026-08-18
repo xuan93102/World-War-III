@@ -38,8 +38,13 @@ export interface UnitDef {
    * without being shot back at (docs 6.5). 0 for anything that has to close.
    */
   range: number;
-  /** Seconds to build one at the arsenal; 0 for anything trained on the spot. */
+  /**
+   * Seconds to produce one, whether it's a militiaman at the core or a tank
+   * at the arsenal (docs 6.1, 6.5). Nothing appears the instant it's paid for.
+   */
   buildSeconds: number;
+  /** Seconds to upgrade one from `upgradeFrom`, if it can be upgraded. */
+  upgradeSeconds: number;
   /** Tech that has to be researched before it can be built at all. */
   requiresTech: 'mainBattleTank' | 'mortarCorps' | 'scouts' | null;
   /**
@@ -71,7 +76,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     upgradeCost: null,
     speed: 1,
     range: 0,
-    buildSeconds: 0,
+    buildSeconds: 5,
+    upgradeSeconds: 0,
     requiresTech: null,
   },
   conscript: {
@@ -85,7 +91,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     upgradeCost: null,
     speed: 1,
     range: 0,
-    buildSeconds: 0,
+    buildSeconds: 15,
+    upgradeSeconds: 0,
     requiresTech: null,
   },
   volunteer: {
@@ -100,6 +107,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     speed: 1,
     range: 0,
     buildSeconds: 0,
+    upgradeSeconds: 20,
     requiresTech: null,
   },
   marine: {
@@ -114,6 +122,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     speed: 1,
     range: 0,
     buildSeconds: 0,
+    upgradeSeconds: 30,
     requiresTech: null,
   },
   tank: {
@@ -128,6 +137,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     speed: 0.6,
     range: 1,
     buildSeconds: 180,
+    upgradeSeconds: 0,
     requiresTech: 'mainBattleTank',
   },
   scout: {
@@ -142,7 +152,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
     upgradeCost: null,
     speed: 1.5,
     range: 0,
-    buildSeconds: 0,
+    buildSeconds: 20,
+    upgradeSeconds: 0,
     requiresTech: 'scouts',
     hidden: true,
   },
@@ -158,6 +169,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     speed: 0.3,
     range: 2,
     buildSeconds: 120,
+    upgradeSeconds: 0,
     requiresTech: 'mortarCorps',
   },
 };

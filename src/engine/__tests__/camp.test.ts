@@ -3,6 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { CART_FOOD_LOAD } from '../supply';
+import { trainNow } from './helpers';
 
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
@@ -19,7 +20,7 @@ function newGame() {
 
 /** Walks `militia` from p1's core into an empty neutral region next door. */
 function armyNextDoor(g: GameEngine, militia = 5) {
-  g.trainUnits(CORE, 'p1', 'militia', militia);
+  trainNow(g, CORE, 'p1', 'militia', militia);
   g.startMarch(CORE, NEXT_DOOR, 'p1', { militia });
   g.tick(g.marchSeconds(CORE, NEXT_DOOR, 'p1') + 1);
   return g.legionsAt(NEXT_DOOR).find((l) => l.playerId === 'p1')!;
@@ -33,7 +34,7 @@ describe('pitching one', () => {
     // Any other building on the same ground stays out of reach.
     expect(g.buildRejection(away, 'shop', 'p1')).toBe('notOwner');
 
-    g.trainUnits(CORE, 'p1', 'militia', 3);
+    trainNow(g, CORE, 'p1', 'militia', 3);
     g.startMarch(CORE, away, 'p1', { militia: 3 });
     g.tick(g.marchSeconds(CORE, away, 'p1') + 1);
     // Walking into empty neutral land takes it, so pick somewhere still

@@ -246,6 +246,7 @@ export function RegionPanel({
         playerId={humanPlayerId}
         onTrain={onTrain}
         onUpgrade={onUpgrade}
+        onCancelProduction={onCancelProduction}
       />
 
       <BattlePanel

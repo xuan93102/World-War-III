@@ -9,6 +9,7 @@ import {
   FOOD_PER_SOLDIER_FULL,
   cartHopSeconds,
 } from '../supply';
+import { trainNow } from './helpers';
 
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
@@ -34,7 +35,7 @@ function build(g: GameEngine, regionId: string, type: 'granary' | 'fortress') {
 
 /** A legion of p1 standing on `regionId`, at the given supply. */
 function legionAt(g: GameEngine, regionId: string, militia: number, supply: number) {
-  g.trainUnits(CORE, 'p1', 'militia', militia);
+  trainNow(g, CORE, 'p1', 'militia', militia);
   if (regionId !== CORE) {
     g.startMarch(CORE, regionId, 'p1', { militia });
     g.tick(g.marchSeconds(CORE, regionId, 'p1') + 1);

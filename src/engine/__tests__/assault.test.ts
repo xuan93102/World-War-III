@@ -8,6 +8,7 @@ import { COMBAT_ROUND_SECONDS } from '../combat';
 import { MARCH_SECONDS_PER_HOP } from '../movement';
 import { totalUnits } from '../units';
 import { garrisonAt } from '../regions';
+import { trainNow } from './helpers';
 
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
@@ -24,7 +25,7 @@ function newGame() {
 
 /** Marches `militia` from p1's core to `to` and lets them arrive. */
 function send(g: GameEngine, to: string, militia: number) {
-  g.trainUnits(CORE, 'p1', 'militia', militia);
+  trainNow(g, CORE, 'p1', 'militia', militia);
   g.startMarch(CORE, to, 'p1', { militia });
   g.tick(g.marchSeconds(CORE, to, 'p1') + 1);
 }

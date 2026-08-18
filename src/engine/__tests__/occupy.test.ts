@@ -7,6 +7,7 @@ import { COMBAT_ROUND_SECONDS } from '../combat';
 import { MARCH_SECONDS_PER_HOP } from '../movement';
 import { garrisonAt } from '../regions';
 import { totalUnits } from '../units';
+import { trainNow } from './helpers';
 
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
@@ -23,7 +24,7 @@ function newGame() {
 
 /** Sends `militia` from p1's core to `to`, and lets them arrive. */
 function send(g: GameEngine, to: string, militia: number) {
-  g.trainUnits(CORE, 'p1', 'militia', militia);
+  trainNow(g, CORE, 'p1', 'militia', militia);
   g.startMarch(CORE, to, 'p1', { militia });
   g.tick(g.marchSeconds(CORE, to, 'p1') + 1);
 }
@@ -72,7 +73,7 @@ describe('standing on ground you do not hold', () => {
       });
     }
 
-    g.trainUnits(CORE, 'p1', 'militia', 4);
+    trainNow(g, CORE, 'p1', 'militia', 4);
     const route = g.marchRoute(CORE, beyond, 'p1');
     expect(route, 'a way through their land').toEqual([NEXT_DOOR, beyond]);
     g.startMarch(CORE, beyond, 'p1', { militia: 4 });
@@ -89,7 +90,7 @@ describe('standing on ground you do not hold', () => {
 
     // p2 walks back into their own region, where our army now stands.
     g.state.players.p2.money = 1000;
-    g.trainUnits('kaohsiung-1', 'p2', 'militia', 4);
+    trainNow(g, 'kaohsiung-1', 'p2', 'militia', 4);
     const legion = g.state.legions.find((l) => l.playerId === 'p2')!;
     legion.regionId = NEXT_DOOR;
     g.state.legions = g.state.legions.filter((l) => l !== legion);
@@ -171,7 +172,7 @@ describe('the order itself', () => {
   it('keeps the supply the victors fought on rather than refilling them', () => {
     const g = newGame();
     g.state.regions[NEXT_DOOR].units = { militia: 3 };
-    g.trainUnits(CORE, 'p1', 'militia', 8);
+    trainNow(g, CORE, 'p1', 'militia', 8);
     g.state.legions.find((l) => l.regionId === CORE)!.supply = 0.5;
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 8 });
     g.tick(MARCH_SECONDS_PER_HOP + 1);

@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { MARCH_SECONDS_PER_HOP } from '../movement';
 import { UNITS } from '../units';
+import { trainNow } from './helpers';
 
 const CORE = 'taipei-1';
 
@@ -94,7 +95,7 @@ describe('scouts', () => {
     const far = g.map.regions.find((r) => g.map.distance(CORE, r.id) === 3)!.id;
     expect(g.canSee(far, 'p1')).toBe(false);
 
-    g.trainUnits(CORE, 'p1', 'scout', 1);
+    trainNow(g, CORE, 'p1', 'scout', 1);
     g.state.legions.find((l) => l.regionId === CORE)!.regionId = far;
     expect(g.canSee(far, 'p1'), 'the scout is the eye').toBe(true);
   });
