@@ -1,3 +1,4 @@
+import { UNIT_ORDER, isVehicle, type UnitCounts } from './units';
 import type { GameMap } from './maps';
 import type { RegionState } from './types';
 
@@ -37,6 +38,12 @@ export const GRANARY_SUPPLY_HOPS = 2;
 export const CART_FOOD_LOAD = 500;
 /** Food to take one soldier from empty to full. §7's 每名士兵10糧食. */
 export const FOOD_PER_SOLDIER_FULL = 10;
+/**
+ * Food to fill one vehicle, flat — §7's 攻城器/戰車固定100糧食全滿. A machine
+ * doesn't eat by the head: it's ten soldiers' worth of fuel and shells however
+ * you count the crew.
+ */
+export const FOOD_PER_VEHICLE_FULL = 100;
 
 /** A cart with nobody pulling it. */
 export const CART_BASE_HOP_SECONDS = 70;
@@ -55,9 +62,19 @@ export function cartHopSeconds(porters: number): number {
   return Math.max(CART_MIN_HOP_SECONDS, Math.round(time));
 }
 
-/** Food needed to take this many soldiers from `supply` up to full. */
-export function refillCost(soldiers: number, supply: number): number {
-  return FOOD_PER_SOLDIER_FULL * soldiers * Math.max(0, FULL_SUPPLY - supply);
+/** Food to take a whole stack from empty to full, by what's in it. */
+export function fullRefillCost(units: UnitCounts | undefined): number {
+  if (!units) return 0;
+  return UNIT_ORDER.reduce(
+    (sum, type) =>
+      sum + (units[type] ?? 0) * (isVehicle(type) ? FOOD_PER_VEHICLE_FULL : FOOD_PER_SOLDIER_FULL),
+    0,
+  );
+}
+
+/** Food needed to take this stack from `supply` up to full. */
+export function refillCost(units: UnitCounts | undefined, supply: number): number {
+  return fullRefillCost(units) * Math.max(0, FULL_SUPPLY - supply);
 }
 
 /**
@@ -67,11 +84,11 @@ export function refillCost(soldiers: number, supply: number): number {
  */
 export function refillFrom(
   food: number,
-  soldiers: number,
+  units: UnitCounts | undefined,
   supply: number,
 ): { supply: number; spent: number } {
-  const needed = refillCost(soldiers, supply);
-  if (needed <= 0 || soldiers <= 0) return { supply, spent: 0 };
+  const needed = refillCost(units, supply);
+  if (needed <= 0) return { supply, spent: 0 };
   const spent = Math.min(food, needed);
   return { supply: supply + (FULL_SUPPLY - supply) * (spent / needed), spent };
 }

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { BASTION_BONUS, BUILDINGS, REINFORCED_FORTRESS_HP } from '../buildings';
 import { UNITS } from '../units';
+import { FOOD_PER_SOLDIER_FULL, FOOD_PER_VEHICLE_FULL, fullRefillCost } from '../supply';
 
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
@@ -66,6 +67,43 @@ describe('an assault order has to be one the army can carry out', () => {
     // One soldier with them is enough to make it a real order.
     g.legionsAt(NEXT_DOOR).find((l) => l.playerId === 'p1')!.units.militia = 5;
     expect(g.assaultRejection(NEXT_DOOR, 'p1')).toBe(null);
+  });
+});
+
+describe('what a refill costs', () => {
+  it('charges a machine ten times a soldier, per §7', () => {
+    expect(fullRefillCost({ militia: 10 })).toBe(10 * FOOD_PER_SOLDIER_FULL);
+    expect(fullRefillCost({ tank: 3 })).toBe(3 * FOOD_PER_VEHICLE_FULL);
+    expect(fullRefillCost({ mortar: 1, militia: 5 })).toBe(
+      FOOD_PER_VEHICLE_FULL + 5 * FOOD_PER_SOLDIER_FULL,
+    );
+    // A scout is a person, not a machine.
+    expect(fullRefillCost({ scout: 2 })).toBe(2 * FOOD_PER_SOLDIER_FULL);
+  });
+
+  it('spends that much out of a fortress store', () => {
+    const g = newGame();
+    const legion = {
+      id: 'armour',
+      playerId: 'p1',
+      units: { tank: 3 },
+      supply: 0,
+      regionId: CORE,
+    };
+    g.state.legions.push(legion);
+    g.state.regions[CORE].building = { type: 'fortress', hp: 1000, stock: 1000 };
+
+    g.tick(1);
+    expect(legion.supply, 'filled').toBe(1);
+    expect(
+      g.state.regions[CORE].building!.stock,
+      'three tanks cost 300, not 30',
+    ).toBe(1000 - 3 * FOOD_PER_VEHICLE_FULL);
+  });
+
+  it('leaves a cart able to fill five tanks and no more', () => {
+    // A cart carries 500 food, so it tops up five machines from empty.
+    expect(fullRefillCost({ tank: 5 })).toBe(500);
   });
 });
 

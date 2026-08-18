@@ -618,7 +618,7 @@ export class GameEngine {
 
     const legion = this.legionsAt(cart.destination).find((l) => l.playerId === cart.playerId);
     if (legion) {
-      const { supply, spent } = refillFrom(load, totalUnits(legion.units), legion.supply);
+      const { supply, spent } = refillFrom(load, legion.units, legion.supply);
       legion.supply = supply;
       load -= spent;
     }
@@ -1962,7 +1962,7 @@ export class GameEngine {
       if (!depotOwner || !this.supplyDepotAt(regionId, depotOwner)) continue;
       const legion = this.legionsAt(regionId).find((l) => l.playerId === depotOwner);
       if (!legion) continue;
-      const { supply, spent } = refillFrom(stock, totalUnits(legion.units), legion.supply);
+      const { supply, spent } = refillFrom(stock, legion.units, legion.supply);
       legion.supply = supply;
       building.stock = stock - spent;
     }
