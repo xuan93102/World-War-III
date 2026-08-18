@@ -11,7 +11,17 @@ import {
   type BuildingType,
 } from './buildings';
 import { FOOD_PER_MIN_BY_SIZE, MILITIA_BY_SIZE, landSizeOf, safeZoneAround } from './land';
-import { UNITS, stackAtk, totalUnits, type UnitCounts, type UnitType } from './units';
+import {
+  UNITS,
+  UNIT_ORDER,
+  isVehicle,
+  rangedAtk,
+  stackAtk,
+  stackSpeed,
+  totalUnits,
+  type UnitCounts,
+  type UnitType,
+} from './units';
 import {
   addUnits,
   findPath,
@@ -22,7 +32,7 @@ import {
   terrainRejection,
   type MarchRejection,
 } from './movement';
-import { COMBAT_ROUND_SECONDS, MUTINY_MILITIA, resolveRound } from './combat';
+import { COMBAT_ROUND_SECONDS, MUTINY_MILITIA, applyDamage, resolveRound } from './combat';
 import {
   CORE_UPGRADE,
   MAX_CORE_LEVEL,
@@ -37,8 +47,11 @@ import {
   moneyTechMultiplier,
   populationCapFromTech,
   researchTimeMultiplier,
+  arsenalTimeMultiplier,
   researcherCost,
+  siegeDamageMultiplier,
   supplyCartCap,
+  vehiclesCrossPasses,
   type TechId,
 } from './tech';
 import { DEFAULT_MAP_ID, getMap, type GameMap } from './maps';
@@ -145,6 +158,24 @@ export type CartRejection =
  */
 export const UNREST_SECONDS = 300;
 
+export type VehicleRejection =
+  | 'notVehicle'
+  | 'needsArsenal'
+  /** The unlocking tech hasn't been researched (docs 6.5). */
+  | 'needsTech'
+  | 'unrest'
+  | 'cannotAfford'
+  | 'noPopulationRoom';
+
+export type BombardRejection =
+  | 'noGuns'
+  /** Further away than anything in the stack can reach. */
+  | 'outOfRange'
+  /** Nothing of theirs there to shell. */
+  | 'noTarget'
+  /** Guns caught in a melee shoot at what's in front of them, not at range. */
+  | 'contested';
+
 export type AssaultRejection =
   | 'noArmy'
   /** A fight is already running here, or an enemy army is standing on it. */
@@ -205,6 +236,7 @@ export class GameEngine {
         techs: [],
         research: [],
         researchers: 0,
+        production: [],
       };
     }
 
@@ -290,9 +322,13 @@ export class GameEngine {
     );
   }
 
-  /** Seconds a hop between these two regions takes. */
-  marchSeconds(from: string, to: string, playerId?: PlayerId): number {
-    const base = marchSeconds(this.map, from, to);
+  /**
+   * Seconds a hop between these two regions takes. `units` matters because a
+   * column moves at its slowest member's pace (docs 6.5) — a mortar makes the
+   * whole march three times longer.
+   */
+  marchSeconds(from: string, to: string, playerId?: PlayerId, units?: UnitCounts): number {
+    const base = marchSeconds(this.map, from, to) / stackSpeed(units);
     if (!playerId) return base;
     // Rapid reaction only helps on ground you already hold, so it rewards
     // defending a front rather than pushing into one.
@@ -340,23 +376,31 @@ export class GameEngine {
     return this.canEnter(regionId, playerId);
   }
 
-  /** The route a march would take, or null if there's no legal way through. */
-  marchRoute(from: string, to: string, playerId: PlayerId): string[] | null {
+  /**
+   * The route a march would take, or null if there's no legal way through.
+   * `units` matters at the passes: vehicles can't cross one until 橫貫工程 is
+   * researched, even though infantry can with 山地公路 (docs 3.2).
+   */
+  marchRoute(from: string, to: string, playerId: PlayerId, units?: UnitCounts): string[] | null {
+    const techs = this.ownedTechs(playerId);
+    const heavy = units !== undefined && UNIT_ORDER.some((t) => isVehicle(t) && (units[t] ?? 0) > 0);
     return findPath(
       this.map,
       from,
       to,
       (id) => this.canEnter(id, playerId),
-      (a, b) => terrainRejection(this.map, a, b, this.hasMountainRoad(playerId)) === null,
+      (a, b) =>
+        terrainRejection(this.map, a, b, this.hasMountainRoad(playerId)) === null &&
+        (!heavy || !this.map.isPass(a, b) || vehiclesCrossPasses(techs)),
     );
   }
 
   /** Total seconds for a whole route, summing each hop. */
-  routeSeconds(from: string, route: string[], playerId?: PlayerId): number {
+  routeSeconds(from: string, route: string[], playerId?: PlayerId, units?: UnitCounts): number {
     let total = 0;
     let at = from;
     for (const step of route) {
-      total += this.marchSeconds(at, step, playerId);
+      total += this.marchSeconds(at, step, playerId, units);
       at = step;
     }
     return total;
@@ -373,7 +417,7 @@ export class GameEngine {
     if (!this.state.regions[from]) return 'notOwner';
     if (!stackContains(this.ownGarrisonAt(from, playerId), units)) return 'noUnits';
     if (from === to) return 'notAdjacent';
-    if (this.marchRoute(from, to, playerId) !== null) return null;
+    if (this.marchRoute(from, to, playerId, units) !== null) return null;
     // No route. Say which wall they hit: a sealed pass reads very differently
     // from "there's no way through", and both are actionable.
     if (terrainRejection(this.map, from, to, this.hasMountainRoad(playerId)) === 'passLocked')
@@ -387,7 +431,7 @@ export class GameEngine {
    */
   startMarch(from: string, to: string, playerId: PlayerId, units: UnitCounts): March | null {
     if (this.marchRejection(from, to, playerId, units) !== null) return null;
-    const route = this.marchRoute(from, to, playerId);
+    const route = this.marchRoute(from, to, playerId, units);
     if (!route || route.length === 0) return null;
     // The column becomes a legion of its own, inheriting the garrison's
     // supply — what marches out and what stays behind each keep their own bar.
@@ -402,7 +446,7 @@ export class GameEngine {
     };
     this.state.legions.push(column);
     const [next, ...rest] = route;
-    const seconds = this.marchSeconds(from, next, playerId);
+    const seconds = this.marchSeconds(from, next, playerId, units);
     const march: March = {
       id: `m${this.nextMarchId++}`,
       playerId,
@@ -881,7 +925,7 @@ export class GameEngine {
       return true;
     }
 
-    const seconds = this.marchSeconds(battle.regionId, battle.attackerFrom, playerId);
+    const seconds = this.marchSeconds(battle.regionId, battle.attackerFrom, playerId, battle.attackerUnits);
     const column: Legion = {
       id: `l${this.nextLegionId++}`,
       playerId,
@@ -969,7 +1013,7 @@ export class GameEngine {
     march.from = march.to;
     march.to = next;
     march.route = march.route.slice(1);
-    march.totalSeconds = this.marchSeconds(march.from, march.to, march.playerId);
+    march.totalSeconds = this.marchSeconds(march.from, march.to, march.playerId, march.units);
     // Carry the overshoot into the next leg so a long march doesn't gain a
     // fraction of a second at every stop.
     march.remainingSeconds += march.totalSeconds;
@@ -1052,6 +1096,62 @@ export class GameEngine {
     return this.state.regions[regionId]?.unrestSeconds ?? 0;
   }
 
+  // ---- vehicles (docs/game-design.md 6.5) --------------------------------
+
+  /** Arsenals this player owns and could build vehicles at. */
+  arsenals(playerId: PlayerId): string[] {
+    return Object.entries(this.state.regions)
+      .filter(([, r]) => r.owner === playerId && r.building?.type === 'arsenal')
+      .map(([id]) => id);
+  }
+
+  buildVehicleRejection(
+    regionId: string,
+    playerId: PlayerId,
+    type: UnitType,
+    count = 1,
+  ): VehicleRejection | null {
+    const def = UNITS[type];
+    if (!isVehicle(type) || def.trainCost === null) return 'notVehicle';
+    if (def.requiresTech && !this.hasTech(playerId, def.requiresTech)) return 'needsTech';
+    if (!this.arsenals(playerId).includes(regionId)) return 'needsArsenal';
+    if (this.unrestAt(regionId) > 0) return 'unrest';
+    if (count < 1) return 'cannotAfford';
+    if (this.state.players[playerId].money < def.trainCost * count) return 'cannotAfford';
+    if (this.populationRoom(playerId) < count) return 'noPopulationRoom';
+    return null;
+  }
+
+  /**
+   * Queues `count` vehicles at an arsenal. Charged up front — the queue is a
+   * commitment, not a reservation — and they roll out one at a time.
+   */
+  queueVehicles(regionId: string, playerId: PlayerId, type: UnitType, count = 1): boolean {
+    if (this.buildVehicleRejection(regionId, playerId, type, count) !== null) return false;
+    const def = UNITS[type];
+    const player = this.state.players[playerId];
+    player.money -= def.trainCost! * count;
+    const seconds = def.buildSeconds * arsenalTimeMultiplier(this.ownedTechs(playerId));
+    player.production.push({
+      type,
+      regionId,
+      remainingSeconds: seconds,
+      totalSeconds: seconds,
+      remaining: count,
+    });
+    return true;
+  }
+
+  /** Cancels a queued batch, refunding what hasn't been built yet. */
+  cancelProduction(playerId: PlayerId, index: number): boolean {
+    const player = this.state.players[playerId];
+    const job = player.production[index];
+    if (!job) return false;
+    player.money += (UNITS[job.type].trainCost ?? 0) * job.remaining;
+    player.production.splice(index, 1);
+    return true;
+  }
+
   // ---- assaulting (docs/game-design.md 6.6) ------------------------------
 
   /** Who a building answers to: its owner if it's a camp, else the landowner. */
@@ -1123,6 +1223,49 @@ export class GameEngine {
     const legion = this.legionsAt(regionId).find((l) => l.playerId === playerId);
     if (!legion?.assaulting) return false;
     legion.assaulting = false;
+    return true;
+  }
+
+  // ---- bombardment (docs/game-design.md 6.5) -----------------------------
+
+  /** Is there anything of another player's here to shell? */
+  private bombardTargetAt(regionId: string, playerId: PlayerId): boolean {
+    const region = this.state.regions[regionId];
+    if (!region) return false;
+    if (totalUnits(region.units) > 0) return true;
+    if (this.legionsAt(regionId).some((l) => l.playerId !== playerId && totalUnits(l.units) > 0))
+      return true;
+    const owner = this.buildingOwner(regionId);
+    return region.building !== undefined && owner !== null && owner !== playerId;
+  }
+
+  bombardRejection(from: string, to: string, playerId: PlayerId): BombardRejection | null {
+    const legion = this.legionsAt(from).find(
+      (l) => l.playerId === playerId && totalUnits(l.units) > 0,
+    );
+    if (!legion || rangedAtk(legion.units, 1) === 0) return 'noGuns';
+    // Guns in a melee are busy. So is a stack with enemies on top of it.
+    if (this.battleAt(from) || this.blockingForceAt(from, playerId)) return 'contested';
+    const hops = this.map.distance(from, to);
+    if (from === to || hops < 1 || rangedAtk(legion.units, hops) === 0) return 'outOfRange';
+    if (!this.bombardTargetAt(to, playerId)) return 'noTarget';
+    return null;
+  }
+
+  /**
+   * Orders the guns here to shell a region within reach. They keep firing
+   * until the target is empty, someone closes on them, or they're called off.
+   */
+  bombard(from: string, to: string, playerId: PlayerId): boolean {
+    if (this.bombardRejection(from, to, playerId) !== null) return false;
+    this.legionsAt(from).find((l) => l.playerId === playerId)!.bombarding = to;
+    return true;
+  }
+
+  ceaseFire(regionId: string, playerId: PlayerId): boolean {
+    const legion = this.legionsAt(regionId).find((l) => l.playerId === playerId);
+    if (!legion?.bombarding) return false;
+    legion.bombarding = undefined;
     return true;
   }
 
@@ -1617,6 +1760,74 @@ export class GameEngine {
       this.state.carts = stillRolling;
     }
 
+    // Arsenals (docs 6.5): one vehicle at a time, rolling out where they were
+    // built. A batch keeps its clock running until the last one is done.
+    for (const player of Object.values(this.state.players)) {
+      if (player.production.length === 0) continue;
+      const stillBuilding: typeof player.production = [];
+      for (const job of player.production) {
+        job.remainingSeconds -= deltaSeconds;
+        while (job.remaining > 0 && job.remainingSeconds <= 0) {
+          const region = this.state.regions[job.regionId];
+          // An arsenal that's been lost or flattened stops delivering; what
+          // hasn't rolled out yet is written off with it.
+          if (region?.owner !== player.id || region.building?.type !== 'arsenal') {
+            job.remaining = 0;
+            break;
+          }
+          const legion = this.legionFor(job.regionId, player.id);
+          legion.units = addUnits(legion.units, { [job.type]: 1 });
+          job.remaining -= 1;
+          if (job.remaining > 0) job.remainingSeconds += job.totalSeconds;
+        }
+        if (job.remaining > 0) stillBuilding.push(job);
+      }
+      player.production = stillBuilding;
+    }
+
+    // Bombardment (docs 6.5): guns shell a region within reach without closing
+    // on it and without being shot back at. Same rate as a combat round.
+    for (const legion of this.state.legions) {
+      const target = legion.bombarding;
+      if (target === undefined) continue;
+      const marching = this.state.marches.some((m) => m.legionId === legion.id);
+      if (marching || this.bombardRejection(legion.regionId, target, legion.playerId) !== null) {
+        legion.bombarding = undefined;
+        continue;
+      }
+
+      const techs = this.ownedTechs(legion.playerId);
+      const hops = this.map.distance(legion.regionId, target);
+      const shells =
+        rangedAtk(legion.units, hops) *
+        attackMultiplier(techs) *
+        supplyAttackMultiplier(legion.supply);
+      const region = this.state.regions[target];
+      const damage = (shells / COMBAT_ROUND_SECONDS) * deltaSeconds;
+
+      // Troops first — shelling an occupied region hits the occupiers, not
+      // the roof over their heads.
+      const defenders = this.legionsAt(target).find(
+        (l) => l.playerId !== legion.playerId && totalUnits(l.units) > 0,
+      );
+      if (defenders) {
+        defenders.units = applyDamage(defenders.units, damage).units;
+        this.pruneLegions();
+      } else if (totalUnits(region.units) > 0) {
+        region.units = applyDamage(region.units, damage).units;
+      } else if (region.building) {
+        region.building.hp -= damage * siegeDamageMultiplier(techs);
+        if (region.building.hp <= 0) {
+          region.building = undefined;
+          region.wonderHeldSeconds = undefined;
+        }
+      }
+
+      // Guns stop firing at rubble: check again now, rather than leaving the
+      // order live until the next tick notices.
+      if (!this.bombardTargetAt(target, legion.playerId)) legion.bombarding = undefined;
+    }
+
     // Assaults (docs 6.6, 6.7). An army under orders batters what's built here
     // at the rate a combat round would deal, spread smoothly over time so no
     // second round clock is needed. Everything that could have changed since
@@ -1638,10 +1849,14 @@ export class GameEngine {
         continue;
       }
 
+      const techs = this.ownedTechs(legion.playerId);
+      // Siege munitions only help against what's built, not against people.
+      const siege = target === 'building' ? siegeDamageMultiplier(techs) : 1;
       const damage =
         ((stackAtk(legion.units) *
-          attackMultiplier(this.ownedTechs(legion.playerId)) *
-          supplyAttackMultiplier(legion.supply)) /
+          attackMultiplier(techs) *
+          supplyAttackMultiplier(legion.supply) *
+          siege) /
           COMBAT_ROUND_SECONDS) *
         deltaSeconds;
 

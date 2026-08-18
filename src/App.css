@@ -1525,3 +1525,70 @@
 .assault-section .hint-text {
   flex-basis: 100%;
 }
+
+/* ---------- arsenal and guns (docs 6.5) ---------- */
+
+.arsenal-section,
+.bombard-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.arsenal-job {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  font-size: 0.74rem;
+}
+
+.arsenal-job-name {
+  font-weight: 600;
+}
+
+.arsenal-job .progress-track {
+  flex-basis: 100%;
+}
+
+.arsenal-job-meta {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.arsenal-count {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bombard-targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.bombard-target {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  border: 1px solid #b3453d;
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.bombard-target-range {
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}

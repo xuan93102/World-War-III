@@ -1,6 +1,6 @@
 import type { BuildingType } from './buildings';
 import type { TechId } from './tech';
-import type { UnitCounts } from './units';
+import type { UnitCounts, UnitType } from './units';
 
 export type PlayerId = string;
 
@@ -112,6 +112,21 @@ export interface PlayerState {
   researchers: number;
   /** A researcher being trained, if any. */
   researcherTraining?: { remainingSeconds: number; totalSeconds: number };
+
+  /**
+   * Vehicles on the arsenal's slipway (docs 6.5). Paid for up front and built
+   * one at a time, so a queue of four tanks is twelve minutes of commitment
+   * rather than a burst of gold.
+   */
+  production: {
+    type: UnitType;
+    /** The arsenal building them; they roll out here. */
+    regionId: string;
+    remainingSeconds: number;
+    totalSeconds: number;
+    /** How many are still to come, the one under construction included. */
+    remaining: number;
+  }[];
 }
 
 /**
@@ -176,6 +191,11 @@ export interface Legion {
    * gone or it moves away.
    */
   assaulting?: boolean;
+  /**
+   * A standing order to shell a region within range without closing on it
+   * (docs 6.5). Holds the target's id while it lasts.
+   */
+  bombarding?: string;
 }
 
 /**

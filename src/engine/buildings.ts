@@ -118,8 +118,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     costFood: 150,
     buildSeconds: 45,
     hp: 300,
-    implemented: false,
-    lockedReasonKey: 'building.locked.vehicles',
+    // Unlocked now that vehicles exist: this is where they are built.
+    implemented: true,
   },
   school: {
     type: 'school',

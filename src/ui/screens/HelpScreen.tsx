@@ -162,9 +162,12 @@ export function HelpScreen({ onBack }: HelpScreenProps) {
             const def = UNITS[type];
             const source = def.upgradeFrom
               ? t('help.unitUpgradeFrom').replace('{n}', t(`unit.${def.upgradeFrom}` as TranslationKey))
-              : type === 'militia'
+              : def.trainAt === 'core'
                 ? t('help.unitTrainCore')
-                : t('help.unitTrainAcademy');
+                : def.trainAt === 'arsenal'
+                  ? // Vehicles say what makes them different: range and pace.
+                    `${t('unit.buildAtArsenal')}・${def.buildSeconds}s　${t('unit.range')} ${def.range}　${t('unit.speed')} ${def.speed}×`
+                  : t('help.unitTrainAcademy');
             const cost = def.trainCost ?? def.upgradeCost;
             return (
               <div className="help-entry" key={type}>

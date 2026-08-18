@@ -5,8 +5,8 @@ import type { TranslationKey } from '../settings/translations';
  *
  * Core level gates which techs can be researched at all; techs then pay out in
  * flat multipliers, unlocks, or raised ceilings. A good many of them point at
- * systems that don't exist yet (supply carts, vehicles, scouting), so those
- * carry `implemented: false` and can't be started — the same treatment the
+ * systems that don't exist yet (scouting, training time, building defence), so
+ * those carry `implemented: false` and can't be started — the same treatment the
  * build menu gives a building whose system isn't built. The tree is complete
  * and browsable either way; nobody spends 400 gold on nothing.
  */
@@ -63,7 +63,6 @@ export interface TechDef {
   lockedReasonKey?: TranslationKey;
 }
 
-const NEEDS_VEHICLES: TranslationKey = 'tech.locked.vehicles';
 const NEEDS_SCOUTING: TranslationKey = 'tech.locked.scouting';
 const NEEDS_BUILDING_COMBAT: TranslationKey = 'tech.locked.buildingCombat';
 const NEEDS_TRAIN_TIME: TranslationKey = 'tech.locked.trainTime';
@@ -102,8 +101,7 @@ export const TECHS: Record<TechId, TechDef> = {
   // ---- core level 2 ----
   mortarCorps: {
     id: 'mortarCorps', nameKey: 'tech.mortarCorps', descKey: 'tech.mortarCorps.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: [],
-    implemented: false, lockedReasonKey: NEEDS_VEHICLES,
+    coreLevel: 2, costMoney: 350, seconds: 150, requires: [], implemented: true,
   },
   autoRifles: {
     id: 'autoRifles', nameKey: 'tech.autoRifles', descKey: 'tech.autoRifles.desc',
@@ -145,8 +143,7 @@ export const TECHS: Record<TechId, TechDef> = {
   },
   siegeMunitions: {
     id: 'siegeMunitions', nameKey: 'tech.siegeMunitions', descKey: 'tech.siegeMunitions.desc',
-    coreLevel: 2, costMoney: 400, seconds: 180, requires: ['mortarCorps'],
-    implemented: false, lockedReasonKey: NEEDS_VEHICLES,
+    coreLevel: 2, costMoney: 400, seconds: 180, requires: ['mortarCorps'], implemented: true,
   },
   scouts: {
     id: 'scouts', nameKey: 'tech.scouts', descKey: 'tech.scouts.desc',
@@ -170,13 +167,11 @@ export const TECHS: Record<TechId, TechDef> = {
   // ---- core level 3 ----
   mainBattleTank: {
     id: 'mainBattleTank', nameKey: 'tech.mainBattleTank', descKey: 'tech.mainBattleTank.desc',
-    coreLevel: 3, costMoney: 900, seconds: 300, requires: ['mortarCorps'],
-    implemented: false, lockedReasonKey: NEEDS_VEHICLES,
+    coreLevel: 3, costMoney: 900, seconds: 300, requires: ['mortarCorps'], implemented: true,
   },
   traverseWorks: {
     id: 'traverseWorks', nameKey: 'tech.traverseWorks', descKey: 'tech.traverseWorks.desc',
-    coreLevel: 3, costMoney: 1000, seconds: 320, requires: ['mountainRoad'],
-    implemented: false, lockedReasonKey: NEEDS_VEHICLES,
+    coreLevel: 3, costMoney: 1000, seconds: 320, requires: ['mountainRoad'], implemented: true,
   },
   apMunitions: {
     id: 'apMunitions', nameKey: 'tech.apMunitions', descKey: 'tech.apMunitions.desc',
@@ -198,8 +193,7 @@ export const TECHS: Record<TechId, TechDef> = {
   },
   arsenalExpansion: {
     id: 'arsenalExpansion', nameKey: 'tech.arsenalExpansion', descKey: 'tech.arsenalExpansion.desc',
-    coreLevel: 3, costMoney: 850, seconds: 280, requires: [],
-    implemented: false, lockedReasonKey: NEEDS_VEHICLES,
+    coreLevel: 3, costMoney: 850, seconds: 280, requires: [], implemented: true,
   },
   urbanisation: {
     id: 'urbanisation', nameKey: 'tech.urbanisation', descKey: 'tech.urbanisation.desc',
@@ -286,6 +280,21 @@ export function populationCapFromTech(owned: ReadonlySet<TechId>, base: number):
   if (owned.has('townExpansion')) return 700;
   if (owned.has('homesteadAct')) return 400;
   return base;
+}
+
+/** Arsenal build time multiplier — lower is faster (docs 6.5, 軍工擴編). */
+export function arsenalTimeMultiplier(owned: ReadonlySet<TechId>): number {
+  return owned.has('arsenalExpansion') ? 1 / 1.3 : 1;
+}
+
+/** What vehicles do to buildings, scaled by 破城彈藥 (docs 11). */
+export function siegeDamageMultiplier(owned: ReadonlySet<TechId>): number {
+  return owned.has('siegeMunitions') ? 1.5 : 1;
+}
+
+/** Whether vehicles may cross a mountain pass yet (docs 3.2, 橫貫工程). */
+export function vehiclesCrossPasses(owned: ReadonlySet<TechId>): boolean {
+  return owned.has('traverseWorks');
 }
 
 /** Supply carts a player may have on the road at once (docs 7). */

@@ -190,6 +190,22 @@ export function GameScreen({
             engine.standDown(regionId, humanPlayerId);
             forceRender((n) => n + 1);
           }}
+          onQueueVehicles={(regionId, type, count) => {
+            engine.queueVehicles(regionId, humanPlayerId, type, count);
+            forceRender((n) => n + 1);
+          }}
+          onCancelProduction={(index) => {
+            engine.cancelProduction(humanPlayerId, index);
+            forceRender((n) => n + 1);
+          }}
+          onBombard={(from, to) => {
+            engine.bombard(from, to, humanPlayerId);
+            forceRender((n) => n + 1);
+          }}
+          onCeaseFire={(regionId) => {
+            engine.ceaseFire(regionId, humanPlayerId);
+            forceRender((n) => n + 1);
+          }}
           onDispatchCart={(from, to, porters) => {
             engine.dispatchCart(from, to, humanPlayerId, porters);
             forceRender((n) => n + 1);

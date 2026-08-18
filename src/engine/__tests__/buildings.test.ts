@@ -39,13 +39,14 @@ describe('building system', () => {
   expect(g.buildRejection('kaohsiung-1', 'shop', 'p1')).toBe('notOwner');
 });
 
-  it('unimplemented buildings are rejected even when affordable', () => {
+  it('buildings gated on research are rejected even when affordable', () => {
   const g = newGame();
   g.state.players.p1.money = 10000;
   g.state.players.p1.food = 10000;
-  // The arsenal still waits on tanks/mortars; the academy used to be the
-  // example here until soldiers landed and unlocked it.
-  expect(g.buildRejection('taipei-1', 'arsenal', 'p1')).toBe('notImplemented');
+  // Every building's own system exists now, so the only gate left is research:
+  // a fortress waits on 基礎工事 (docs 5.3).
+  expect(g.buildRejection('taipei-1', 'fortress', 'p1')).toBe('notImplemented');
+  expect(g.buildRejection('taipei-1', 'arsenal', 'p1'), 'vehicles landed').toBe(null);
   expect(g.buildRejection('taipei-1', 'academy', 'p1'), 'academy is buildable now').toBe(null);
 });
 

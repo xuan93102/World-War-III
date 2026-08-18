@@ -6,6 +6,8 @@ import { garrisonAt } from '../engine/regions';
 import { UnitPanel } from './UnitPanel';
 import { MarchPanel } from './MarchPanel';
 import { SupplyCartPanel } from './SupplyCartPanel';
+import { ArsenalPanel } from './ArsenalPanel';
+import { BombardPanel } from './BombardPanel';
 import { BattlePanel } from './BattlePanel';
 import { useSettings } from '../settings/useSettings';
 import type { TranslationKey } from '../settings/translations';
@@ -25,6 +27,10 @@ interface RegionPanelProps {
   onOccupy: (regionId: string) => void;
   onAssault: (regionId: string) => void;
   onStandDown: (regionId: string) => void;
+  onQueueVehicles: (regionId: string, type: UnitType, count: number) => void;
+  onCancelProduction: (index: number) => void;
+  onBombard: (from: string, to: string) => void;
+  onCeaseFire: (regionId: string) => void;
   onDispatchCart: (from: string, to: string, porters: number) => void;
   marchTarget: string | null;
   pickingMarch: boolean;
@@ -70,6 +76,10 @@ export function RegionPanel({
   onOccupy,
   onAssault,
   onStandDown,
+  onQueueVehicles,
+  onCancelProduction,
+  onBombard,
+  onCeaseFire,
   onDispatchCart,
   marchTarget,
   pickingMarch,
@@ -242,6 +252,22 @@ export function RegionPanel({
         pickingMarch={pickingMarch}
         onPickMarch={onPickMarch}
         onMarch={onMarch}
+      />
+
+      <BombardPanel
+        engine={engine}
+        regionId={selectedRegionId}
+        playerId={humanPlayerId}
+        onBombard={onBombard}
+        onCeaseFire={onCeaseFire}
+      />
+
+      <ArsenalPanel
+        engine={engine}
+        regionId={selectedRegionId}
+        playerId={humanPlayerId}
+        onQueue={onQueueVehicles}
+        onCancel={onCancelProduction}
       />
 
       <SupplyCartPanel

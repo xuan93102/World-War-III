@@ -1,6 +1,16 @@
 import type { TranslationKey } from '../settings/translations';
 
-export type UnitType = 'militia' | 'conscript' | 'volunteer' | 'marine';
+export type UnitType =
+  | 'militia'
+  | 'conscript'
+  | 'volunteer'
+  | 'marine'
+  // Mechanised units (docs/game-design.md 6.5). They live in the same stacks
+  // as infantry, so marching, legions, supply and combat take them without
+  // special cases — what differs is where they're made, how fast they move,
+  // and that they can shoot without closing.
+  | 'tank'
+  | 'mortar';
 
 export interface UnitDef {
   type: UnitType;
@@ -10,11 +20,26 @@ export interface UnitDef {
   /** Gold to train a fresh one, or null if this tier is upgrade-only. */
   trainCost: number | null;
   /** Where a fresh one can be trained. */
-  trainAt: 'core' | 'academy' | null;
+  trainAt: 'core' | 'academy' | 'arsenal' | null;
   /** The tier this one is upgraded from, if any. */
   upgradeFrom: UnitType | null;
   /** Gold to upgrade one unit from `upgradeFrom`. */
   upgradeCost: number | null;
+  /**
+   * Movement speed as a fraction of an infantryman's (docs 6.5). A column
+   * moves at its slowest unit's pace, so a tank slows everything it travels
+   * with. Infantry are 1.
+   */
+  speed: number;
+  /**
+   * How many regions away this unit can shell a target without moving in and
+   * without being shot back at (docs 6.5). 0 for anything that has to close.
+   */
+  range: number;
+  /** Seconds to build one at the arsenal; 0 for anything trained on the spot. */
+  buildSeconds: number;
+  /** Tech that has to be researched before it can be built at all. */
+  requiresTech: 'mainBattleTank' | 'mortarCorps' | null;
 }
 
 /**
@@ -37,6 +62,10 @@ export const UNITS: Record<UnitType, UnitDef> = {
     trainAt: 'core',
     upgradeFrom: null,
     upgradeCost: null,
+    speed: 1,
+    range: 0,
+    buildSeconds: 0,
+    requiresTech: null,
   },
   conscript: {
     type: 'conscript',
@@ -47,6 +76,10 @@ export const UNITS: Record<UnitType, UnitDef> = {
     trainAt: 'academy',
     upgradeFrom: null,
     upgradeCost: null,
+    speed: 1,
+    range: 0,
+    buildSeconds: 0,
+    requiresTech: null,
   },
   volunteer: {
     type: 'volunteer',
@@ -57,6 +90,10 @@ export const UNITS: Record<UnitType, UnitDef> = {
     trainAt: null,
     upgradeFrom: 'conscript',
     upgradeCost: 2,
+    speed: 1,
+    range: 0,
+    buildSeconds: 0,
+    requiresTech: null,
   },
   marine: {
     type: 'marine',
@@ -67,10 +104,65 @@ export const UNITS: Record<UnitType, UnitDef> = {
     trainAt: null,
     upgradeFrom: 'volunteer',
     upgradeCost: 3,
+    speed: 1,
+    range: 0,
+    buildSeconds: 0,
+    requiresTech: null,
+  },
+  tank: {
+    type: 'tank',
+    nameKey: 'unit.tank',
+    atk: 15,
+    hp: 150,
+    trainCost: 12,
+    trainAt: 'arsenal',
+    upgradeFrom: null,
+    upgradeCost: null,
+    speed: 0.6,
+    range: 1,
+    buildSeconds: 180,
+    requiresTech: 'mainBattleTank',
+  },
+  mortar: {
+    type: 'mortar',
+    nameKey: 'unit.mortar',
+    atk: 30,
+    hp: 50,
+    trainCost: 8,
+    trainAt: 'arsenal',
+    upgradeFrom: null,
+    upgradeCost: null,
+    speed: 0.3,
+    range: 2,
+    buildSeconds: 120,
+    requiresTech: 'mortarCorps',
   },
 };
 
-export const UNIT_ORDER: UnitType[] = ['militia', 'conscript', 'volunteer', 'marine'];
+/**
+ * Casualty order: cheapest first (docs 6.2), machines last.
+ *
+ * §6.5 sketches proportional losses for mixed stacks, but §6.2 rules that out
+ * deliberately — spreading damage evenly evaporates the elites along with the
+ * chaff and hollows out the upgrade tree. Putting vehicles at the end says in
+ * numbers what the vehicle rules say in prose: escorted machines are screened,
+ * and a mortar caught on its own dies first because it's the only thing there.
+ */
+export const UNIT_ORDER: UnitType[] = [
+  'militia',
+  'conscript',
+  'volunteer',
+  'marine',
+  'tank',
+  'mortar',
+];
+
+/** Built at the arsenal rather than trained (docs 6.5). */
+export const VEHICLE_TYPES: UnitType[] = ['tank', 'mortar'];
+
+export function isVehicle(type: UnitType): boolean {
+  return UNITS[type].trainAt === 'arsenal';
+}
 
 /** Every unit takes one population slot, whatever its tier. */
 export const POPULATION_PER_UNIT = 1;
@@ -80,6 +172,25 @@ export type UnitCounts = Partial<Record<UnitType, number>>;
 export function totalUnits(counts: UnitCounts | undefined): number {
   if (!counts) return 0;
   return UNIT_ORDER.reduce((sum, type) => sum + (counts[type] ?? 0), 0);
+}
+
+/** A column moves at its slowest unit's pace (docs 6.5). */
+export function stackSpeed(counts: UnitCounts | undefined): number {
+  if (!counts) return 1;
+  let slowest = 1;
+  for (const type of UNIT_ORDER) {
+    if ((counts[type] ?? 0) > 0) slowest = Math.min(slowest, UNITS[type].speed);
+  }
+  return slowest;
+}
+
+/** Attack of the units in a stack that can shell something `hops` away. */
+export function rangedAtk(counts: UnitCounts | undefined, hops: number): number {
+  if (!counts) return 0;
+  return UNIT_ORDER.reduce(
+    (sum, type) => (UNITS[type].range >= hops ? sum + (counts[type] ?? 0) * UNITS[type].atk : sum),
+    0,
+  );
 }
 
 /** Combined attack of a stack. */
