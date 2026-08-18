@@ -1,5 +1,4 @@
 import { UNITS, UNIT_ORDER, stackAtk, totalUnits, type UnitCounts } from '../engine/units';
-import { garrisonAt } from '../engine/regions';
 import { SupplyBar } from './SupplyBar';
 import { useSettings } from '../settings/useSettings';
 import type { GameEngine } from '../engine/GameEngine';
@@ -61,7 +60,7 @@ export function BattlePanel({ engine, regionId, playerId, players, onRetreat }: 
       {side(
         t('battle.defender'),
         nameOf(battle.defenderId),
-        garrisonAt(engine.state, regionId),
+        engine.garrisonSeenBy(regionId, playerId),
         battle.defenderId === playerId,
       )}
 

@@ -21,6 +21,11 @@ interface MapViewProps {
   marchRoute: string[] | null;
   /** Where that route starts. */
   routeFrom: string | null;
+  /**
+   * Regions the viewer can see (docs 9). Everything else is drawn as unknown
+   * ground: no owner, no garrison, no buildings.
+   */
+  visible: ReadonlySet<string>;
   onSelectRegion: (regionId: string) => void;
 }
 
@@ -201,6 +206,7 @@ export function MapView({
   map,
   marchRoute,
   routeFrom,
+  visible,
   onSelectRegion,
 }: MapViewProps) {
   const { settings, t } = useSettings();
@@ -598,9 +604,14 @@ export function MapView({
         <g transform={`rotate(${rotation} ${rotationPivot.x} ${rotationPivot.y})`}>
           {map.regions.map((region) => {
             const regionState = gameState.regions[region.id];
-            const fill = regionState.owner
-              ? colorByPlayer[regionState.owner]
-              : themeColors.neutralRegion;
+            const seen = visible.has(region.id);
+            // Fog (docs 9.1): unscouted ground keeps its shape but gives
+            // nothing away — not even whose it is.
+            const fill = !seen
+              ? themeColors.neutralRegion
+              : regionState.owner
+                ? colorByPlayer[regionState.owner]
+                : themeColors.neutralRegion;
             const isSelected = region.id === selectedRegionId;
             // A player's territory is one flat colour, so a fixed grey border
             // disappeared into any solid block of it. Bordering owned ground
@@ -608,7 +619,7 @@ export function MapView({
             // visible no matter how much of the map one side holds.
             const stroke = isSelected
               ? labelFill
-              : regionState.owner
+              : seen && regionState.owner
                 ? shade(fill, -0.5)
                 : themeColors.regionStroke;
             return (
@@ -860,6 +871,7 @@ export function MapView({
                     sit side by side. In 3D these are the buildings themselves,
                     planted on the terrain; in 2D they're badges above the label. */}
                 {(() => {
+                  if (!visible.has(region.id)) return null;
                   const badges: { key: IconKey; color?: string; dashed?: boolean }[] = [];
                   if (regionState.isCore) {
                     badges.push({
@@ -921,7 +933,9 @@ export function MapView({
                 )}
                 {/* Neutral garrison strength, so contested ground and the
                     undefended land near each core read at a glance. */}
-                {regionState.owner === null && totalUnits(garrisonAt(gameState, region.id)) > 0 && (
+                {visible.has(region.id) &&
+                  regionState.owner === null &&
+                  totalUnits(garrisonAt(gameState, region.id)) > 0 && (
                   <text
                     x={p.x}
                     y={p.y + (showLabels ? 13 : 4) / transform.k}

@@ -153,8 +153,13 @@ describe('the order itself', () => {
     g.state.regions[NEXT_DOOR].units = { militia: 3 };
     send(g, NEXT_DOOR, 8);
     // Walking in is peaceful now; taking the ground off the militia is an
-    // order of its own (docs 6.6).
+    // order of its own (docs 6.6). Our army is standing there, so the answer
+    // is about the garrison rather than about us.
     expect(g.occupyRejection(NEXT_DOOR, 'p1'), 'their garrison is in the way').toBe('contested');
+    expect(
+      g.occupyRejection(g.map.region(CORE).neighbors[1], 'p1'),
+      'and somewhere we have nobody, that is all it says',
+    ).toBe('noArmy');
     g.assault(NEXT_DOOR, 'p1');
     expect(g.battleAt(NEXT_DOOR), 'fighting the militia').toBeDefined();
     expect(g.occupyRejection(NEXT_DOOR, 'p1'), 'not while it is contested').toBe('contested');

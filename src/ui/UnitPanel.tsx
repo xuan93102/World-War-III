@@ -1,5 +1,4 @@
 import { UNITS, UNIT_ORDER, totalUnits, type UnitType } from '../engine/units';
-import { garrisonAt } from '../engine/regions';
 import { SupplyBar } from './SupplyBar';
 import { useSettings } from '../settings/useSettings';
 import type { GameEngine } from '../engine/GameEngine';
@@ -15,7 +14,8 @@ interface UnitPanelProps {
 export function UnitPanel({ engine, regionId, playerId, onTrain, onUpgrade }: UnitPanelProps) {
   const { t } = useSettings();
   const region = engine.state.regions[regionId];
-  const stationed = garrisonAt(engine.state, regionId);
+  // Only what this player is allowed to know is standing here (docs 9).
+  const stationed = engine.garrisonSeenBy(regionId, playerId);
   const isMine = region.owner === playerId;
   // Supply belongs to the legion, so it only shows on ground you hold.
   const legion = engine.legionsAt(regionId).find((l) => l.playerId === playerId);

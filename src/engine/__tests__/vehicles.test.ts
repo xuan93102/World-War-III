@@ -167,7 +167,15 @@ describe('shelling from a distance', () => {
     )!;
     const threeOut = g.map.regions.find((r) => g.map.distance(CORE, r.id) === 3)!;
 
-    expect(g.bombardRejection(CORE, twoOut.id, 'p1'), 'mortars reach two').toBe(null);
+    // Two hops is inside the mortars' range but outside what one region can
+    // see (docs 9.1), so the guns need someone forward to spot for them.
+    expect(g.bombardRejection(CORE, twoOut.id, 'p1'), 'nothing to aim by').toBe('noVision');
+    const spotter = g.map
+      .region(CORE)
+      .neighbors.find((id) => g.map.region(id).neighbors.includes(twoOut.id))!;
+    g.setRegionOwner(spotter, 'p1');
+    expect(g.bombardRejection(CORE, twoOut.id, 'p1'), 'now the border sees it').toBe(null);
+
     expect(g.bombardRejection(CORE, threeOut.id, 'p1')).toBe('outOfRange');
   });
 

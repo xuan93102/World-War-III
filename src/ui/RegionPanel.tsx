@@ -2,7 +2,6 @@ import { BUILDINGS, BUILDING_ORDER, CORE_HP, type BuildingType } from '../engine
 import { BuildingIcon } from './buildingIcons';
 import { FOOD_PER_MIN_BY_SIZE, landSizeOf, type LandSize } from '../engine/land';
 import { totalUnits, type UnitCounts, type UnitType } from '../engine/units';
-import { garrisonAt } from '../engine/regions';
 import { UnitPanel } from './UnitPanel';
 import { MarchPanel } from './MarchPanel';
 import { SupplyCartPanel } from './SupplyCartPanel';
@@ -98,7 +97,8 @@ export function RegionPanel({
   const regionState = engine.state.regions[selectedRegionId];
   const owner = regionState.owner ? players.find((p) => p.id === regionState.owner) : null;
   const isMine = regionState.owner === humanPlayerId;
-  const garrison = totalUnits(garrisonAt(engine.state, selectedRegionId));
+  const garrison = totalUnits(engine.garrisonSeenBy(selectedRegionId, humanPlayerId));
+  const seen = engine.canSee(selectedRegionId, humanPlayerId);
   // A camp only needs an army standing here, so the build menu has to appear on
   // ground that isn't yours.
   const canCamp = engine.buildRejection(selectedRegionId, 'camp', humanPlayerId) !== 'notOwner';
@@ -115,11 +115,20 @@ export function RegionPanel({
   return (
     <div className="region-panel">
       <h3>{region.name}</h3>
-      <p className="region-owner">
-        {t('game.owner')}：{owner ? owner.name : t('game.neutral')}
-        {regionState.isCore ? `（${t('game.core')}）` : ''}
-      </p>
+      {/* Fog (docs 9): an unscouted region shows its name and nothing else. */}
+      {!seen ? (
+        <>
+          <p className="region-owner">{t('fog.unknown')}</p>
+          <p className="hint-text">{t('fog.note')}</p>
+        </>
+      ) : (
+        <p className="region-owner">
+          {t('game.owner')}：{owner ? owner.name : t('game.neutral')}
+          {regionState.isCore ? `（${t('game.core')}）` : ''}
+        </p>
+      )}
 
+      {seen && (
       <dl className="region-stats">
         <div>
           <dt>{t('land.size')}</dt>
@@ -138,8 +147,9 @@ export function RegionPanel({
           </div>
         )}
       </dl>
+      )}
 
-      {regionState.owner === null && (
+      {seen && regionState.owner === null && (
         <p className="hint-text">{t('land.captureHint')}</p>
       )}
 

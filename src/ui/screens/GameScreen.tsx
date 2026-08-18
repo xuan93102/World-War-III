@@ -136,6 +136,7 @@ export function GameScreen({
                 : null
             }
             routeFrom={pickingMarch ? selectedRegionId : null}
+            visible={engine.visibleTo(humanPlayerId)}
             onSelectRegion={(id) => {
               if (pickingMarch) setMarchTarget(id);
               else setSelectedRegionId(id);

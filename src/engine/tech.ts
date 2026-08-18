@@ -63,7 +63,6 @@ export interface TechDef {
   lockedReasonKey?: TranslationKey;
 }
 
-const NEEDS_SCOUTING: TranslationKey = 'tech.locked.scouting';
 const NEEDS_BUILDING_COMBAT: TranslationKey = 'tech.locked.buildingCombat';
 const NEEDS_TRAIN_TIME: TranslationKey = 'tech.locked.trainTime';
 
@@ -147,13 +146,11 @@ export const TECHS: Record<TechId, TechDef> = {
   },
   scouts: {
     id: 'scouts', nameKey: 'tech.scouts', descKey: 'tech.scouts.desc',
-    coreLevel: 2, costMoney: 400, seconds: 180, requires: [],
-    implemented: false, lockedReasonKey: NEEDS_SCOUTING,
+    coreLevel: 2, costMoney: 400, seconds: 180, requires: [], implemented: true,
   },
   counterRecon: {
     id: 'counterRecon', nameKey: 'tech.counterRecon', descKey: 'tech.counterRecon.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: ['scouts'],
-    implemented: false, lockedReasonKey: NEEDS_SCOUTING,
+    coreLevel: 2, costMoney: 350, seconds: 150, requires: ['scouts'], implemented: true,
   },
   townExpansion: {
     id: 'townExpansion', nameKey: 'tech.townExpansion', descKey: 'tech.townExpansion.desc',
@@ -188,8 +185,7 @@ export const TECHS: Record<TechId, TechDef> = {
   },
   drones: {
     id: 'drones', nameKey: 'tech.drones', descKey: 'tech.drones.desc',
-    coreLevel: 3, costMoney: 850, seconds: 280, requires: ['scouts'],
-    implemented: false, lockedReasonKey: NEEDS_SCOUTING,
+    coreLevel: 3, costMoney: 850, seconds: 280, requires: ['scouts'], implemented: true,
   },
   arsenalExpansion: {
     id: 'arsenalExpansion', nameKey: 'tech.arsenalExpansion', descKey: 'tech.arsenalExpansion.desc',

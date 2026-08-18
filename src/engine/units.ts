@@ -10,7 +10,9 @@ export type UnitType =
   // special cases — what differs is where they're made, how fast they move,
   // and that they can shoot without closing.
   | 'tank'
-  | 'mortar';
+  | 'mortar'
+  /** Eyes, not troops (docs 9.2): fast, unarmed, and unseen until looked for. */
+  | 'scout';
 
 export interface UnitDef {
   type: UnitType;
@@ -39,7 +41,12 @@ export interface UnitDef {
   /** Seconds to build one at the arsenal; 0 for anything trained on the spot. */
   buildSeconds: number;
   /** Tech that has to be researched before it can be built at all. */
-  requiresTech: 'mainBattleTank' | 'mortarCorps' | null;
+  requiresTech: 'mainBattleTank' | 'mortarCorps' | 'scouts' | null;
+  /**
+   * Invisible to other players until they research 反偵察技術 (docs 9.2).
+   * Only scouts are.
+   */
+  hidden?: boolean;
 }
 
 /**
@@ -123,6 +130,22 @@ export const UNITS: Record<UnitType, UnitDef> = {
     buildSeconds: 180,
     requiresTech: 'mainBattleTank',
   },
+  scout: {
+    type: 'scout',
+    nameKey: 'unit.scout',
+    // No teeth at all: a scout is a pair of eyes that dies if looked at.
+    atk: 0,
+    hp: 5,
+    trainCost: 30,
+    trainAt: 'academy',
+    upgradeFrom: null,
+    upgradeCost: null,
+    speed: 1.5,
+    range: 0,
+    buildSeconds: 0,
+    requiresTech: 'scouts',
+    hidden: true,
+  },
   mortar: {
     type: 'mortar',
     nameKey: 'unit.mortar',
@@ -155,6 +178,9 @@ export const UNIT_ORDER: UnitType[] = [
   'marine',
   'tank',
   'mortar',
+  // Last of all: the scout is worthless in a fight, so it's the last thing a
+  // stack loses — and the first when it's travelling alone.
+  'scout',
 ];
 
 /** Built at the arsenal rather than trained (docs 6.5). */
@@ -177,11 +203,13 @@ export function totalUnits(counts: UnitCounts | undefined): number {
 /** A column moves at its slowest unit's pace (docs 6.5). */
 export function stackSpeed(counts: UnitCounts | undefined): number {
   if (!counts) return 1;
-  let slowest = 1;
+  // The slowest thing present sets the pace — which cuts both ways: a lone
+  // scout outruns infantry, and one walking with them doesn't.
+  let slowest = Infinity;
   for (const type of UNIT_ORDER) {
     if ((counts[type] ?? 0) > 0) slowest = Math.min(slowest, UNITS[type].speed);
   }
-  return slowest;
+  return Number.isFinite(slowest) ? slowest : 1;
 }
 
 /** Attack of the units in a stack that can shell something `hops` away. */

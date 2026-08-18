@@ -68,6 +68,7 @@ import {
   type LogisticsZones,
 } from './supply';
 import { garrisonAt } from './regions';
+import { unitsVisibleTo, visibleRegions } from './vision';
 import type {
   AiDifficulty,
   Battle,
@@ -173,6 +174,8 @@ export type BombardRejection =
   | 'outOfRange'
   /** Nothing of theirs there to shell. */
   | 'noTarget'
+  /** Out of sight, so out of reach (docs 9.1). */
+  | 'noVision'
   /** Guns caught in a melee shoot at what's in front of them, not at range. */
   | 'contested';
 
@@ -1068,16 +1071,24 @@ export class GameEngine {
     const region = this.state.regions[regionId];
     if (!region) return 'noArmy';
     if (region.owner === playerId) return 'alreadyYours';
+    // A fight of ours here counts as being present — the troops are in the
+    // battle rather than standing in a legion.
+    const fight = this.battleAt(regionId);
+    if (fight && (fight.attackerId === playerId || fight.defenderId === playerId))
+      return 'contested';
+    // Otherwise "no army of ours there" comes first: anything else would be
+    // telling the player what's on ground they may not even be able to see.
+    const standing = this.legionsAt(regionId).find(
+      (l) => l.playerId === playerId && totalUnits(l.units) > 0,
+    );
+    if (!standing) return 'noArmy';
     // A standing core isn't taken, it's knocked down (docs 6.7). The ground
     // under it only changes hands once the core itself is gone — which ends
     // the match anyway.
     if (region.isCore && region.owner !== null) return 'enemyCore';
     if (this.battleAt(regionId)) return 'contested';
     if (this.contestedAt(regionId, playerId)) return 'contested';
-    const standing = this.legionsAt(regionId).find(
-      (l) => l.playerId === playerId && totalUnits(l.units) > 0,
-    );
-    return standing ? null : 'noArmy';
+    return null;
   }
 
   /** Takes the ground this player's army is standing on. */
@@ -1226,6 +1237,36 @@ export class GameEngine {
     return true;
   }
 
+  // ---- sight (docs/game-design.md 9) -------------------------------------
+
+  /** Every region this player can see right now. */
+  visibleTo(playerId: PlayerId): Set<string> {
+    return visibleRegions(this.map, this.state, playerId, this.hasTech(playerId, 'drones'));
+  }
+
+  /** Whether a player can see a given region. */
+  canSee(regionId: string, playerId: PlayerId): boolean {
+    return this.visibleTo(playerId).has(regionId);
+  }
+
+  /**
+   * What `viewer` is allowed to know is standing in a region: everything if
+   * they can see it, nothing if they can't, and never another player's scouts
+   * until 反偵察技術 is in (docs 9.2).
+   */
+  garrisonSeenBy(regionId: string, viewerId: PlayerId): UnitCounts {
+    if (!this.canSee(regionId, viewerId)) return {};
+    const counterRecon = this.hasTech(viewerId, 'counterRecon');
+    const combined: UnitCounts = { ...this.state.regions[regionId]?.units };
+    for (const legion of this.legionsAt(regionId)) {
+      const seen = unitsVisibleTo(legion.units, legion.playerId === viewerId, counterRecon);
+      for (const [type, n] of Object.entries(seen) as [UnitType, number][]) {
+        if (n > 0) combined[type] = (combined[type] ?? 0) + n;
+      }
+    }
+    return combined;
+  }
+
   // ---- bombardment (docs/game-design.md 6.5) -----------------------------
 
   /** Is there anything of another player's here to shell? */
@@ -1248,6 +1289,7 @@ export class GameEngine {
     if (this.battleAt(from) || this.blockingForceAt(from, playerId)) return 'contested';
     const hops = this.map.distance(from, to);
     if (from === to || hops < 1 || rangedAtk(legion.units, hops) === 0) return 'outOfRange';
+    if (!this.canSee(to, playerId)) return 'noVision';
     if (!this.bombardTargetAt(to, playerId)) return 'noTarget';
     return null;
   }
@@ -1403,6 +1445,7 @@ export class GameEngine {
   ): 'wrongSite' | 'notTrainable' | 'cannotAfford' | 'noPopulationRoom' | null {
     const def = UNITS[type];
     if (def.trainCost === null || def.trainAt === null) return 'notTrainable';
+    if (def.requiresTech && !this.hasTech(playerId, def.requiresTech)) return 'notTrainable';
     if (!this.trainingSites(playerId, type).includes(regionId)) return 'wrongSite';
     const player = this.state.players[playerId];
     if (player.money < def.trainCost * count) return 'cannotAfford';

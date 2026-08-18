@@ -76,9 +76,11 @@ describe('research prerequisites', () => {
 
   it('refuses techs whose system does not exist yet', () => {
     const g = withBuilding(newGame(), 'research');
-    expect(TECHS.scouts.implemented, 'scouting is not built').toBe(false);
+    // Training time isn't modelled, so the tech that shortens it can't be had.
+    expect(TECHS.conscriptionDrive.implemented, 'no training time to shorten').toBe(false);
     g.state.players.p1.coreLevel = 2;
-    expect(g.researchRejection('p1', 'scouts')).toBe('notImplemented');
+    expect(g.researchRejection('p1', 'conscriptionDrive')).toBe('notImplemented');
+    expect(g.researchRejection('p1', 'scouts'), 'scouting is built now').toBe(null);
   });
 
   it('allows only two at a time', () => {
