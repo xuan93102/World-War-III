@@ -88,6 +88,12 @@ export interface PlayerState {
   /** Present for AI-controlled seats; omitted for human players. */
   aiDifficulty?: AiDifficulty;
   coreRegionId: string;
+  /**
+   * The core's remaining hit points (docs/game-design.md 6.7). An enemy army
+   * standing on the core's region — with a line of held ground back to its own
+   * core — grinds this down; at zero the match is lost.
+   */
+  coreHp: number;
 
   // ---- research (docs/game-design.md 10 and 11) ----
   /** Gates which tier of tech can be researched. Starts at 1. */

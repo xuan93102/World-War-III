@@ -1,3 +1,4 @@
+import { CORE_HP } from '../engine/buildings';
 import { useSettings } from '../settings/useSettings';
 import type { PlayerEconomy } from '../engine/GameEngine';
 import type { PlayerState } from '../engine/types';
@@ -28,6 +29,10 @@ export function HUD({ players, ownedCounts, economies, populations }: HUDProps) 
             <div className="hud-stats">
               <span>
                 {t('game.regions')} {ownedCounts[p.id] ?? 0}
+              </span>
+              {/* The core's own HP (docs 6.7): at zero the match is over. */}
+              <span className={p.coreHp < CORE_HP ? 'is-hurt' : undefined}>
+                {t('game.core')} {Math.ceil(p.coreHp)}/{CORE_HP}
               </span>
               <span>
                 {t('game.population')} {populations[p.id] ?? 0}/{eco?.populationCap ?? p.populationCap}

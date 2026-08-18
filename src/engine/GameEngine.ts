@@ -2,6 +2,7 @@ import {
   BASE_FOOD_CAP,
   BUILDINGS,
   BUILDING_LIMITS,
+  CORE_HP,
   GOLD_PER_VILLAGER_PER_MIN,
   GRANARY_FOOD_CAP,
   STACK_BONUS,
@@ -10,7 +11,7 @@ import {
   type BuildingType,
 } from './buildings';
 import { FOOD_PER_MIN_BY_SIZE, MILITIA_BY_SIZE, landSizeOf, safeZoneAround } from './land';
-import { UNITS, totalUnits, type UnitCounts, type UnitType } from './units';
+import { UNITS, stackAtk, totalUnits, type UnitCounts, type UnitType } from './units';
 import {
   addUnits,
   findPath,
@@ -149,6 +150,8 @@ export type OccupyRejection =
   | 'noArmy'
   /** A fight is still on, or someone else's troops are still on their feet. */
   | 'contested'
+  /** A living core stands here — it has to be destroyed, not taken (docs 6.7). */
+  | 'enemyCore'
   | 'alreadyYours';
 
 export type BuildRejection =
@@ -190,6 +193,7 @@ export class GameEngine {
         food: 0,
         aiDifficulty: setup.aiDifficulty,
         coreRegionId: setup.coreRegionId,
+        coreHp: CORE_HP,
         coreLevel: 1,
         techs: [],
         research: [],
@@ -972,6 +976,10 @@ export class GameEngine {
     const region = this.state.regions[regionId];
     if (!region) return 'noArmy';
     if (region.owner === playerId) return 'alreadyYours';
+    // A standing core isn't taken, it's knocked down (docs 6.7). The ground
+    // under it only changes hands once the core itself is gone — which ends
+    // the match anyway.
+    if (region.isCore && region.owner !== null) return 'enemyCore';
     if (this.battleAt(regionId)) return 'contested';
     if (this.hostileForceAt(regionId, playerId)) return 'contested';
     const standing = this.legionsAt(regionId).find(
@@ -994,6 +1002,67 @@ export class GameEngine {
   /** Seconds of unrest left here, or 0 if the region is settled. */
   unrestAt(regionId: string): number {
     return this.state.regions[regionId]?.unrestSeconds ?? 0;
+  }
+
+  // ---- the core (docs/game-design.md 6.7) --------------------------------
+
+  /** Ground that carries a player's supply line: theirs, or under their camp. */
+  private isHeldGround(regionId: string, playerId: PlayerId): boolean {
+    const region = this.state.regions[regionId];
+    if (!region) return false;
+    // Unrest doesn't break the chain — a region in unrest is still yours.
+    if (region.owner === playerId) return true;
+    return region.building?.type === 'camp' && region.building.owner === playerId;
+  }
+
+  /**
+   * Whether `playerId` has an unbroken line of held ground from their own core
+   * to somewhere adjacent to `regionId` (docs 6.7).
+   *
+   * Only attacking a core needs this. Ordinary regions and buildings are
+   * reached by simply marching there (6.6) — the line exists so that killing a
+   * core takes a front, not one column that slipped through the back.
+   */
+  coreAttackConnected(regionId: string, playerId: PlayerId): boolean {
+    const from = this.state.players[playerId]?.coreRegionId;
+    if (!from || !this.isHeldGround(from, playerId)) return false;
+
+    const seen = new Set([from]);
+    let frontier = [from];
+    while (frontier.length > 0) {
+      const next: string[] = [];
+      for (const at of frontier) {
+        for (const neighbor of this.map.region(at).neighbors) {
+          if (neighbor === regionId) return true;
+          if (seen.has(neighbor) || !this.isHeldGround(neighbor, playerId)) continue;
+          seen.add(neighbor);
+          next.push(neighbor);
+        }
+      }
+      frontier = next;
+    }
+    return false;
+  }
+
+  /**
+   * The player whose core is under attack here and by whom, if a siege is
+   * actually running: the attacker's army is standing on the core's region,
+   * nothing hostile is left on it, and the line of held ground holds.
+   */
+  coreSiegeAt(regionId: string): { defenderId: PlayerId; attackerId: PlayerId } | null {
+    const region = this.state.regions[regionId];
+    if (!region?.isCore) return null;
+    const defender = Object.values(this.state.players).find((p) => p.coreRegionId === regionId);
+    if (!defender || defender.coreHp <= 0) return null;
+    if (this.battleAt(regionId)) return null;
+
+    for (const legion of this.legionsAt(regionId)) {
+      if (legion.playerId === defender.id || totalUnits(legion.units) === 0) continue;
+      if (this.hostileForceAt(regionId, legion.playerId)) continue;
+      if (!this.coreAttackConnected(regionId, legion.playerId)) continue;
+      return { defenderId: defender.id, attackerId: legion.playerId };
+    }
+    return null;
   }
 
   // ---- population -------------------------------------------------------
@@ -1332,8 +1401,9 @@ export class GameEngine {
 
   /**
    * Winner, if the match is decided. Two paths, both from docs 12:
-   *  - the opponent's core region changes hands (core HP isn't built yet, so
-   *    losing control stands in for the core falling)
+   *  - an opponent's core is knocked down (HP zero, docs 6.7). Losing the core
+   *    *region* still counts too, which is only reachable via the debug owner
+   *    buttons — a standing core can't be occupied.
    *  - a completed wonder is held for WONDER_HOLD_SECONDS
    */
   getWinner(): PlayerState | null {
@@ -1348,7 +1418,7 @@ export class GameEngine {
     }
 
     const alive = Object.values(this.state.players).filter(
-      (p) => this.state.regions[p.coreRegionId]?.owner === p.id,
+      (p) => p.coreHp > 0 && this.state.regions[p.coreRegionId]?.owner === p.id,
     );
     if (alive.length === 1 && Object.keys(this.state.players).length > 1) return alive[0];
     return null;
@@ -1420,6 +1490,23 @@ export class GameEngine {
         if (!done) stillRolling.push(cart);
       }
       this.state.carts = stillRolling;
+    }
+
+    // Siege of a core (docs 6.7): an army standing on it with its supply line
+    // intact grinds the core down. Damage is dealt smoothly at the same rate a
+    // combat round would, so no separate round clock is needed.
+    for (const [regionId, region] of Object.entries(this.state.regions)) {
+      if (!region.isCore) continue;
+      const siege = this.coreSiegeAt(regionId);
+      if (!siege) continue;
+      const legion = this.legionsAt(regionId).find((l) => l.playerId === siege.attackerId)!;
+      const techs = this.ownedTechs(siege.attackerId);
+      const perRound =
+        stackAtk(legion.units) *
+        attackMultiplier(techs) *
+        supplyAttackMultiplier(legion.supply);
+      const defender = this.state.players[siege.defenderId];
+      defender.coreHp = Math.max(0, defender.coreHp - (perRound / COMBAT_ROUND_SECONDS) * deltaSeconds);
     }
 
     // A depot hands out what it's holding to its owner's troops standing on it

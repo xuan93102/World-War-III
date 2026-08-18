@@ -1,4 +1,4 @@
-import { BUILDINGS, BUILDING_ORDER, type BuildingType } from '../engine/buildings';
+import { BUILDINGS, BUILDING_ORDER, CORE_HP, type BuildingType } from '../engine/buildings';
 import { BuildingIcon } from './buildingIcons';
 import { FOOD_PER_MIN_BY_SIZE, landSizeOf, type LandSize } from '../engine/land';
 import { totalUnits, type UnitCounts, type UnitType } from '../engine/units';
@@ -83,6 +83,8 @@ export function RegionPanel({
   const canCamp = engine.buildRejection(selectedRegionId, 'camp', humanPlayerId) !== 'notOwner';
   const occupyRejection = engine.occupyRejection(selectedRegionId, humanPlayerId);
   const unrest = isMine ? engine.unrestAt(selectedRegionId) : 0;
+  const coreOwner = regionState.isCore ? players.find((p) => p.coreRegionId === selectedRegionId) : undefined;
+  const siege = engine.coreSiegeAt(selectedRegionId)?.attackerId === humanPlayerId;
 
   return (
     <div className="region-panel">
@@ -126,22 +128,52 @@ export function RegionPanel({
         </section>
       )}
 
-      {/* Taking ground is its own order (docs 6.6): fighting through a region
-          doesn't claim it, so the army standing here is offered the choice. */}
-      {occupyRejection !== 'noArmy' && occupyRejection !== 'alreadyYours' && (
-        <section className="occupy-section">
-          <button
-            className="btn btn-sm btn-primary"
-            disabled={occupyRejection !== null}
-            onClick={() => onOccupy(selectedRegionId)}
-          >
-            {t('occupy.action')}
-          </button>
-          <p className="hint-text">
-            {t(occupyRejection === 'contested' ? 'occupy.contested' : 'occupy.hint')}
-          </p>
+      {/* The core itself (docs 6.7): it has hit points, it can't be taken, and
+          grinding it down needs a line of held ground reaching it. */}
+      {regionState.isCore && coreOwner && (
+        <section className="core-section">
+          <span className="core-head">
+            <span className="field-label">{t('core.hp')}</span>
+            <span className="core-hp-value">
+              {Math.ceil(coreOwner.coreHp)}/{CORE_HP}
+            </span>
+          </span>
+          <div className="core-track">
+            <div
+              className="core-fill"
+              style={{ width: `${Math.max(0, coreOwner.coreHp / CORE_HP) * 100}%` }}
+            />
+          </div>
+          {coreOwner.id !== humanPlayerId && (
+            <p className="hint-text">
+              {siege
+                ? t('core.sieging')
+                : engine.coreAttackConnected(selectedRegionId, humanPlayerId)
+                  ? t('core.needArmy')
+                  : t('core.needLine')}
+            </p>
+          )}
         </section>
       )}
+
+      {/* Taking ground is its own order (docs 6.6): fighting through a region
+          doesn't claim it, so the army standing here is offered the choice. */}
+      {occupyRejection !== 'noArmy' &&
+        occupyRejection !== 'alreadyYours' &&
+        occupyRejection !== 'enemyCore' && (
+          <section className="occupy-section">
+            <button
+              className="btn btn-sm btn-primary"
+              disabled={occupyRejection !== null}
+              onClick={() => onOccupy(selectedRegionId)}
+            >
+              {t('occupy.action')}
+            </button>
+            <p className="hint-text">
+              {t(occupyRejection === 'contested' ? 'occupy.contested' : 'occupy.hint')}
+            </p>
+          </section>
+        )}
 
       <UnitPanel
         engine={engine}

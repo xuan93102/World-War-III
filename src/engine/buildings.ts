@@ -221,3 +221,9 @@ export const GOLD_PER_VILLAGER_PER_MIN = 1;
 export const VILLAGER_COST = 1;
 /** How long a finished wonder must be held to win (docs 5.3 / 12). */
 export const WONDER_HOLD_SECONDS = 180;
+/**
+ * The core's own hit points (docs 6.7). It is a building in every sense except
+ * that it can't be demolished, replaced or captured — it has to be knocked
+ * down, and doing so ends the match.
+ */
+export const CORE_HP = 5000;
