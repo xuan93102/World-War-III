@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { select } from 'd3-selection';
 import 'd3-transition'; // side-effect: adds .transition() to d3-selection Selection
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomTransform } from 'd3-zoom';
-import { garrisonAt, hasMountainRoad } from '../engine/regions';
+import { garrisonAt } from '../engine/regions';
 import type { GameMap, MapBounds } from '../engine/maps';
 import { totalUnits } from '../engine/units';
 import { BuildingBadge, BuildingSolid, GROUND_Y, type IconKey } from './buildingIcons';
@@ -26,6 +26,10 @@ interface MapViewProps {
    * ground: no owner, no garrison, no buildings.
    */
   visible: ReadonlySet<string>;
+  /** Whose eyes these are — anything of theirs is drawn through the fog. */
+  viewerId: string;
+  /** Whether the viewer has 山地公路, which is what colours the pass roads. */
+  passesUnlocked: boolean;
   onSelectRegion: (regionId: string) => void;
 }
 
@@ -207,6 +211,8 @@ export function MapView({
   marchRoute,
   routeFrom,
   visible,
+  viewerId,
+  passesUnlocked,
   onSelectRegion,
 }: MapViewProps) {
   const { settings, t } = useSettings();
@@ -219,7 +225,7 @@ export function MapView({
   const tilt = MAP_TILT[settings.mapMode];
   const is3D = settings.mapMode === '3d';
   // Sealed (and drawn grey) until 山地公路 is researched.
-  const unlockedPasses = hasMountainRoad();
+  const unlockedPasses = passesUnlocked;
 
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
@@ -773,6 +779,10 @@ export function MapView({
           {/* Fights in progress (docs 6.2), so a contested region is obvious
               from the map rather than only from the panel. */}
           {gameState.battles.map((battle) => {
+            // Fog (docs 9): a fight you're not in, on ground you can't see,
+            // isn't yours to know about.
+            const mine = battle.attackerId === viewerId || battle.defenderId === viewerId;
+            if (!mine && !visible.has(battle.regionId)) return null;
             const region = map.region(battle.regionId);
             const p = project(region.cx, region.cy);
             const r = BATTLE_MARKER_PX / transform.k / 2;
@@ -803,6 +813,14 @@ export function MapView({
               reached between the two regions, so march time is something you
               watch rather than a number in a panel. */}
           {gameState.marches.map((march) => {
+            // A column is only spotted if one end of the hop it's walking is
+            // in sight — your own are always drawn.
+            if (
+              march.playerId !== viewerId &&
+              !visible.has(march.from) &&
+              !visible.has(march.to)
+            )
+              return null;
             const from = map.region(march.from);
             const to = map.region(march.to);
             const progress = 1 - march.remainingSeconds / march.totalSeconds;
@@ -832,6 +850,8 @@ export function MapView({
           {/* Supply carts (docs 7). Square, so a convoy never reads as an army,
               and hollow on the way back when there's nothing left to take. */}
           {gameState.carts.map((cart) => {
+            if (cart.playerId !== viewerId && !visible.has(cart.from) && !visible.has(cart.to))
+              return null;
             const from = map.region(cart.from);
             const to = map.region(cart.to);
             const progress = 1 - cart.remainingSeconds / cart.totalSeconds;

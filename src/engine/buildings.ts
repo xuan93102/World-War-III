@@ -227,3 +227,22 @@ export const WONDER_HOLD_SECONDS = 180;
  * down, and doing so ends the match.
  */
 export const CORE_HP = 5000;
+
+/**
+ * A fortress with 關隘強化 researched, per 5.4. Reinforcement is baked in at
+ * build time — an already-standing fortress isn't retrofitted.
+ */
+export const REINFORCED_FORTRESS_HP = 1500;
+
+/**
+ * 稜堡工事 (docs 11): troops fighting on their own fortress deal more and take
+ * less. A flat area bonus on top of the tech ladders, which are exclusive
+ * among themselves. v1 draft — the doc gives no figure.
+ */
+export const BASTION_BONUS = 0.2;
+
+/** A building's hit points as built, with the owner's research applied. */
+export function buildingHp(type: BuildingType, owned: ReadonlySet<TechId>): number {
+  if (type === 'fortress' && owned.has('reinforcedFortress')) return REINFORCED_FORTRESS_HP;
+  return BUILDINGS[type].hp;
+}

@@ -63,7 +63,6 @@ export interface TechDef {
   lockedReasonKey?: TranslationKey;
 }
 
-const NEEDS_BUILDING_COMBAT: TranslationKey = 'tech.locked.buildingCombat';
 const NEEDS_TRAIN_TIME: TranslationKey = 'tech.locked.trainTime';
 
 export const TECHS: Record<TechId, TechDef> = {
@@ -125,8 +124,7 @@ export const TECHS: Record<TechId, TechDef> = {
   },
   reinforcedFortress: {
     id: 'reinforcedFortress', nameKey: 'tech.reinforcedFortress', descKey: 'tech.reinforcedFortress.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: ['fieldworks'],
-    implemented: false, lockedReasonKey: NEEDS_BUILDING_COMBAT,
+    coreLevel: 2, costMoney: 350, seconds: 150, requires: ['fieldworks'], implemented: true,
   },
   mountainRoad: {
     id: 'mountainRoad', nameKey: 'tech.mountainRoad', descKey: 'tech.mountainRoad.desc',
@@ -180,8 +178,7 @@ export const TECHS: Record<TechId, TechDef> = {
   },
   bastionWorks: {
     id: 'bastionWorks', nameKey: 'tech.bastionWorks', descKey: 'tech.bastionWorks.desc',
-    coreLevel: 3, costMoney: 900, seconds: 300, requires: ['reinforcedFortress'],
-    implemented: false, lockedReasonKey: NEEDS_BUILDING_COMBAT,
+    coreLevel: 3, costMoney: 900, seconds: 300, requires: ['reinforcedFortress'], implemented: true,
   },
   drones: {
     id: 'drones', nameKey: 'tech.drones', descKey: 'tech.drones.desc',

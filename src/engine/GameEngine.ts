@@ -1,8 +1,10 @@
 import {
   BASE_FOOD_CAP,
   BUILDINGS,
+  BASTION_BONUS,
   BUILDING_LIMITS,
   CORE_HP,
+  buildingHp,
   GOLD_PER_VILLAGER_PER_MIN,
   GRANARY_FOOD_CAP,
   STACK_BONUS,
@@ -184,7 +186,9 @@ export type AssaultRejection =
   /** A fight is already running here, or an enemy army is standing on it. */
   | 'contested'
   /** Nothing here to attack: no militia, no enemy building, no enemy core. */
-  | 'noTarget';
+  | 'noTarget'
+  /** Scouts alone can't fight — ordering it would just get them killed. */
+  | 'unarmed';
 
 export type OccupyRejection =
   /** No army of yours standing there. */
@@ -480,6 +484,14 @@ export class GameEngine {
   cartsAvailable(playerId: PlayerId): number {
     const out = this.state.carts.filter((c) => c.playerId === playerId).length;
     return Math.max(0, this.supplyCartCap(playerId) - out);
+  }
+
+  /** Vehicles paid for and still on the slipway (docs 6.5). */
+  queuedVehicles(playerId: PlayerId): number {
+    return (this.state.players[playerId]?.production ?? []).reduce(
+      (sum, job) => sum + job.remaining,
+      0,
+    );
   }
 
   /** Porters this player has tied up on the road. They're still population. */
@@ -853,18 +865,24 @@ export class GameEngine {
       battle.defenderCarry,
       {
         // A neutral garrison has neither research nor a supply line, so it
-        // always fights at flat values.
+        // always fights at flat values. A fortress adds a bonus on top of the
+        // tech ladders for whoever owns the one standing here (docs 11).
         attackerAttack:
-          attackMultiplier(attackerTechs) * supplyAttackMultiplier(battle.attackerSupply),
+          attackMultiplier(attackerTechs) *
+          supplyAttackMultiplier(battle.attackerSupply) *
+          this.bastionAttack(battle.regionId, battle.attackerId),
         defenderAttack:
           attackMultiplier(defenderTechs) *
-          (defenderLegion ? supplyAttackMultiplier(defenderLegion.supply) : 1),
+          (defenderLegion ? supplyAttackMultiplier(defenderLegion.supply) : 1) *
+          (battle.defenderId ? this.bastionAttack(battle.regionId, battle.defenderId) : 1),
         attackerTaken:
           damageTakenMultiplier(attackerTechs) *
-          supplyDamageTakenMultiplier(battle.attackerSupply),
+          supplyDamageTakenMultiplier(battle.attackerSupply) *
+          this.bastionTaken(battle.regionId, battle.attackerId),
         defenderTaken:
           damageTakenMultiplier(defenderTechs) *
-          (defenderLegion ? supplyDamageTakenMultiplier(defenderLegion.supply) : 1),
+          (defenderLegion ? supplyDamageTakenMultiplier(defenderLegion.supply) : 1) *
+          (battle.defenderId ? this.bastionTaken(battle.regionId, battle.defenderId) : 1),
       },
     );
     battle.attackerUnits = outcome.attacker.units;
@@ -1047,22 +1065,6 @@ export class GameEngine {
   }
 
   /**
-   * Why `playerId` can't take this neutral region right now, or null if they
-   * could. Neutral land is claimed by force only: it takes soldiers, and any
-   * militia holding it have to be beaten first. Nothing can produce soldiers
-   * until the army system exists, so `needsSoldiers` is the standing answer
-   * for now — the rule is in place ahead of the units that satisfy it.
-   */
-  captureRejection(regionId: string, playerId: PlayerId, soldiers = 0): 'notNeutral' | 'needsSoldiers' | 'garrisoned' | null {
-    const region = this.state.regions[regionId];
-    if (!region || region.owner !== null) return 'notNeutral';
-    if (soldiers <= 0) return 'needsSoldiers';
-    if (totalUnits(this.garrisonAt(regionId)) > 0) return 'garrisoned';
-    void playerId;
-    return null;
-  }
-
-  /**
    * Why `playerId` can't occupy the ground they're standing on, or null if
    * they can (docs 6.6). Winning a fight clears a region; taking it is this
    * separate order, so an army can raid through and leave the ground alone.
@@ -1199,6 +1201,7 @@ export class GameEngine {
     if (this.battleAt(regionId)) return 'contested';
     // Someone else's army is here: that fight starts on contact, not by order.
     if (this.blockingForceAt(regionId, playerId)) return 'contested';
+    if (stackAtk(standing.units) === 0) return 'unarmed';
     if (this.assaultTargetAt(regionId, playerId) === null) return 'noTarget';
     return null;
   }
@@ -1235,6 +1238,24 @@ export class GameEngine {
     if (!legion?.assaulting) return false;
     legion.assaulting = false;
     return true;
+  }
+
+  /** Whether this player's own fortress stands here, bastion works and all. */
+  private hasBastionHere(regionId: string, playerId: PlayerId): boolean {
+    const region = this.state.regions[regionId];
+    return (
+      region?.building?.type === 'fortress' &&
+      region.owner === playerId &&
+      this.hasTech(playerId, 'bastionWorks')
+    );
+  }
+
+  private bastionAttack(regionId: string, playerId: PlayerId): number {
+    return this.hasBastionHere(regionId, playerId) ? 1 + BASTION_BONUS : 1;
+  }
+
+  private bastionTaken(regionId: string, playerId: PlayerId): number {
+    return this.hasBastionHere(regionId, playerId) ? 1 - BASTION_BONUS : 1;
   }
 
   // ---- sight (docs/game-design.md 9) -------------------------------------
@@ -1407,8 +1428,15 @@ export class GameEngine {
     const researchers = (player?.researchers ?? 0) + (player?.researcherTraining ? 1 : 0);
     // Porters are off the villager roll while hauling, but they are still
     // people — leaving them out would let you buy replacements for free.
+    // Vehicles on order count too: they're bought and coming, so the slot is
+    // spoken for. Without this they'd arrive into a full population and the
+    // cap sweep would quietly delete villagers to make room for them.
     return (
-      (player?.villagers ?? 0) + this.troopCount(playerId) + researchers + this.porterCount(playerId)
+      (player?.villagers ?? 0) +
+      this.troopCount(playerId) +
+      researchers +
+      this.porterCount(playerId) +
+      this.queuedVehicles(playerId)
     );
   }
 
@@ -1973,7 +2001,7 @@ export class GameEngine {
         if (region.construction.remainingSeconds <= 0) {
           const { type, builtBy } = region.construction;
           region.construction = undefined;
-          region.building = { type, hp: BUILDINGS[type].hp };
+          region.building = { type, hp: buildingHp(type, this.ownedTechs(builtBy ?? region.owner ?? '')) };
           // A camp belongs to the army that pitched it, not to the ground.
           if (type === 'camp') region.building.owner = builtBy;
           if (type === 'wonder') region.wonderHeldSeconds = 0;

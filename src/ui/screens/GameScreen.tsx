@@ -137,6 +137,8 @@ export function GameScreen({
             }
             routeFrom={pickingMarch ? selectedRegionId : null}
             visible={engine.visibleTo(humanPlayerId)}
+            viewerId={humanPlayerId}
+            passesUnlocked={engine.hasMountainRoad(humanPlayerId)}
             onSelectRegion={(id) => {
               if (pickingMarch) setMarchTarget(id);
               else setSelectedRegionId(id);

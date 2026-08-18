@@ -166,7 +166,7 @@ export function RegionPanel({
 
       {/* The core itself (docs 6.7): it has hit points, it can't be taken, and
           grinding it down needs a line of held ground reaching it. */}
-      {regionState.isCore && coreOwner && (
+      {seen && regionState.isCore && coreOwner && (
         <section className="core-section">
           <span className="core-head">
             <span className="field-label">{t('core.hp')}</span>
@@ -210,8 +210,10 @@ export function RegionPanel({
             </button>
           ) : null}
           <p className="hint-text">
-            {assaultRejection === 'contested'
-              ? t('assault.contested')
+            {assaultRejection === 'unarmed'
+              ? t('assault.unarmed')
+              : assaultRejection === 'contested'
+                ? t('assault.contested')
               : assaulting
                 ? t('assault.underway')
                 : t(ASSAULT_TARGET_KEY[assaultTarget ?? 'militia'])}

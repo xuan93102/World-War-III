@@ -596,29 +596,6 @@ describe('land: garrisons and size', () => {
     expect(totalUnits(garrisonAt(g.state, 'kaohsiung-1'))).toBe(0);
   });
 
-  it('neutral land cannot be taken without soldiers', () => {
-    const g = newGame();
-    // An undefended safe-zone region still needs troops to claim.
-    const safeNeutral = Object.keys(g.state.regions).find(
-      (id) =>
-        g.state.regions[id].owner === null &&
-        totalUnits(garrisonAt(g.state, id)) === 0,
-    )!;
-    expect(g.captureRejection(safeNeutral, 'p1', 0), 'no soldiers, no claim').toBe('needsSoldiers');
-    expect(g.captureRejection(safeNeutral, 'p1', 5), 'soldiers can claim empty land').toBe(null);
-  });
-
-  it('garrisoned land must be cleared before it can be claimed', () => {
-    const g = newGame();
-    const defended = Object.keys(g.state.regions).find((id) => totalUnits(garrisonAt(g.state, id)) > 0)!;
-    expect(g.captureRejection(defended, 'p1', 50), 'militia block the claim').toBe('garrisoned');
-
-    g.state.regions[defended].units = {};
-    expect(g.captureRejection(defended, 'p1', 50), 'cleared land can be claimed').toBe(null);
-  });
-
-  it('owned land is not a capture target', () => {
-    const g = newGame();
-    expect(g.captureRejection('kaohsiung-1', 'p1', 50)).toBe('notNeutral');
-  });
+  // The old captureRejection() lived here. Taking ground is occupy() now
+  // (docs 6.6), and occupy.test.ts covers the rules it used to state.
 });
