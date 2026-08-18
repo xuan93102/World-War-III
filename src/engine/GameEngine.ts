@@ -145,6 +145,13 @@ export type CartRejection =
  */
 export const UNREST_SECONDS = 300;
 
+export type AssaultRejection =
+  | 'noArmy'
+  /** A fight is already running here, or an enemy army is standing on it. */
+  | 'contested'
+  /** Nothing here to attack: no militia, no enemy building, no enemy core. */
+  | 'noTarget';
+
 export type OccupyRejection =
   /** No army of yours standing there. */
   | 'noArmy'
@@ -247,6 +254,16 @@ export class GameEngine {
   }
 
   /**
+   * Just this player's troops standing here. garrisonAt() answers "who is on
+   * this ground" and since docs 6.6 that can be two sides at once, so anything
+   * asking "what can I order about" has to ask this instead.
+   */
+  ownGarrisonAt(regionId: string, playerId: PlayerId): UnitCounts {
+    const legion = this.legionsAt(regionId).find((l) => l.playerId === playerId);
+    return legion ? legion.units : {};
+  }
+
+  /**
    * This player's legion in a region, created empty if they have none there.
    * One per region per player, so reinforcements merge rather than piling up
    * as separate stacks — which keeps "the defender" a single target.
@@ -285,16 +302,24 @@ export class GameEngine {
   }
 
   /**
-   * Troops here that `playerId` would have to beat before standing on this
-   * ground: a neutral militia garrison, or anyone else's legion.
+   * Another player's army standing here — the only thing that stops a march.
+   *
+   * A neutral militia garrison deliberately isn't one: the 亂軍 hold their own
+   * ground but don't police the roads, so columns walk past them (docs 8.1).
+   * They still have to be beaten to take the region — that's `contestedAt`.
    */
-  private hostileForceAt(regionId: string, playerId: PlayerId): boolean {
-    const region = this.state.regions[regionId];
-    if (!region) return false;
-    if (totalUnits(region.units) > 0) return true;
+  private blockingForceAt(regionId: string, playerId: PlayerId): boolean {
+    if (!this.state.regions[regionId]) return false;
     return this.legionsAt(regionId).some(
       (l) => l.playerId !== playerId && totalUnits(l.units) > 0,
     );
+  }
+
+  /** Anyone here who would have to be beaten before the ground could be taken. */
+  private contestedAt(regionId: string, playerId: PlayerId): boolean {
+    const region = this.state.regions[regionId];
+    if (!region) return false;
+    return totalUnits(region.units) > 0 || this.blockingForceAt(regionId, playerId);
   }
 
   /**
@@ -307,7 +332,7 @@ export class GameEngine {
    */
   private canEnter(regionId: string, playerId: PlayerId): boolean {
     if (!this.state.regions[regionId]) return false;
-    return !this.hostileForceAt(regionId, playerId);
+    return !this.blockingForceAt(regionId, playerId);
   }
 
   /** Whether arriving here would be a peaceful landing rather than an attack. */
@@ -343,9 +368,10 @@ export class GameEngine {
     playerId: PlayerId,
     units: UnitCounts,
   ): MarchRejection | null {
-    const origin = this.state.regions[from];
-    if (!origin || origin.owner !== playerId) return 'notOwner';
-    if (!stackContains(this.garrisonAt(from), units)) return 'noUnits';
+    // Troops march out of wherever they stand, not out of ground you hold: an
+    // army on someone else's land (docs 6.6) still has to be able to leave.
+    if (!this.state.regions[from]) return 'notOwner';
+    if (!stackContains(this.ownGarrisonAt(from, playerId), units)) return 'noUnits';
     if (from === to) return 'notAdjacent';
     if (this.marchRoute(from, to, playerId) !== null) return null;
     // No route. Say which wall they hit: a sealed pass reads very differently
@@ -843,6 +869,18 @@ export class GameEngine {
   retreat(regionId: string, playerId: PlayerId): boolean {
     if (this.retreatRejection(regionId, playerId) !== null) return false;
     const battle = this.battleAt(regionId)!;
+
+    // A fight started where the army already stood (an assault on a militia
+    // garrison, docs 6.6) has nowhere to fall back to: breaking it off just
+    // means standing down where they are.
+    if (battle.attackerFrom === battle.regionId) {
+      const standing = this.legionFor(battle.regionId, playerId);
+      standing.units = addUnits(standing.units, battle.attackerUnits);
+      standing.supply = battle.attackerSupply;
+      this.state.battles = this.state.battles.filter((b) => b !== battle);
+      return true;
+    }
+
     const seconds = this.marchSeconds(battle.regionId, battle.attackerFrom, playerId);
     const column: Legion = {
       id: `l${this.nextLegionId++}`,
@@ -885,6 +923,16 @@ export class GameEngine {
     // hostile ground, so if an enemy has moved into the column's path since it
     // set out, it walks straight into them.
     if (!this.canEnter(march.to, march.playerId)) {
+      const column = this.state.legions.find((l) => l.id === march.legionId);
+      this.engage(march.to, march.playerId, march.units, march.from, column?.supply ?? FULL_SUPPLY);
+      this.state.legions = this.state.legions.filter((l) => l.id !== march.legionId);
+      return true;
+    }
+
+    // A fight of ours already running here takes the newcomers as
+    // reinforcements (docs 6.2) rather than landing them beside it.
+    const fight = this.battleAt(march.to);
+    if (fight && fight.attackerId === march.playerId) {
       const column = this.state.legions.find((l) => l.id === march.legionId);
       this.engage(march.to, march.playerId, march.units, march.from, column?.supply ?? FULL_SUPPLY);
       this.state.legions = this.state.legions.filter((l) => l.id !== march.legionId);
@@ -981,7 +1029,7 @@ export class GameEngine {
     // the match anyway.
     if (region.isCore && region.owner !== null) return 'enemyCore';
     if (this.battleAt(regionId)) return 'contested';
-    if (this.hostileForceAt(regionId, playerId)) return 'contested';
+    if (this.contestedAt(regionId, playerId)) return 'contested';
     const standing = this.legionsAt(regionId).find(
       (l) => l.playerId === playerId && totalUnits(l.units) > 0,
     );
@@ -1002,6 +1050,80 @@ export class GameEngine {
   /** Seconds of unrest left here, or 0 if the region is settled. */
   unrestAt(regionId: string): number {
     return this.state.regions[regionId]?.unrestSeconds ?? 0;
+  }
+
+  // ---- assaulting (docs/game-design.md 6.6) ------------------------------
+
+  /** Who a building answers to: its owner if it's a camp, else the landowner. */
+  buildingOwner(regionId: string): PlayerId | null {
+    const region = this.state.regions[regionId];
+    if (!region?.building) return null;
+    return region.building.type === 'camp' ? (region.building.owner ?? null) : region.owner;
+  }
+
+  /**
+   * What an army of `playerId` standing here could attack (docs 6.6):
+   *
+   *  - `militia` — a neutral garrison. It doesn't stop a march, so taking the
+   *    ground off it is a fight you choose to start.
+   *  - `core` — another player's core (docs 6.7).
+   *  - `building` — anything else they built here.
+   *
+   * null when there's nothing to hit.
+   */
+  assaultTargetAt(regionId: string, playerId: PlayerId): 'militia' | 'core' | 'building' | null {
+    const region = this.state.regions[regionId];
+    if (!region) return null;
+    if (totalUnits(region.units) > 0) return 'militia';
+    if (region.isCore && region.owner !== null && region.owner !== playerId) return 'core';
+    const owner = this.buildingOwner(regionId);
+    return region.building && owner !== null && owner !== playerId ? 'building' : null;
+  }
+
+  assaultRejection(regionId: string, playerId: PlayerId): AssaultRejection | null {
+    const standing = this.legionsAt(regionId).find(
+      (l) => l.playerId === playerId && totalUnits(l.units) > 0,
+    );
+    if (!standing) return 'noArmy';
+    if (this.battleAt(regionId)) return 'contested';
+    // Someone else's army is here: that fight starts on contact, not by order.
+    if (this.blockingForceAt(regionId, playerId)) return 'contested';
+    if (this.assaultTargetAt(regionId, playerId) === null) return 'noTarget';
+    return null;
+  }
+
+  /**
+   * Orders the army standing here to attack. Against a militia garrison that
+   * opens a normal battle (docs 6.2); against a structure it's a standing
+   * order the tick works through.
+   */
+  assault(regionId: string, playerId: PlayerId): boolean {
+    if (this.assaultRejection(regionId, playerId) !== null) return false;
+    const legion = this.legionsAt(regionId).find(
+      (l) => l.playerId === playerId && totalUnits(l.units) > 0,
+    )!;
+
+    if (this.assaultTargetAt(regionId, playerId) === 'militia') {
+      // Somewhere to fall back to if they break off: ground of ours next door,
+      // else where they stand — retreat() copes with staying put.
+      const fallback =
+        this.map.region(regionId).neighbors.find((id) => this.state.regions[id]?.owner === playerId) ??
+        regionId;
+      this.engage(regionId, playerId, legion.units, fallback, legion.supply);
+      this.state.legions = this.state.legions.filter((l) => l !== legion);
+      return true;
+    }
+
+    legion.assaulting = true;
+    return true;
+  }
+
+  /** Calls off a standing assault order. */
+  standDown(regionId: string, playerId: PlayerId): boolean {
+    const legion = this.legionsAt(regionId).find((l) => l.playerId === playerId);
+    if (!legion?.assaulting) return false;
+    legion.assaulting = false;
+    return true;
   }
 
   // ---- the core (docs/game-design.md 6.7) --------------------------------
@@ -1058,7 +1180,10 @@ export class GameEngine {
 
     for (const legion of this.legionsAt(regionId)) {
       if (legion.playerId === defender.id || totalUnits(legion.units) === 0) continue;
-      if (this.hostileForceAt(regionId, legion.playerId)) continue;
+      // Standing on a core does nothing by itself — it has to be ordered
+      // (docs 6.6's separate assault), and the line has to hold (6.7).
+      if (!legion.assaulting) continue;
+      if (this.contestedAt(regionId, legion.playerId)) continue;
       if (!this.coreAttackConnected(regionId, legion.playerId)) continue;
       return { defenderId: defender.id, attackerId: legion.playerId };
     }
@@ -1174,7 +1299,7 @@ export class GameEngine {
     if (!region || region.owner !== playerId) return 'needsAcademy';
     // Upgrades happen at an academy, so troops have to march back to one.
     if (region.building?.type !== 'academy') return 'needsAcademy';
-    if ((this.garrisonAt(regionId)[def.upgradeFrom] ?? 0) < count) return 'noSourceUnits';
+    if ((this.ownGarrisonAt(regionId, playerId)[def.upgradeFrom] ?? 0) < count) return 'noSourceUnits';
     if (this.state.players[playerId].money < def.upgradeCost * count) return 'cannotAfford';
     return null;
   }
@@ -1492,21 +1617,52 @@ export class GameEngine {
       this.state.carts = stillRolling;
     }
 
-    // Siege of a core (docs 6.7): an army standing on it with its supply line
-    // intact grinds the core down. Damage is dealt smoothly at the same rate a
-    // combat round would, so no separate round clock is needed.
-    for (const [regionId, region] of Object.entries(this.state.regions)) {
-      if (!region.isCore) continue;
-      const siege = this.coreSiegeAt(regionId);
-      if (!siege) continue;
-      const legion = this.legionsAt(regionId).find((l) => l.playerId === siege.attackerId)!;
-      const techs = this.ownedTechs(siege.attackerId);
-      const perRound =
-        stackAtk(legion.units) *
-        attackMultiplier(techs) *
-        supplyAttackMultiplier(legion.supply);
-      const defender = this.state.players[siege.defenderId];
-      defender.coreHp = Math.max(0, defender.coreHp - (perRound / COMBAT_ROUND_SECONDS) * deltaSeconds);
+    // Assaults (docs 6.6, 6.7). An army under orders batters what's built here
+    // at the rate a combat round would deal, spread smoothly over time so no
+    // second round clock is needed. Everything that could have changed since
+    // the order was given is re-checked, and a stale order just lapses.
+    for (const legion of this.state.legions) {
+      if (!legion.assaulting) continue;
+      const regionId = legion.regionId;
+      const region = this.state.regions[regionId];
+      const marching = this.state.marches.some((m) => m.legionId === legion.id);
+      const target = marching ? null : this.assaultTargetAt(regionId, legion.playerId);
+      if (
+        target === null ||
+        target === 'militia' ||
+        totalUnits(legion.units) === 0 ||
+        this.blockingForceAt(regionId, legion.playerId) ||
+        this.battleAt(regionId)
+      ) {
+        legion.assaulting = false;
+        continue;
+      }
+
+      const damage =
+        ((stackAtk(legion.units) *
+          attackMultiplier(this.ownedTechs(legion.playerId)) *
+          supplyAttackMultiplier(legion.supply)) /
+          COMBAT_ROUND_SECONDS) *
+        deltaSeconds;
+
+      if (target === 'core') {
+        // The core also wants a line of held ground behind the attacker (6.7).
+        if (!this.coreSiegeAt(regionId)) continue;
+        const defender = Object.values(this.state.players).find(
+          (p) => p.coreRegionId === regionId,
+        )!;
+        defender.coreHp = Math.max(0, defender.coreHp - damage);
+        continue;
+      }
+
+      const building = region.building!;
+      building.hp -= damage;
+      if (building.hp <= 0) {
+        // Down with everything in it — a depot's stores go with the depot.
+        region.building = undefined;
+        region.wonderHeldSeconds = undefined;
+        legion.assaulting = false;
+      }
     }
 
     // A depot hands out what it's holding to its owner's troops standing on it

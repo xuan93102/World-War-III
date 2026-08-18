@@ -169,6 +169,13 @@ export interface Legion {
   supply: number;
   /** Where it stands, or the region it set out from while marching. */
   regionId: string;
+  /**
+   * A standing order to batter what's built here — an enemy building, or a
+   * core (docs 6.6, 6.7). Marching is movement only, so attacking a structure
+   * is something the army is told to do and keeps doing until the target is
+   * gone or it moves away.
+   */
+  assaulting?: boolean;
 }
 
 /**

@@ -182,6 +182,14 @@ export function GameScreen({
             engine.occupy(regionId, humanPlayerId);
             forceRender((n) => n + 1);
           }}
+          onAssault={(regionId) => {
+            engine.assault(regionId, humanPlayerId);
+            forceRender((n) => n + 1);
+          }}
+          onStandDown={(regionId) => {
+            engine.standDown(regionId, humanPlayerId);
+            forceRender((n) => n + 1);
+          }}
           onDispatchCart={(from, to, porters) => {
             engine.dispatchCart(from, to, humanPlayerId, porters);
             forceRender((n) => n + 1);

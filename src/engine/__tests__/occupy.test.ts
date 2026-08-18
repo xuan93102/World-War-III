@@ -57,11 +57,19 @@ describe('standing on ground you do not hold', () => {
       .neighbors.find((id) => id !== CORE && g.map.distance(CORE, id) === 2)!;
     g.setRegionOwner(NEXT_DOOR, 'p2');
     g.state.regions[beyond].units = {};
-    // Seal every other way in, so the only clear path to `beyond` is across
-    // their region. Docs 6.6 needs neither the deed to the ground on the way
-    // nor a continuous front.
+    // Seal every other way in with enemy armies — a militia garrison
+    // wouldn't stop anyone (docs 8.1) — so the only clear path to `beyond` is
+    // across their region. Docs 6.6 needs neither the deed to the ground on
+    // the way nor a continuous front.
     for (const n of g.map.region(beyond).neighbors) {
-      if (n !== NEXT_DOOR) g.state.regions[n].units = { militia: 5 };
+      if (n === NEXT_DOOR || n === CORE) continue;
+      g.state.legions.push({
+        id: `wall-${n}`,
+        playerId: 'p2',
+        units: { militia: 5 },
+        supply: 1,
+        regionId: n,
+      });
     }
 
     g.trainUnits(CORE, 'p1', 'militia', 4);
@@ -144,6 +152,10 @@ describe('the order itself', () => {
     g.state.regions[NEXT_DOOR].owner = null;
     g.state.regions[NEXT_DOOR].units = { militia: 3 };
     send(g, NEXT_DOOR, 8);
+    // Walking in is peaceful now; taking the ground off the militia is an
+    // order of its own (docs 6.6).
+    expect(g.occupyRejection(NEXT_DOOR, 'p1'), 'their garrison is in the way').toBe('contested');
+    g.assault(NEXT_DOOR, 'p1');
     expect(g.battleAt(NEXT_DOOR), 'fighting the militia').toBeDefined();
     expect(g.occupyRejection(NEXT_DOOR, 'p1'), 'not while it is contested').toBe('contested');
 

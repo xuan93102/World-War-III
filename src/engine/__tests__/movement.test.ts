@@ -63,9 +63,21 @@ describe('march timing', () => {
 });
 
 describe('march orders', () => {
-  it('refuses to move troops out of land you do not hold', () => {
+  it('refuses to move troops that are not yours out of a region', () => {
     const g = newGame();
-    expect(g.marchRejection(NEXT_DOOR, CORE, 'p1', { militia: 1 })).toBe('notOwner');
+    // Nothing of ours is standing there — the deed is beside the point, since
+    // an army can be parked on ground it doesn't hold (docs 6.6).
+    expect(g.marchRejection(NEXT_DOOR, CORE, 'p1', { militia: 1 })).toBe('noUnits');
+
+    g.state.regions[NEXT_DOOR].units = { militia: 4 };
+    expect(g.marchRejection(NEXT_DOOR, CORE, 'p1', { militia: 1 }), 'nor are the 亂軍').toBe(
+      'noUnits',
+    );
+
+    // Our own column standing on their ground can leave again.
+    g.setRegionOwner(NEXT_DOOR, 'p2');
+    station(g, NEXT_DOOR, 'p1', { militia: 3 });
+    expect(g.marchRejection(NEXT_DOOR, CORE, 'p1', { militia: 3 })).toBe(null);
   });
 
   it('refuses to send troops that are not there', () => {
@@ -92,12 +104,36 @@ describe('march orders', () => {
     expect(g.marchRejection(CORE, FAR, 'p1', { militia: 3 })).toBeNull();
   });
 
-  it('will not route a march *through* ground that would have to be fought for', () => {
+  it('walks straight past a neutral garrison', () => {
     const g = withTroops(newGame());
-    // Attacking what's next to you is fine, but a column can't bulldoze its
-    // way across the island: every path to the far core runs through
-    // garrisoned neutral land, so there's no route.
-    expect(g.marchRejection(CORE, 'kaohsiung-1', 'p1', { militia: 1 })).toBe('noRoute');
+    // The 亂軍 hold their own ground but don't police the roads (docs 8.1), so
+    // a column can cross the island through garrisoned neutral land.
+    expect(g.marchRejection(CORE, 'kaohsiung-1', 'p1', { militia: 1 })).toBe(null);
+    const route = g.marchRoute(CORE, 'kaohsiung-1', 'p1')!;
+    expect(
+      route.some((id) => totalUnits(g.state.regions[id].units) > 0),
+      'and the route really does cross one',
+    ).toBe(true);
+  });
+
+  it('will not route a march *through* an enemy army', () => {
+    const g = withTroops(newGame());
+    const next = g.map.region(CORE).neighbors[0];
+    const beyond = g.map
+      .region(next)
+      .neighbors.find((id) => id !== CORE && !g.map.region(CORE).neighbors.includes(id))!;
+    // Park an enemy army on every way in, so there's no clear approach left.
+    for (const n of g.map.region(beyond).neighbors) {
+      if (n === CORE) continue;
+      g.state.legions.push({
+        id: `wall-${n}`,
+        playerId: 'p2',
+        units: { militia: 5 },
+        supply: 1,
+        regionId: n,
+      });
+    }
+    expect(g.marchRejection(CORE, beyond, 'p1', { militia: 1 })).toBe('noRoute');
   });
 
   it('seals mountain passes until the road tech exists', () => {
@@ -206,9 +242,16 @@ describe('arrival', () => {
     g.state.regions[FAR].units = {};
     const route = g.marchRoute(CORE, FAR, 'p1')!;
     g.startMarch(CORE, FAR, 'p1', { militia: 3 });
-    // Someone garrisons the very next stop while the column is still walking.
-    g.state.regions[route[0]].units = { militia: 2 };
+    // An enemy army moves into the very next stop while the column is still
+    // walking. Only troops do this — ground alone is walked over (docs 6.6).
     g.state.regions[route[0]].owner = 'p2';
+    g.state.legions.push({
+      id: 'ambush',
+      playerId: 'p2',
+      units: { militia: 2 },
+      supply: 1,
+      regionId: route[0],
+    });
 
     g.tick(MARCH_SECONDS_PER_HOP);
     expect(g.state.marches, 'the march ends where it was stopped').toHaveLength(0);

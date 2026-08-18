@@ -74,11 +74,16 @@ describe('a round', () => {
 
 describe('battles in play', () => {
   /** Sends `count` militia from p1's core into the neighbouring region. */
+  /**
+   * Marches an army next door and orders it onto the militia there. Since
+   * docs 6.6 arriving is only movement — the fight is a separate order.
+   */
   function attackNextDoor(g: GameEngine, count: number) {
     g.state.players.p1.money = 1000;
     g.trainUnits(CORE, 'p1', 'militia', count);
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: count });
     g.tick(MARCH_SECONDS_PER_HOP);
+    g.assault(NEXT_DOOR, 'p1');
   }
 
   it('starts when an army walks onto defended ground', () => {
@@ -146,6 +151,7 @@ describe('battles in play', () => {
     const before = g.population('p1');
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 5 });
     g.tick(MARCH_SECONDS_PER_HOP);
+    g.assault(NEXT_DOOR, 'p1');
 
     expect(g.battleAt(NEXT_DOOR)).toBeDefined();
     expect(g.population('p1'), 'still on the books while fighting').toBe(before);
@@ -154,8 +160,10 @@ describe('battles in play', () => {
   it('takes reinforcements into an ongoing fight', () => {
     const g = newGame();
     g.state.regions[NEXT_DOOR].units = { militia: 20 };
-    attackNextDoor(g, 3);
+    // Big enough to still be fighting when the second wave lands.
+    attackNextDoor(g, 25);
     g.tick(COMBAT_ROUND_SECONDS);
+    const holding = totalUnits(g.battleAt(NEXT_DOOR)!.attackerUnits);
 
     g.trainUnits(CORE, 'p1', 'militia', 4);
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 4 });
@@ -163,7 +171,10 @@ describe('battles in play', () => {
 
     const battle = g.battleAt(NEXT_DOOR);
     expect(battle, 'the fight is still on').toBeDefined();
-    expect(totalUnits(battle!.attackerUnits), 'the newcomers joined it').toBeGreaterThan(3);
+    expect(
+      totalUnits(battle!.attackerUnits),
+      'the newcomers joined it rather than standing beside it',
+    ).toBeGreaterThan(holding - 20);
   });
 });
 
@@ -175,6 +186,7 @@ describe('breaking off', () => {
     g.trainUnits(CORE, 'p1', 'militia', 5);
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 5 });
     g.tick(MARCH_SECONDS_PER_HOP);
+    g.assault(NEXT_DOOR, 'p1');
     return g;
   }
 

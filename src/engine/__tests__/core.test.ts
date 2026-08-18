@@ -28,6 +28,8 @@ function besiege(g: GameEngine, militia = 20) {
     units: { militia },
     supply: 1,
     regionId: ENEMY_CORE,
+    // Standing on a core does nothing by itself — it's an order (docs 6.6).
+    assaulting: true,
   });
 }
 

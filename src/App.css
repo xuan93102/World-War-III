@@ -1508,3 +1508,20 @@
 .hud-stats .is-hurt {
   color: #ff8a80;
 }
+
+/* ---------- assault (docs 6.6) ---------- */
+
+.assault-section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px dashed #d9534f;
+  border-radius: 6px;
+  background: color-mix(in srgb, #d9534f 10%, transparent);
+}
+
+.assault-section .hint-text {
+  flex-basis: 100%;
+}

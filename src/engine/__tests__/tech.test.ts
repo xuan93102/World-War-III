@@ -232,6 +232,7 @@ describe('tech effects', () => {
     g.state.players.p1.techs.push('rifles', 'autoRifles');
     g.startMarch(CORE, LAB, 'p1', { militia: 10 });
     g.tick(20);
+    g.assault(LAB, 'p1');
 
     const before = garrisonAt(g.state, LAB).militia ?? 0;
     g.tick(5);

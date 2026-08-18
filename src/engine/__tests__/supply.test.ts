@@ -182,6 +182,7 @@ describe('a hungry army fights worse', () => {
       g.trainUnits(CORE, 'p1', 'militia', 10);
       g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 10 });
       g.tick(MARCH_SECONDS_PER_HOP);
+      g.assault(NEXT_DOOR, 'p1');
       g.battleAt(NEXT_DOOR)!.attackerSupply = supply;
       const before = g.garrisonAt(NEXT_DOOR).militia ?? 0;
       g.tick(COMBAT_ROUND_SECONDS);
@@ -203,6 +204,7 @@ describe('a hungry army fights worse', () => {
 
     g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 5 });
     g.tick(MARCH_SECONDS_PER_HOP);
+    g.assault(NEXT_DOOR, 'p1');
     const battle = g.battleAt(NEXT_DOOR)!;
     expect(battle.attackerSupply, 'the column arrives as hungry as it left').toBeLessThan(0.61);
 

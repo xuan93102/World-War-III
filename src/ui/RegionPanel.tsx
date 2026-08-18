@@ -23,6 +23,8 @@ interface RegionPanelProps {
   onUpgrade: (regionId: string, type: UnitType, count: number) => void;
   onMarch: (from: string, to: string, units: UnitCounts) => void;
   onOccupy: (regionId: string) => void;
+  onAssault: (regionId: string) => void;
+  onStandDown: (regionId: string) => void;
   onDispatchCart: (from: string, to: string, porters: number) => void;
   marchTarget: string | null;
   pickingMarch: boolean;
@@ -37,6 +39,13 @@ const LAND_SIZE_KEY: Record<LandSize, TranslationKey> = {
   medium: 'land.size.medium',
   large: 'land.size.large',
   huge: 'land.size.huge',
+};
+
+/** What the assault button would be swung at, for the line under it. */
+const ASSAULT_TARGET_KEY: Record<'militia' | 'core' | 'building', TranslationKey> = {
+  militia: 'assault.militia',
+  core: 'assault.core',
+  building: 'assault.building',
 };
 
 const REJECTION_KEY: Record<Exclude<BuildRejection, 'notOwner'>, TranslationKey> = {
@@ -59,6 +68,8 @@ export function RegionPanel({
   onUpgrade,
   onMarch,
   onOccupy,
+  onAssault,
+  onStandDown,
   onDispatchCart,
   marchTarget,
   pickingMarch,
@@ -83,6 +94,11 @@ export function RegionPanel({
   const canCamp = engine.buildRejection(selectedRegionId, 'camp', humanPlayerId) !== 'notOwner';
   const occupyRejection = engine.occupyRejection(selectedRegionId, humanPlayerId);
   const unrest = isMine ? engine.unrestAt(selectedRegionId) : 0;
+  const assaultRejection = engine.assaultRejection(selectedRegionId, humanPlayerId);
+  const assaultTarget = engine.assaultTargetAt(selectedRegionId, humanPlayerId);
+  const assaulting = engine
+    .legionsAt(selectedRegionId)
+    .some((l) => l.playerId === humanPlayerId && l.assaulting);
   const coreOwner = regionState.isCore ? players.find((p) => p.coreRegionId === selectedRegionId) : undefined;
   const siege = engine.coreSiegeAt(selectedRegionId)?.attackerId === humanPlayerId;
 
@@ -153,6 +169,33 @@ export function RegionPanel({
                   : t('core.needLine')}
             </p>
           )}
+        </section>
+      )}
+
+      {/* The three things an army standing here can be told to do (docs 6.6):
+          march (in the panel below), assault, occupy. Marching is movement
+          only now, so attacking is an order rather than a side effect. */}
+      {assaultRejection !== 'noArmy' && assaultRejection !== 'noTarget' && (
+        <section className="assault-section">
+          <button
+            className="btn btn-sm btn-danger"
+            disabled={assaultRejection !== null || assaulting}
+            onClick={() => onAssault(selectedRegionId)}
+          >
+            {t('assault.action')}
+          </button>
+          {assaulting ? (
+            <button className="btn btn-sm" onClick={() => onStandDown(selectedRegionId)}>
+              {t('assault.standDown')}
+            </button>
+          ) : null}
+          <p className="hint-text">
+            {assaultRejection === 'contested'
+              ? t('assault.contested')
+              : assaulting
+                ? t('assault.underway')
+                : t(ASSAULT_TARGET_KEY[assaultTarget ?? 'militia'])}
+          </p>
         </section>
       )}
 
