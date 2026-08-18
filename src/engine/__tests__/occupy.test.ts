@@ -105,6 +105,35 @@ describe('standing on ground you do not hold', () => {
   });
 });
 
+describe('what taking ground costs the loser', () => {
+  it('razes whatever they built on it', () => {
+    const g = newGame();
+    g.setRegionOwner(NEXT_DOOR, 'p2');
+    g.state.regions[NEXT_DOOR].building = { type: 'shop', hp: 250 };
+    send(g, NEXT_DOOR, 4);
+
+    expect(g.occupy(NEXT_DOOR, 'p1')).toBe(true);
+    expect(g.state.regions[NEXT_DOOR].building, 'their shop burns with the ground').toBe(
+      undefined,
+    );
+  });
+
+  it('leaves neutral ground and your own buildings alone', () => {
+    const g = newGame();
+    // Claiming empty neutral land builds nothing and destroys nothing.
+    g.state.regions[NEXT_DOOR].units = {};
+    send(g, NEXT_DOOR, 4);
+    g.state.players.p1.money = 100000;
+    g.startConstruction(NEXT_DOOR, 'shop', 'p1');
+    g.tick(31);
+    expect(g.state.regions[NEXT_DOOR].building?.type).toBe('shop');
+
+    // Re-affirming your own ownership doesn't touch it either.
+    g.setRegionOwner(NEXT_DOOR, 'p1');
+    expect(g.state.regions[NEXT_DOOR].building?.type, 'still standing').toBe('shop');
+  });
+});
+
 describe('the order itself', () => {
   it('refuses without an army, mid-fight, or on your own ground', () => {
     const g = newGame();

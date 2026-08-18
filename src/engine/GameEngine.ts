@@ -139,7 +139,8 @@ export type CartRejection =
 
 /**
  * How long ground taken off another player stays in unrest (docs 6.4): yours,
- * but no building and no garrison until it settles. v1 draft.
+ * and garrisoned normally, but nothing can be built on it until it settles.
+ * v1 draft.
  */
 export const UNREST_SECONDS = 300;
 
@@ -342,10 +343,6 @@ export class GameEngine {
     if (!origin || origin.owner !== playerId) return 'notOwner';
     if (!stackContains(this.garrisonAt(from), units)) return 'noUnits';
     if (from === to) return 'notAdjacent';
-    // Ground in unrest can be crossed but not garrisoned (docs 6.4), so it's
-    // refused as a destination while it settles — including reinforcing the
-    // army that took it. Freshly conquered ground is meant to be hard to hold.
-    if (this.state.regions[to]?.owner === playerId && this.unrestAt(to) > 0) return 'unrest';
     if (this.marchRoute(from, to, playerId) !== null) return null;
     // No route. Say which wall they hit: a sealed pass reads very differently
     // from "there's no way through", and both are actionable.
@@ -1066,12 +1063,10 @@ export class GameEngine {
     playerId: PlayerId,
     type: UnitType,
     count = 1,
-  ): 'wrongSite' | 'notTrainable' | 'cannotAfford' | 'noPopulationRoom' | 'unrest' | null {
+  ): 'wrongSite' | 'notTrainable' | 'cannotAfford' | 'noPopulationRoom' | null {
     const def = UNITS[type];
     if (def.trainCost === null || def.trainAt === null) return 'notTrainable';
     if (!this.trainingSites(playerId, type).includes(regionId)) return 'wrongSite';
-    // Ground that hasn't settled raises no troops (docs 6.4).
-    if (this.unrestAt(regionId) > 0) return 'unrest';
     const player = this.state.players[playerId];
     if (player.money < def.trainCost * count) return 'cannotAfford';
     if (this.populationRoom(playerId) < count) return 'noPopulationRoom';
@@ -1103,15 +1098,13 @@ export class GameEngine {
     playerId: PlayerId,
     type: UnitType,
     count = 1,
-  ): 'notUpgradable' | 'needsAcademy' | 'noSourceUnits' | 'cannotAfford' | 'unrest' | null {
+  ): 'notUpgradable' | 'needsAcademy' | 'noSourceUnits' | 'cannotAfford' | null {
     const def = UNITS[type];
     if (def.upgradeFrom === null || def.upgradeCost === null) return 'notUpgradable';
     const region = this.state.regions[regionId];
     if (!region || region.owner !== playerId) return 'needsAcademy';
     // Upgrades happen at an academy, so troops have to march back to one.
     if (region.building?.type !== 'academy') return 'needsAcademy';
-    // A captured academy is no use until the ground settles (docs 6.4).
-    if (this.unrestAt(regionId) > 0) return 'unrest';
     if ((this.garrisonAt(regionId)[def.upgradeFrom] ?? 0) < count) return 'noSourceUnits';
     if (this.state.players[playerId].money < def.upgradeCost * count) return 'cannotAfford';
     return null;
@@ -1144,6 +1137,7 @@ export class GameEngine {
   setRegionOwner(regionId: string, owner: PlayerId | null): void {
     const region = this.state.regions[regionId];
     if (!region) throw new Error(`Unknown region id: ${regionId}`);
+    const previousOwner = region.owner;
     region.owner = owner;
     // Troops standing here don't change sides with the ground. A neutral
     // garrison had to be beaten to take the region, and a defender's army
@@ -1161,9 +1155,12 @@ export class GameEngine {
         l.playerId === owner ||
         this.state.marches.some((m) => m.legionId === l.id),
     );
-    // Someone else's camp doesn't survive the ground being taken: it's a tent
-    // full of their supplies, and whoever walks in burns it (docs 6.3). Other
-    // buildings are fixtures and change hands with the land.
+    // Nothing a player built survives losing the ground: taking a region razes
+    // what stood on it rather than handing it over (docs 5). So conquest wins
+    // you bare land — the loser's economy is destroyed, not inherited.
+    if (previousOwner !== null && previousOwner !== owner) region.building = undefined;
+    // A camp is its owner's wherever it stands, so it also burns when the
+    // ground goes to anyone else (docs 6.3).
     if (region.building?.type === 'camp' && region.building.owner !== owner) {
       region.building = undefined;
     }

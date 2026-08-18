@@ -21,7 +21,6 @@ interface MarchPanelProps {
 const REJECTION_KEY: Partial<Record<MarchRejection, TranslationKey>> = {
   passLocked: 'march.reject.passLocked',
   noRoute: 'march.reject.noRoute',
-  unrest: 'unrest.noTroops',
 };
 
 export function MarchPanel({
@@ -150,13 +149,7 @@ export function MarchPanel({
           )}
           {target && !route && (
             <p className="hint-text">
-              {t(
-                rejection === 'passLocked'
-                  ? 'march.reject.passLocked'
-                  : rejection === 'unrest'
-                    ? 'unrest.noTroops'
-                    : 'march.reject.noRoute',
-              )}
+              {t(rejection === 'passLocked' ? 'march.reject.passLocked' : 'march.reject.noRoute')}
             </p>
           )}
 

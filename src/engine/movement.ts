@@ -22,8 +22,6 @@ export type MarchRejection =
   | 'noUnits'
   | 'passLocked'
   | 'contested'
-  /** The destination is yours but still in unrest (docs 6.4). */
-  | 'unrest'
   | 'noRoute';
 
 /** Seconds for one hop between two adjacent regions. */

@@ -1,5 +1,5 @@
-// Unrest (docs/game-design.md 6.4): ground taken off another player is yours
-// but useless for five minutes — no building, no garrisoning.
+// Unrest (docs/game-design.md 6.4): ground taken off another player can't be
+// built on for five minutes. Troops are unaffected — it garrisons normally.
 import { describe, expect, it } from 'vitest';
 import { GameEngine, UNREST_SECONDS } from '../GameEngine';
 import { MARCH_SECONDS_PER_HOP } from '../movement';
@@ -82,39 +82,17 @@ describe('what it blocks', () => {
     expect(g.buildRejection(NEXT_DOOR, 'shop', 'p1'), 'settled, so build away').toBe(null);
   });
 
-  it('raises and upgrades no troops there', () => {
+  it('leaves troops alone: raise, upgrade and reinforce all still work', () => {
     const g = newGame();
     const region = takeNextDoorFrom(g, 'p2');
-    // Give it an academy and a core-style training site by hand: the point is
-    // the unrest check, not how the site got there.
+    // An academy planted by hand — the point is that unrest doesn't stop it.
     region.building = { type: 'academy', hp: 300 };
-    expect(g.trainRejection(NEXT_DOOR, 'p1', 'conscript', 1)).toBe('unrest');
-    expect(g.upgradeRejection(NEXT_DOOR, 'p1', 'volunteer', 1)).toBe('unrest');
+    expect(g.trainRejection(NEXT_DOOR, 'p1', 'conscript', 1)).toBe(null);
+    expect(g.upgradeRejection(NEXT_DOOR, 'p1', 'volunteer', 1)).toBe('noSourceUnits');
 
-    g.tick(UNREST_SECONDS + 1);
-    expect(g.trainRejection(NEXT_DOOR, 'p1', 'conscript', 1), 'settled').toBe(null);
-  });
-
-  it('takes no reinforcements, but troops may cross it', () => {
-    const g = newGame();
-    takeNextDoorFrom(g, 'p2');
     g.trainUnits(CORE, 'p1', 'militia', 4);
-
-    expect(g.marchRejection(CORE, NEXT_DOOR, 'p1', { militia: 4 }), 'no garrisoning').toBe(
-      'unrest',
-    );
-    expect(g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 4 })).toBe(null);
-
-    // Somewhere on the far side, reachable only through the unrest region.
-    const beyond = g.map
-      .region(NEXT_DOOR)
-      .neighbors.find((id) => id !== CORE && g.map.distance(CORE, id) === 2)!;
-    for (const n of g.map.region(beyond).neighbors) {
-      if (n !== NEXT_DOOR) g.state.regions[n].units = { militia: 5 };
-    }
-    g.state.regions[beyond].units = {};
-    expect(g.marchRoute(CORE, beyond, 'p1'), 'crossing it is fine').toEqual([NEXT_DOOR, beyond]);
-    expect(g.startMarch(CORE, beyond, 'p1', { militia: 4 })).not.toBe(null);
+    expect(g.marchRejection(CORE, NEXT_DOOR, 'p1', { militia: 4 })).toBe(null);
+    expect(g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 4 })).not.toBe(null);
   });
 
   it('leaves the region yours, army and food included', () => {
