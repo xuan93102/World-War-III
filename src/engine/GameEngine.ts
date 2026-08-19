@@ -1328,6 +1328,27 @@ export class GameEngine {
     return combined;
   }
 
+  /**
+   * What `viewerId` can honestly say about another player (docs 9).
+   *
+   * Fog covers the scoreboard as well as the map: an opponent's purse, their
+   * headcount and how much ground they hold are things you'd need eyes on to
+   * know. What's left is what you can actually see — the regions of theirs in
+   * sight, and their core's condition if you're looking at it.
+   */
+  intelOn(viewerId: PlayerId, targetId: PlayerId): { regions: number; coreHp: number | null } {
+    const target = this.state.players[targetId];
+    if (!target) return { regions: 0, coreHp: null };
+    if (viewerId === targetId) {
+      return { regions: this.ownedRegionCount(targetId), coreHp: target.coreHp };
+    }
+    const seen = this.visibleTo(viewerId);
+    return {
+      regions: this.ownedRegionIds(targetId).filter((id) => seen.has(id)).length,
+      coreHp: seen.has(target.coreRegionId) ? target.coreHp : null,
+    };
+  }
+
   // ---- bombardment (docs/game-design.md 6.5) -----------------------------
 
   /** Is there anything of another player's here to shell? */

@@ -1592,3 +1592,8 @@
   color: var(--text-dim);
   font-variant-numeric: tabular-nums;
 }
+
+/* Someone else's numbers, seen through the fog (docs 9). */
+.hud-hidden {
+  color: var(--text-dim);
+}

@@ -122,6 +122,9 @@ const zhTW = {
   'game.playerA': '玩家A',
   'game.playerB': '玩家B',
   'game.ai': '電腦',
+  'hud.unknown': '？',
+  'hud.seenOnly': '只計入你目前看得到的地塊，實際數量可能更多。',
+  'hud.hiddenNote': '對手的人口、金錢與糧食看不到——地圖上的視野不會告訴你他的國庫。',
 
   'result.victory': '勝利',
   'result.defeat': '落敗',
@@ -506,6 +509,9 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'game.playerA': '玩家A',
   'game.playerB': '玩家B',
   'game.ai': '电脑',
+  'hud.unknown': '？',
+  'hud.seenOnly': '只计入你目前看得到的地块，实际数量可能更多。',
+  'hud.hiddenNote': '对手的人口、金钱与粮食看不到——地图上的视野不会告诉你他的国库。',
 
   'result.victory': '胜利',
   'result.defeat': '落败',
@@ -890,6 +896,9 @@ const en: Record<keyof typeof zhTW, string> = {
   'game.playerA': 'Player A',
   'game.playerB': 'Player B',
   'game.ai': 'Computer',
+  'hud.unknown': '?',
+  'hud.seenOnly': 'Only the regions of theirs you can currently see. There may be more.',
+  'hud.hiddenNote': 'An opponent\'s population, gold and food are hidden — sight of the map tells you nothing about their treasury.',
 
   'result.victory': 'Victory',
   'result.defeat': 'Defeat',

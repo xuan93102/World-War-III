@@ -67,11 +67,11 @@ export function GameScreen({
   }, [engine, clockStopped]);
 
   const players = Object.values(engine.state.players);
-  const ownedCounts: Record<string, number> = {};
+  const intel: Record<string, ReturnType<GameEngine['intelOn']>> = {};
   const economies: Record<string, ReturnType<GameEngine['economy']>> = {};
   const populations: Record<string, number> = {};
   for (const p of players) {
-    ownedCounts[p.id] = engine.ownedRegionCount(p.id);
+    intel[p.id] = engine.intelOn(humanPlayerId, p.id);
     economies[p.id] = engine.economy(p.id);
     populations[p.id] = engine.population(p.id);
   }
@@ -82,7 +82,13 @@ export function GameScreen({
   return (
     <div className="app">
       <div className="game-topbar">
-        <HUD players={players} ownedCounts={ownedCounts} economies={economies} populations={populations} />
+        <HUD
+          players={players}
+          viewerId={humanPlayerId}
+          intel={intel}
+          economies={economies}
+          populations={populations}
+        />
         <MatchClock
           elapsedSeconds={engine.state.elapsedSeconds}
           secondsUntilPayout={engine.state.secondsUntilPayout}

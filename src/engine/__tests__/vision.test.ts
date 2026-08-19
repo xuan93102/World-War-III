@@ -136,6 +136,41 @@ describe('scouts', () => {
   });
 });
 
+describe('the scoreboard', () => {
+  it('tells you everything about yourself', () => {
+    const g = newGame();
+    const mine = g.intelOn('p1', 'p1');
+    expect(mine.regions).toBe(1);
+    expect(mine.coreHp).toBe(g.state.players.p1.coreHp);
+  });
+
+  it('counts only the enemy ground you can see, and hides their core', () => {
+    const g = newGame();
+    // They hold three regions; one of them borders us.
+    const border = g.map.region(CORE).neighbors[0];
+    const away = g.map.regions.find((r) => g.map.distance(CORE, r.id) === 4)!.id;
+    g.setRegionOwner(border, 'p2');
+    g.setRegionOwner(away, 'p2');
+
+    const seen = g.intelOn('p1', 'p2');
+    expect(seen.regions, 'their border region, not the one out of sight').toBe(1);
+    expect(seen.coreHp, 'no eyes on their core').toBe(null);
+  });
+
+  it('shows their core once you are looking at it', () => {
+    const g = newGame();
+    const theirCore = g.state.players.p2.coreRegionId;
+    g.state.legions.push({
+      id: 'besiegers',
+      playerId: 'p1',
+      units: { militia: 5 },
+      supply: 1,
+      regionId: theirCore,
+    });
+    expect(g.intelOn('p1', 'p2').coreHp).toBe(g.state.players.p2.coreHp);
+  });
+});
+
 describe('fog', () => {
   it('hides everything in a region you cannot see', () => {
     const g = newGame();
