@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { UNITS, UNIT_ORDER, isVehicle, totalUnits, type UnitType } from '../engine/units';
 import { SupplyBar } from './SupplyBar';
 import { useSettings } from '../settings/useSettings';
@@ -21,12 +22,37 @@ export function UnitPanel({
   onCancelProduction,
 }: UnitPanelProps) {
   const { t } = useSettings();
+  // How many to order at once. Shared by every row: each one clamps it to what
+  // it can actually deliver, so the same "10" means ten militia here and
+  // however many volunteers you have conscripts for there.
+  const [count, setCount] = useState(1);
   const region = engine.state.regions[regionId];
   // Only what this player is allowed to know is standing here (docs 9).
   const stationed = engine.garrisonSeenBy(regionId, playerId);
   const isMine = region.owner === playerId;
   // Supply belongs to the legion, so it only shows on ground you hold.
   const legion = engine.legionsAt(regionId).find((l) => l.playerId === playerId);
+
+  const money = engine.state.players[playerId].money;
+  const room = engine.populationRoom(playerId);
+  /** How many of a type this region could start on right now. */
+  const trainCapacity = (type: UnitType) => {
+    const cost = UNITS[type].trainCost;
+    if (cost === null) return 0;
+    return Math.max(0, Math.min(Math.floor(money / cost), room));
+  };
+  /** How many could be promoted — limited by who's standing here to promote. */
+  const upgradeCapacity = (type: UnitType) => {
+    const def = UNITS[type];
+    if (def.upgradeFrom === null || def.upgradeCost === null) return 0;
+    const source = engine.ownGarrisonAt(regionId, playerId)[def.upgradeFrom] ?? 0;
+    return Math.max(0, Math.min(Math.floor(money / def.upgradeCost), source));
+  };
+  // "Max" aims at whatever the panel could actually field the most of.
+  const mostAffordable = UNIT_ORDER.reduce(
+    (best, type) => Math.max(best, trainCapacity(type), upgradeCapacity(type)),
+    1,
+  );
 
   return (
     <section className="unit-section">
@@ -108,6 +134,25 @@ export function UnitPanel({
 
       {isMine && (
         <div className="unit-actions">
+          <div className="unit-count">
+            <span className="field-label">{t('unit.count')}</span>
+            <span className="march-stepper">
+              <button className="btn btn-sm" disabled={count <= 1} onClick={() => setCount(count - 1)}>
+                −
+              </button>
+              <span className="march-count">{count}</span>
+              <button className="btn btn-sm" onClick={() => setCount(count + 1)}>
+                +
+              </button>
+              <button className="btn btn-sm" onClick={() => setCount(count + 10)}>
+                +10
+              </button>
+              <button className="btn btn-sm" onClick={() => setCount(Math.max(1, mostAffordable))}>
+                {t('unit.max')}
+              </button>
+            </span>
+          </div>
+
           {UNIT_ORDER.map((type) => {
             const def = UNITS[type];
             const canTrainHere = def.trainCost !== null;
@@ -125,6 +170,11 @@ export function UnitPanel({
             const upgradable = def.upgradeFrom !== null && upgradeRejection !== 'needsAcademy';
             if (!trainable && !upgradable) return null;
 
+            // What this row would actually deliver for the current count —
+            // the engine clamps anyway, so the label may as well be honest.
+            const trainNow = Math.min(count, trainCapacity(type));
+            const upgradeNow = Math.min(count, upgradeCapacity(type));
+
             return (
               <div key={type} className="unit-row">
                 <span className="unit-row-name">
@@ -136,21 +186,23 @@ export function UnitPanel({
                 {trainable && (
                   <button
                     className="btn btn-sm"
-                    disabled={trainRejection !== null}
-                    onClick={() => onTrain(regionId, type, 1)}
+                    disabled={trainRejection !== null || trainNow < 1}
+                    onClick={() => onTrain(regionId, type, trainNow)}
                     title={trainRejection === 'noPopulationRoom' ? t('unit.noPopulationRoom') : undefined}
                   >
-                    {t('unit.train')} ({def.trainCost}・{def.buildSeconds}s)
+                    {t('unit.train')} ×{trainNow} ({def.trainCost! * trainNow}・
+                    {def.buildSeconds * trainNow}s)
                   </button>
                 )}
                 {upgradable && (
                   <button
                     className="btn btn-sm"
-                    disabled={upgradeRejection !== null}
-                    onClick={() => onUpgrade(regionId, type, 1)}
+                    disabled={upgradeRejection !== null || upgradeNow < 1}
+                    onClick={() => onUpgrade(regionId, type, upgradeNow)}
                     title={upgradeRejection === 'noSourceUnits' ? t('unit.noSourceUnits') : undefined}
                   >
-                    {t('unit.upgrade')} ({def.upgradeCost}・{def.upgradeSeconds}s)
+                    {t('unit.upgrade')} ×{upgradeNow} ({def.upgradeCost! * upgradeNow}・
+                    {def.upgradeSeconds * upgradeNow}s)
                   </button>
                 )}
               </div>
