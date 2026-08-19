@@ -52,8 +52,8 @@ describe('unit stats', () => {
   it('prices each tier as designed', () => {
     expect(UNITS.militia.trainCost, 'militia cost 1 at the core').toBe(1);
     expect(UNITS.conscript.trainCost, 'conscripts cost 2').toBe(2);
-    expect(UNITS.volunteer.upgradeCost, 'volunteer upgrade costs 2').toBe(2);
-    expect(UNITS.marine.upgradeCost, 'marine upgrade costs 3').toBe(3);
+    expect(UNITS.volunteer.upgradeCost, 'volunteer upgrade costs 3').toBe(3);
+    expect(UNITS.marine.upgradeCost, 'marine upgrade costs 4').toBe(4);
   });
 
   it('sums a mixed stack correctly', () => {
@@ -139,7 +139,9 @@ describe('the upgrade chain', () => {
     trainNow(g, academy, 'p1', 'conscript', 3);
     const before = g.state.players.p1.money;
     upgradeNow(g, academy, 'p1', 'volunteer', 3);
-    expect(before - g.state.players.p1.money, '3 upgrades at 2 gold').toBe(6);
+    expect(before - g.state.players.p1.money, '3 upgrades at 3 gold').toBe(
+      3 * UNITS.volunteer.upgradeCost!,
+    );
   });
 
   it('upgrading never changes headcount, so it needs no population room', () => {
