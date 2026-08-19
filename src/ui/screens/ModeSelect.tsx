@@ -3,10 +3,11 @@ import { useSettings } from '../../settings/useSettings';
 interface ModeSelectProps {
   onPvp: () => void;
   onPve: () => void;
+  onSpectate: () => void;
   onBack: () => void;
 }
 
-export function ModeSelect({ onPvp, onPve, onBack }: ModeSelectProps) {
+export function ModeSelect({ onPvp, onPve, onSpectate, onBack }: ModeSelectProps) {
   const { t } = useSettings();
   return (
     <div className="screen screen-centered">
@@ -19,6 +20,10 @@ export function ModeSelect({ onPvp, onPve, onBack }: ModeSelectProps) {
         <button className="card-option" onClick={onPvp}>
           <span className="card-option-title">{t('mode.pvp')}</span>
           <span className="card-option-desc">{t('mode.pvpDesc')}</span>
+        </button>
+        <button className="card-option" onClick={onSpectate}>
+          <span className="card-option-title">{t('mode.spectate')}</span>
+          <span className="card-option-desc">{t('mode.spectateDesc')}</span>
         </button>
       </div>
       <button className="btn btn-ghost" onClick={onBack}>

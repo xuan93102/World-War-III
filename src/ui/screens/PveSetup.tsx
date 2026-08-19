@@ -9,9 +9,12 @@ import { MapPicker } from '../MapPicker';
 interface PveSetupProps {
   playerColor: string;
   opponentColor: string;
+  /** Spectating puts a machine in the blue seat too, so it picks two skills. */
+  spectate?: boolean;
   onBegin: (options: {
     mapId: string;
     difficulty: AiDifficulty;
+    opponentDifficulty: AiDifficulty;
     playerCore: string;
     opponentCore: string;
   }) => void;
@@ -28,10 +31,11 @@ function pick<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
-export function PveSetup({ playerColor, opponentColor, onBegin, onBack }: PveSetupProps) {
+export function PveSetup({ playerColor, opponentColor, spectate = false, onBegin, onBack }: PveSetupProps) {
   const { t } = useSettings();
   const [mapId, setMapId] = useState(DEFAULT_MAP_ID);
   const [difficulty, setDifficulty] = useState<AiDifficulty>('normal');
+  const [opponentDifficulty, setOpponentDifficulty] = useState<AiDifficulty>('normal');
   const map = getMap(mapId);
 
   // Regions with no legal opponent placement can't be chosen at all — they'd
@@ -58,10 +62,10 @@ export function PveSetup({ playerColor, opponentColor, onBegin, onBack }: PveSet
 
   return (
     <div className="screen screen-centered">
-      <h2 className="screen-title">{t('pve.title')}</h2>
+      <h2 className="screen-title">{t(spectate ? 'spectate.title' : 'pve.title')}</h2>
 
       <div className="panel panel-wide">
-        <div className="field-label">{t('pve.startRegion')}</div>
+        <div className="field-label">{t(spectate ? 'spectate.startRegion' : 'pve.startRegion')}</div>
         <p className="hint-text">{t('pve.startRegionHint')}</p>
         <MapPicker
           map={map}
@@ -77,12 +81,12 @@ export function PveSetup({ playerColor, opponentColor, onBegin, onBack }: PveSet
         <div className="picker-footer">
           <span>
             <span className="swatch" style={{ background: playerColor }} />
-            {t('pve.selected')}：{map.region(playerCore).name}
+            {t(spectate ? 'spectate.blue' : 'pve.selected')}：{map.region(playerCore).name}
             {opponentCore && (
               <>
                 {'　'}
                 <span className="swatch" style={{ background: opponentColor }} />
-                {t('game.ai')}：{map.region(opponentCore).name}
+                {t(spectate ? 'spectate.red' : 'game.ai')}：{map.region(opponentCore).name}
               </>
             )}
           </span>
@@ -113,7 +117,9 @@ export function PveSetup({ playerColor, opponentColor, onBegin, onBack }: PveSet
       </div>
 
       <div className="panel">
-        <div className="field-label">{t('pve.difficulty')}</div>
+        <div className="field-label">
+          {t(spectate ? 'spectate.blueDifficulty' : 'pve.difficulty')}
+        </div>
         <div className="card-list">
           {DIFFICULTIES.map((d) => (
             <button
@@ -129,6 +135,25 @@ export function PveSetup({ playerColor, opponentColor, onBegin, onBack }: PveSet
         </div>
       </div>
 
+      {spectate && (
+        <div className="panel">
+          <div className="field-label">{t('spectate.redDifficulty')}</div>
+          <div className="card-list">
+            {DIFFICULTIES.map((d) => (
+              <button
+                key={d.id}
+                className={`card-option${opponentDifficulty === d.id ? ' is-selected' : ''}`}
+                onClick={() => setOpponentDifficulty(d.id)}
+                aria-pressed={opponentDifficulty === d.id}
+              >
+                <span className="card-option-title">{t(d.nameKey)}</span>
+                <span className="card-option-desc">{t(d.descKey)}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       <div className="button-row">
         <button className="btn btn-ghost" onClick={onBack}>
           {t('menu.back')}
@@ -137,10 +162,11 @@ export function PveSetup({ playerColor, opponentColor, onBegin, onBack }: PveSet
           className="btn btn-primary"
           disabled={!opponentCore}
           onClick={() =>
-            opponentCore && onBegin({ mapId, difficulty, playerCore, opponentCore })
+            opponentCore &&
+            onBegin({ mapId, difficulty, opponentDifficulty, playerCore, opponentCore })
           }
         >
-          {t('pve.begin')}
+          {t(spectate ? 'spectate.begin' : 'pve.begin')}
         </button>
       </div>
     </div>

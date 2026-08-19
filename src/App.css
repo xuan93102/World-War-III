@@ -1627,3 +1627,52 @@
   padding-top: 10px;
   border-top: 1px solid var(--border);
 }
+
+/* ---------- spectating a machine match (docs 13) ---------- */
+
+.speed-control {
+  display: inline-flex;
+  gap: 2px;
+}
+
+.speed-control .btn.is-selected {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.spectate-forces {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.spectate-force {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.spectate-force-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.spectate-supply {
+  font-style: normal;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.spectate-force-units {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 4px;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}

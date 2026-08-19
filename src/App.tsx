@@ -12,7 +12,7 @@ import { PveSetup } from './ui/screens/PveSetup';
 import { PvpLobby } from './ui/screens/PvpLobby';
 import { SettingsScreen } from './ui/screens/SettingsScreen';
 
-type Screen = 'menu' | 'mode' | 'pvp' | 'pve' | 'settings' | 'help' | 'game';
+type Screen = 'menu' | 'mode' | 'pvp' | 'pve' | 'spectate' | 'settings' | 'help' | 'game';
 
 const PLAYER_COLOR = '#4f8ef7';
 const OPPONENT_COLOR = '#e0524a';
@@ -21,6 +21,8 @@ const HUMAN_ID = 'p1';
 interface MatchConfig {
   setups: PlayerSetup[];
   canPause: boolean;
+  /** null when nobody is playing — both seats are machines and we watch. */
+  humanPlayerId: string | null;
 }
 
 function AppShell() {
@@ -30,18 +32,18 @@ function AppShell() {
   // Bumped on each new match so <GameScreen> remounts with a fresh engine.
   const [matchKey, setMatchKey] = useState(0);
 
-  const beginPve = ({
-    difficulty,
-    playerCore,
-    opponentCore,
-  }: {
+  interface SetupResult {
     mapId: string;
     difficulty: AiDifficulty;
+    opponentDifficulty: AiDifficulty;
     playerCore: string;
     opponentCore: string;
-  }) => {
+  }
+
+  const beginPve = ({ difficulty, playerCore, opponentCore }: SetupResult) => {
     setMatch({
       canPause: true,
+      humanPlayerId: HUMAN_ID,
       setups: [
         { id: HUMAN_ID, name: t('game.playerA'), color: PLAYER_COLOR, coreRegionId: playerCore },
         {
@@ -50,6 +52,38 @@ function AppShell() {
           color: OPPONENT_COLOR,
           coreRegionId: opponentCore,
           aiDifficulty: difficulty,
+        },
+      ],
+    });
+    setMatchKey((k) => k + 1);
+    setScreen('game');
+  };
+
+  // Both seats machine-run (docs 13). Nothing else about the match changes —
+  // the controllers take the same orders a human would.
+  const beginSpectate = ({
+    difficulty,
+    opponentDifficulty,
+    playerCore,
+    opponentCore,
+  }: SetupResult) => {
+    setMatch({
+      canPause: true,
+      humanPlayerId: null,
+      setups: [
+        {
+          id: HUMAN_ID,
+          name: t('spectate.blue'),
+          color: PLAYER_COLOR,
+          coreRegionId: playerCore,
+          aiDifficulty: difficulty,
+        },
+        {
+          id: 'p2',
+          name: t('spectate.red'),
+          color: OPPONENT_COLOR,
+          coreRegionId: opponentCore,
+          aiDifficulty: opponentDifficulty,
         },
       ],
     });
@@ -71,6 +105,7 @@ function AppShell() {
         <ModeSelect
           onPvp={() => setScreen('pvp')}
           onPve={() => setScreen('pve')}
+          onSpectate={() => setScreen('spectate')}
           onBack={() => setScreen('menu')}
         />
       );
@@ -85,6 +120,16 @@ function AppShell() {
           onBack={() => setScreen('mode')}
         />
       );
+    case 'spectate':
+      return (
+        <PveSetup
+          spectate
+          playerColor={PLAYER_COLOR}
+          opponentColor={OPPONENT_COLOR}
+          onBegin={beginSpectate}
+          onBack={() => setScreen('mode')}
+        />
+      );
     case 'settings':
       return <SettingsScreen onBack={() => setScreen('menu')} />;
     case 'help':
@@ -94,7 +139,7 @@ function AppShell() {
         <GameScreen
           key={matchKey}
           setups={match.setups}
-          humanPlayerId={HUMAN_ID}
+          humanPlayerId={match.humanPlayerId}
           canPause={match.canPause}
           onQuit={() => setScreen('menu')}
           onPlayAgain={() => setMatchKey((k) => k + 1)}

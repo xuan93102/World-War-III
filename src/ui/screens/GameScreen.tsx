@@ -8,14 +8,21 @@ import { TechPanel } from '../TechPanel';
 import { MatchClock } from '../MatchClock';
 import { Modal } from '../Modal';
 import { RegionPanel } from '../RegionPanel';
+import { SpectatePanel } from '../SpectatePanel';
 import { VillagerBar } from '../VillagerBar';
 
 const TICK_INTERVAL_MS = 200;
 
+/** Fast-forward, for watching a match nobody is steering. */
+const SPEEDS = [1, 2, 4, 8];
+
 interface GameScreenProps {
   setups: PlayerSetup[];
-  /** The seat the local player controls — decides victory vs defeat wording. */
-  humanPlayerId: string;
+  /**
+   * The seat the local player controls, or null when nobody is playing and
+   * the match is only being watched.
+   */
+  humanPlayerId: string | null;
   /** Pause is single-player only; a networked match can't unilaterally stop. */
   canPause: boolean;
   onQuit: () => void;
@@ -34,7 +41,11 @@ export function GameScreen({
   // starts a fresh game, so this deliberately ignores later `setups` changes.
   const engine = useMemo(() => new GameEngine(setups), []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Nobody in a seat: no fog, no orders, and the clock can be wound forward.
+  const spectating = humanPlayerId === null;
+
   const [, forceRender] = useState(0);
+  const [speed, setSpeed] = useState(1);
   const [selectedRegionId, setSelectedRegionId] = useState<string | null>(null);
   // While picking a march destination, map clicks choose the target instead of
   // changing which region the panel is showing — otherwise selecting the
@@ -67,25 +78,30 @@ export function GameScreen({
       const now = performance.now();
       const deltaSeconds = (now - lastTimeRef.current) / 1000;
       lastTimeRef.current = now;
-      engine.tick(deltaSeconds);
-      for (const seat of seatsRef.current) seat.update(engine, deltaSeconds);
+      const step = deltaSeconds * (spectating ? speed : 1);
+      engine.tick(step);
+      for (const seat of seatsRef.current) seat.update(engine, step);
       forceRender((n) => n + 1);
     }, TICK_INTERVAL_MS);
     return () => clearInterval(intervalId);
-  }, [engine, clockStopped]);
+  }, [engine, clockStopped, spectating, speed]);
 
   const players = Object.values(engine.state.players);
   const intel: Record<string, ReturnType<GameEngine['intelOn']>> = {};
   const economies: Record<string, ReturnType<GameEngine['economy']>> = {};
   const populations: Record<string, number> = {};
   for (const p of players) {
-    intel[p.id] = engine.intelOn(humanPlayerId, p.id);
+    intel[p.id] = engine.intelOn(spectating ? p.id : humanPlayerId, p.id);
     economies[p.id] = engine.economy(p.id);
     populations[p.id] = engine.population(p.id);
   }
 
   const humanWon = winner?.id === humanPlayerId;
   const wonder = engine.wonderCountdown();
+  // Watching sees the whole board — there is no seat to keep secrets from.
+  const visible = spectating
+    ? new Set(engine.map.regions.map((r) => r.id))
+    : engine.visibleTo(humanPlayerId!);
 
   return (
     <div className="app">
@@ -100,22 +116,42 @@ export function GameScreen({
         <MatchClock
           elapsedSeconds={engine.state.elapsedSeconds}
           secondsUntilPayout={engine.state.secondsUntilPayout}
-          nextPayout={economies[humanPlayerId]?.moneyPerMin ?? 0}
+          nextPayout={humanPlayerId ? (economies[humanPlayerId]?.moneyPerMin ?? 0) : 0}
         />
-        <VillagerBar
-          engine={engine}
-          playerId={humanPlayerId}
-          onBuy={(count) => {
-            engine.buyVillagers(humanPlayerId, count);
-            forceRender((n) => n + 1);
-          }}
-        />
+        {humanPlayerId && (
+          <VillagerBar
+            engine={engine}
+            playerId={humanPlayerId}
+            onBuy={(count) => {
+              engine.buyVillagers(humanPlayerId, count);
+              forceRender((n) => n + 1);
+            }}
+          />
+        )}
         <div className="topbar-actions">
-          <button className="btn btn-sm" onClick={() => setShowTech(true)} disabled={isOver}>
-            {t('tech.section')}
-            {engine.state.players[humanPlayerId].research.length > 0 &&
-              `・${engine.state.players[humanPlayerId].research.length}`}
-          </button>
+          {humanPlayerId && (
+            <button className="btn btn-sm" onClick={() => setShowTech(true)} disabled={isOver}>
+              {t('tech.section')}
+              {engine.state.players[humanPlayerId].research.length > 0 &&
+                `・${engine.state.players[humanPlayerId].research.length}`}
+            </button>
+          )}
+          {/* Wind the clock forward — a whole match takes a while to watch. */}
+          {spectating && (
+            <span className="speed-control">
+              {SPEEDS.map((x) => (
+                <button
+                  key={x}
+                  className={`btn btn-sm${speed === x ? ' is-selected' : ''}`}
+                  onClick={() => setSpeed(x)}
+                  aria-pressed={speed === x}
+                  disabled={isOver}
+                >
+                  ×{x}
+                </button>
+              ))}
+            </span>
+          )}
           {wonder && (
             <span className="wonder-countdown" style={{ color: engine.state.players[wonder.playerId]?.color }}>
               {t('game.wonderCountdown')} {Math.ceil(wonder.secondsLeft)}s
@@ -146,9 +182,13 @@ export function GameScreen({
             map={engine.map}
             marchRoute={null}
             routeFrom={null}
-            visible={engine.visibleTo(humanPlayerId)}
-            viewerId={humanPlayerId}
-            passesUnlocked={engine.hasMountainRoad(humanPlayerId)}
+            visible={visible}
+            viewerId={humanPlayerId ?? ''}
+            passesUnlocked={
+              spectating
+                ? players.some((p) => engine.hasMountainRoad(p.id))
+                : engine.hasMountainRoad(humanPlayerId!)
+            }
             onSelectRegion={(id) => setSelectedRegionId(id)}
           />
           {paused && !isOver && (
@@ -157,6 +197,9 @@ export function GameScreen({
             </div>
           )}
         </div>
+        {humanPlayerId === null ? (
+          <SpectatePanel engine={engine} players={players} selectedRegionId={selectedRegionId} />
+        ) : (
         <RegionPanel
           engine={engine}
           players={players}
@@ -223,9 +266,10 @@ export function GameScreen({
             forceRender((n) => n + 1);
           }}
         />
+        )}
       </div>
 
-      {showTech && !isOver && (
+      {showTech && !isOver && humanPlayerId && (
         <TechPanel
           engine={engine}
           playerId={humanPlayerId}
@@ -255,7 +299,13 @@ export function GameScreen({
 
       {isOver && (
         <Modal
-          title={humanWon ? t('result.victory') : t('result.defeat')}
+          title={
+            spectating
+              ? t('spectate.result').replace('{name}', winner?.name ?? '')
+              : humanWon
+                ? t('result.victory')
+                : t('result.defeat')
+          }
           actions={
             <>
               <button className="btn" onClick={onQuit}>
@@ -267,8 +317,18 @@ export function GameScreen({
             </>
           }
         >
-          <p className={`result-banner ${humanWon ? 'is-victory' : 'is-defeat'}`}>
-            {humanWon ? t('result.victoryDesc') : t('result.defeatDesc')}
+          <p
+            className={`result-banner ${spectating ? '' : humanWon ? 'is-victory' : 'is-defeat'}`}
+            style={spectating ? { color: winner?.color } : undefined}
+          >
+            {spectating
+              ? t('spectate.resultDesc').replace(
+                  '{n}',
+                  String(Math.round(engine.state.elapsedSeconds / 60)),
+                )
+              : humanWon
+                ? t('result.victoryDesc')
+                : t('result.defeatDesc')}
           </p>
         </Modal>
       )}

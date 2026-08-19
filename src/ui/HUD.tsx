@@ -5,8 +5,11 @@ import type { PlayerState } from '../engine/types';
 
 interface HUDProps {
   players: PlayerState[];
-  /** Whose scoreboard this is — everyone else is seen through the fog. */
-  viewerId: string;
+  /**
+   * Whose scoreboard this is — everyone else is seen through the fog. null
+   * when nobody is playing, which shows every seat in full (docs 13).
+   */
+  viewerId: string | null;
   /** What the viewer can honestly say about each player (docs 9). */
   intel: Record<string, { regions: number; coreHp: number | null }>;
   economies: Record<string, PlayerEconomy>;
@@ -24,7 +27,7 @@ export function HUD({ players, viewerId, intel, economies, populations }: HUDPro
   return (
     <div className="hud">
       {players.map((p) => {
-        const mine = p.id === viewerId;
+        const mine = viewerId === null || p.id === viewerId;
         const eco = economies[p.id];
         const seen = intel[p.id] ?? { regions: 0, coreHp: null };
         return (
