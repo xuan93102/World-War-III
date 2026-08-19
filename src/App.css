@@ -1606,3 +1606,14 @@
   gap: 8px;
   flex-wrap: wrap;
 }
+
+/* March orders: go, go and fight, go and take (docs 6.6). */
+.march-orders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.march-orders .btn-primary {
+  flex: 1 1 100%;
+}

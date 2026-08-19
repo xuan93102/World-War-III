@@ -14,7 +14,7 @@ interface MarchPanelProps {
   marchTarget: string | null;
   pickingMarch: boolean;
   onPickMarch: (picking: boolean) => void;
-  onMarch: (from: string, to: string, units: UnitCounts) => void;
+  onMarch: (from: string, to: string, units: UnitCounts, onArrival?: 'assault' | 'occupy') => void;
 }
 
 /** Only the reasons worth explaining — the rest can't be shown to the user. */
@@ -58,6 +58,12 @@ export function MarchPanel({
   };
 
   const chosen = totalUnits(counts);
+  const depart = (onArrival?: 'assault' | 'occupy') => {
+    if (!target) return;
+    onMarch(regionId, target, counts, onArrival);
+    setCounts({});
+    setNearby(null);
+  };
   const rejection = target ? engine.marchRejection(regionId, target, playerId, counts) : null;
   const canGo = target !== null && chosen > 0 && rejection === null;
   const totalSeconds = route ? engine.routeSeconds(regionId, route) : 0;
@@ -153,20 +159,36 @@ export function MarchPanel({
             </p>
           )}
 
-          <button
-            className="btn btn-primary btn-sm"
-            disabled={!canGo}
-            onClick={() => {
-              if (!target) return;
-              onMarch(regionId, target, counts);
-              setCounts({});
-              setNearby(null);
-            }}
-          >
-            {target && route
-              ? `${t('march.depart')}・${engine.map.region(target).name}（${totalSeconds}s）`
-              : t('march.pickTarget')}
-          </button>
+          {/* The order is given with the march, not on arrival: "go there and
+              take it" is one decision (docs 6.6). Each button sends the same
+              column with a different standing order. */}
+          <div className="march-orders">
+            <button
+              className="btn btn-primary btn-sm"
+              disabled={!canGo}
+              onClick={() => depart()}
+            >
+              {target && route
+                ? `${t('march.depart')}・${engine.map.region(target).name}（${totalSeconds}s）`
+                : t('march.pickTarget')}
+            </button>
+            <button
+              className="btn btn-sm btn-danger"
+              disabled={!canGo}
+              title={t('march.thenAssaultNote')}
+              onClick={() => depart('assault')}
+            >
+              {t('march.thenAssault')}
+            </button>
+            <button
+              className="btn btn-sm"
+              disabled={!canGo}
+              title={t('march.thenOccupyNote')}
+              onClick={() => depart('occupy')}
+            >
+              {t('march.thenOccupy')}
+            </button>
+          </div>
           <p className="hint-text">{t('march.hint')}</p>
         </>
       )}

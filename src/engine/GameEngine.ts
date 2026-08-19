@@ -437,7 +437,13 @@ export class GameEngine {
    * Sends part of a region's garrison to another region, however far. The army
    * walks the route one hop at a time.
    */
-  startMarch(from: string, to: string, playerId: PlayerId, units: UnitCounts): March | null {
+  startMarch(
+    from: string,
+    to: string,
+    playerId: PlayerId,
+    units: UnitCounts,
+    onArrival?: 'assault' | 'occupy',
+  ): March | null {
     if (this.marchRejection(from, to, playerId, units) !== null) return null;
     const route = this.marchRoute(from, to, playerId, units);
     if (!route || route.length === 0) return null;
@@ -451,6 +457,7 @@ export class GameEngine {
       units: { ...units },
       supply: garrison.supply,
       regionId: from,
+      onArrival,
     };
     this.state.legions.push(column);
     const [next, ...rest] = route;
@@ -837,6 +844,7 @@ export class GameEngine {
     units: UnitCounts,
     from: string,
     supply = FULL_SUPPLY,
+    onArrival?: 'assault' | 'occupy',
   ): void {
     const existing = this.battleAt(regionId);
     if (existing && existing.attackerId === attackerId) {
@@ -863,6 +871,7 @@ export class GameEngine {
       attackerCarry: 0,
       attackerSupply: supply,
       attackerFrom: from,
+      attackerOnArrival: onArrival,
       defenderId: holder?.playerId ?? null,
       defenderCarry: 0,
       secondsUntilRound: COMBAT_ROUND_SECONDS,
@@ -931,6 +940,9 @@ export class GameEngine {
       // optional order (docs 6.6) — you may fight through and walk on.
       const victors = this.legionFor(battle.regionId, battle.attackerId);
       victors.units = battle.attackerUnits;
+      // Whatever they were sent to do, they're still under those orders — an
+      // order to take the ground outlives the fight it started.
+      if (battle.attackerOnArrival) victors.onArrival = battle.attackerOnArrival;
       // They keep the bar they fought on. A fresh legion would default to full,
       // which would make winning a fight a free resupply.
       victors.supply = battle.attackerSupply;
@@ -966,6 +978,7 @@ export class GameEngine {
       const standing = this.legionFor(battle.regionId, playerId);
       standing.units = addUnits(standing.units, battle.attackerUnits);
       standing.supply = battle.attackerSupply;
+      standing.onArrival = undefined;
       this.state.battles = this.state.battles.filter((b) => b !== battle);
       return true;
     }
@@ -1013,7 +1026,14 @@ export class GameEngine {
     // set out, it walks straight into them.
     if (!this.canEnter(march.to, march.playerId)) {
       const column = this.state.legions.find((l) => l.id === march.legionId);
-      this.engage(march.to, march.playerId, march.units, march.from, column?.supply ?? FULL_SUPPLY);
+      this.engage(
+        march.to,
+        march.playerId,
+        march.units,
+        march.from,
+        column?.supply ?? FULL_SUPPLY,
+        column?.onArrival,
+      );
       this.state.legions = this.state.legions.filter((l) => l.id !== march.legionId);
       return true;
     }
@@ -1047,6 +1067,9 @@ export class GameEngine {
         if (had + joining > 0) {
           garrison.supply = (garrison.supply * had + column.supply * joining) / (had + joining);
         }
+        // The order came with the column, so it has to survive the column
+        // being folded into whatever was already standing here.
+        if (column.onArrival) garrison.onArrival = column.onArrival;
         garrison.units = addUnits(garrison.units, column.units);
         this.state.legions = this.state.legions.filter((l) => l !== column);
       }
@@ -1263,7 +1286,9 @@ export class GameEngine {
       const fallback =
         this.map.region(regionId).neighbors.find((id) => this.state.regions[id]?.owner === playerId) ??
         regionId;
-      this.engage(regionId, playerId, legion.units, fallback, legion.supply);
+      // Carry any standing order into the fight: an order to take the
+      // ground is what started this, and it outlives the battle.
+      this.engage(regionId, playerId, legion.units, fallback, legion.supply, legion.onArrival);
       this.state.legions = this.state.legions.filter((l) => l !== legion);
       return true;
     }
@@ -1975,6 +2000,34 @@ export class GameEngine {
       // Guns stop firing at rubble: check again now, rather than leaving the
       // order live until the next tick notices.
       if (!this.bombardTargetAt(target, legion.playerId)) legion.bombarding = undefined;
+    }
+
+    // Marching orders (docs 6.6): a column told to take ground carries that
+    // order through the fight it starts. Run before assaults so an order given
+    // this tick is acted on in the same tick it lands.
+    for (const legion of this.state.legions) {
+      const order = legion.onArrival;
+      if (order === undefined) continue;
+      if (this.state.marches.some((m) => m.legionId === legion.id)) continue;
+      const region = legion.regionId;
+
+      if (order === 'occupy' && this.occupyRejection(region, legion.playerId) === null) {
+        this.occupy(region, legion.playerId);
+        legion.onArrival = undefined;
+        continue;
+      }
+      if (this.assaultRejection(region, legion.playerId) === null) {
+        this.assault(region, legion.playerId);
+        // An assault order is done once given; an occupy order waits for the
+        // ground to be clear and tries again.
+        if (order === 'assault') legion.onArrival = undefined;
+        continue;
+      }
+      // Nothing to fight and nothing to take — the order has lapsed. A fight
+      // already in progress here is the exception: wait for it to finish.
+      if (!this.battleAt(region) && this.occupyRejection(region, legion.playerId) !== 'contested') {
+        legion.onArrival = undefined;
+      }
     }
 
     // Assaults (docs 6.6, 6.7). An army under orders batters what's built here

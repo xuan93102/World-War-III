@@ -22,7 +22,7 @@ interface RegionPanelProps {
   onBuild: (regionId: string, type: BuildingType) => void;
   onTrain: (regionId: string, type: UnitType, count: number) => void;
   onUpgrade: (regionId: string, type: UnitType, count: number) => void;
-  onMarch: (from: string, to: string, units: UnitCounts) => void;
+  onMarch: (from: string, to: string, units: UnitCounts, onArrival?: 'assault' | 'occupy') => void;
   onOccupy: (regionId: string) => void;
   onAssault: (regionId: string) => void;
   onStandDown: (regionId: string) => void;

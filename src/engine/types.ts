@@ -198,6 +198,15 @@ export interface Legion {
    * (docs 6.5). Holds the target's id while it lasts.
    */
   bombarding?: string;
+  /**
+   * What this column was told to do when it gets where it's going — set when
+   * the march is ordered, so "go there and take it" is one decision rather
+   * than a march now and a second visit to the panel later.
+   *
+   * It survives the fight it starts: an order to occupy garrisoned ground
+   * beats the garrison first and takes the ground after.
+   */
+  onArrival?: 'assault' | 'occupy';
 }
 
 /**
@@ -249,6 +258,8 @@ export interface Battle {
   attackerSupply: number;
   /** Where the attack came from, so breaking off has somewhere to go back to. */
   attackerFrom: string;
+  /** What the attacker was told to do here, kept for the survivors. */
+  attackerOnArrival?: 'assault' | 'occupy';
   /** null when the defender is a neutral garrison. */
   defenderId: PlayerId | null;
   defenderCarry: number;

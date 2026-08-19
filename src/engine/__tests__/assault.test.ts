@@ -71,6 +71,53 @@ describe('marching past a neutral garrison', () => {
   });
 });
 
+describe('orders given with the march', () => {
+  it('takes garrisoned neutral ground in one decision', () => {
+    const g = newGame();
+    g.state.regions[NEXT_DOOR].units = { militia: 4 };
+    trainNow(g, CORE, 'p1', 'militia', 15);
+    g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 15 }, 'occupy');
+
+    // Arrives, finds the 亂軍 in the way, and fights them without being told
+    // a second time.
+    g.tick(g.marchSeconds(CORE, NEXT_DOOR, 'p1') + 1);
+    expect(g.battleAt(NEXT_DOOR), 'the order started the fight').toBeDefined();
+    expect(g.state.regions[NEXT_DOOR].owner, 'not theirs yet').toBe(null);
+
+    // …and takes the ground once the fight is won, still without being asked.
+    g.tick(COMBAT_ROUND_SECONDS * 10);
+    expect(g.state.regions[NEXT_DOOR].owner, 'the order saw itself through').toBe('p1');
+  });
+
+  it('attacks a building it was sent at', () => {
+    const g = newGame();
+    g.setRegionOwner(NEXT_DOOR, 'p2');
+    g.state.regions[NEXT_DOOR].building = { type: 'shop', hp: BUILDINGS.shop.hp };
+    trainNow(g, CORE, 'p1', 'militia', 10);
+    g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 10 }, 'assault');
+
+    g.tick(g.marchSeconds(CORE, NEXT_DOOR, 'p1') + 1 + COMBAT_ROUND_SECONDS);
+    expect(g.state.regions[NEXT_DOOR].building!.hp, 'already swinging').toBeLessThan(
+      BUILDINGS.shop.hp,
+    );
+  });
+
+  it('lapses quietly when there is nothing to do on arrival', () => {
+    const g = newGame();
+    trainNow(g, CORE, 'p1', 'militia', 5);
+    // Empty neutral land: walking in claims it, so the occupy order has
+    // nothing left to carry out.
+    g.startMarch(CORE, NEXT_DOOR, 'p1', { militia: 5 }, 'occupy');
+    g.tick(g.marchSeconds(CORE, NEXT_DOOR, 'p1') + 2);
+
+    expect(g.state.regions[NEXT_DOOR].owner).toBe('p1');
+    expect(
+      g.legionsAt(NEXT_DOOR).find((l) => l.playerId === 'p1')!.onArrival,
+      'order cleared',
+    ).toBe(undefined);
+  });
+});
+
 describe('knocking a building down', () => {
   it('needs an enemy building to be there at all', () => {
     const g = newGame();
