@@ -1297,6 +1297,20 @@ export class GameEngine {
     return true;
   }
 
+  /**
+   * Tells whoever is standing here to take the ground, or to attack what's on
+   * it. Same machinery as an order given with a march (docs 6.6): the tick
+   * works it through, so "take it" beats the garrison first if there is one.
+   */
+  orderHere(regionId: string, playerId: PlayerId, order: 'assault' | 'occupy'): boolean {
+    const legion = this.legionsAt(regionId).find(
+      (l) => l.playerId === playerId && totalUnits(l.units) > 0,
+    );
+    if (!legion) return false;
+    legion.onArrival = order;
+    return true;
+  }
+
   /** Calls off a standing assault order. */
   standDown(regionId: string, playerId: PlayerId): boolean {
     const legion = this.legionsAt(regionId).find((l) => l.playerId === playerId);

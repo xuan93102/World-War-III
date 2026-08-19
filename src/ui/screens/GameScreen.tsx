@@ -39,8 +39,6 @@ export function GameScreen({
   // While picking a march destination, map clicks choose the target instead of
   // changing which region the panel is showing — otherwise selecting the
   // destination would navigate away from the panel issuing the order.
-  const [marchTarget, setMarchTarget] = useState<string | null>(null);
-  const [pickingMarch, setPickingMarch] = useState(false);
   const [showTech, setShowTech] = useState(false);
   const [paused, setPaused] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
@@ -146,19 +144,12 @@ export function GameScreen({
             players={players}
             selectedRegionId={selectedRegionId}
             map={engine.map}
-            marchRoute={
-              pickingMarch && selectedRegionId && marchTarget
-                ? engine.marchRoute(selectedRegionId, marchTarget, humanPlayerId)
-                : null
-            }
-            routeFrom={pickingMarch ? selectedRegionId : null}
+            marchRoute={null}
+            routeFrom={null}
             visible={engine.visibleTo(humanPlayerId)}
             viewerId={humanPlayerId}
             passesUnlocked={engine.hasMountainRoad(humanPlayerId)}
-            onSelectRegion={(id) => {
-              if (pickingMarch) setMarchTarget(id);
-              else setSelectedRegionId(id);
-            }}
+            onSelectRegion={(id) => setSelectedRegionId(id)}
           />
           {paused && !isOver && (
             <div className="pause-overlay">
@@ -171,12 +162,6 @@ export function GameScreen({
           players={players}
           humanPlayerId={humanPlayerId}
           selectedRegionId={selectedRegionId}
-          marchTarget={marchTarget}
-          pickingMarch={pickingMarch}
-          onPickMarch={(picking) => {
-            setPickingMarch(picking);
-            if (!picking) setMarchTarget(null);
-          }}
           onClaim={(regionId, owner) => {
             engine.setRegionOwner(regionId, owner);
             forceRender((n) => n + 1);
@@ -197,12 +182,8 @@ export function GameScreen({
             engine.retreat(regionId, humanPlayerId);
             forceRender((n) => n + 1);
           }}
-          onOccupy={(regionId) => {
-            engine.occupy(regionId, humanPlayerId);
-            forceRender((n) => n + 1);
-          }}
-          onAssault={(regionId) => {
-            engine.assault(regionId, humanPlayerId);
+          onOrderHere={(regionId, order) => {
+            engine.orderHere(regionId, humanPlayerId, order);
             forceRender((n) => n + 1);
           }}
           onStandDown={(regionId) => {
@@ -231,8 +212,6 @@ export function GameScreen({
           }}
           onMarch={(from, to, units, onArrival) => {
             engine.startMarch(from, to, humanPlayerId, units, onArrival);
-            setPickingMarch(false);
-            setMarchTarget(null);
             forceRender((n) => n + 1);
           }}
           onCancelBuild={(regionId) => {
