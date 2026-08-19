@@ -75,7 +75,17 @@ export function UnitPanel({
       {/* Troops that have left here, or are on their way in. They're on the
           road and count for neither region's garrison, so without this the
           origin just reads "no garrison" the instant an army sets off. */}
-      {engine.marchesInvolving(regionId).map((march) => {
+      {engine
+        .marchesInvolving(regionId)
+        // Someone else's column is only news if you can see one end of the hop
+        // it's walking (docs 9) — the same rule the map markers follow.
+        .filter(
+          (march) =>
+            march.playerId === playerId ||
+            engine.canSee(march.from, playerId) ||
+            engine.canSee(march.to, playerId),
+        )
+        .map((march) => {
         const outbound = march.from === regionId;
         return (
           <div key={march.id} className="unit-transit">

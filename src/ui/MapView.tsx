@@ -891,15 +891,21 @@ export function MapView({
                     sit side by side. In 3D these are the buildings themselves,
                     planted on the terrain; in 2D they're badges above the label. */}
                 {(() => {
-                  if (!visible.has(region.id)) return null;
+                  const seen = visible.has(region.id);
                   const badges: { key: IconKey; color?: string; dashed?: boolean }[] = [];
+                  // A core is a landmark, not a secret: the setup screen names
+                  // where each side starts, so hiding the citadel afterwards
+                  // just reads as "they haven't got one". What's *inside* it —
+                  // its condition, its garrison — stays fogged.
                   if (regionState.isCore) {
                     badges.push({
                       key: 'core',
                       color: regionState.owner ? colorByPlayer[regionState.owner] : undefined,
                     });
                   }
-                  const built = regionState.building?.type ?? regionState.construction?.type;
+                  const built = seen
+                    ? (regionState.building?.type ?? regionState.construction?.type)
+                    : undefined;
                   if (built) badges.push({ key: built, dashed: !regionState.building });
                   if (badges.length === 0) return null;
 

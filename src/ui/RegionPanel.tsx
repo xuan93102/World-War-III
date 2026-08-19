@@ -115,11 +115,19 @@ export function RegionPanel({
   return (
     <div className="region-panel">
       <h3>{region.name}</h3>
-      {/* Fog (docs 9): an unscouted region shows its name and nothing else. */}
+      {/* Fog (docs 9): an unscouted region shows its name and nothing else —
+          except a core, whose location is common knowledge from the setup
+          screen on. Its condition is still hidden. */}
       {!seen ? (
         <>
-          <p className="region-owner">{t('fog.unknown')}</p>
-          <p className="hint-text">{t('fog.note')}</p>
+          <p className="region-owner">
+            {regionState.isCore && owner
+              ? `${t('game.owner')}：${owner.name}（${t('game.core')}）`
+              : t('fog.unknown')}
+          </p>
+          <p className="hint-text">
+            {t(regionState.isCore ? 'fog.coreKnown' : 'fog.note')}
+          </p>
         </>
       ) : (
         <p className="region-owner">
