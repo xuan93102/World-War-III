@@ -18,7 +18,6 @@ interface RegionPanelProps {
   players: PlayerState[];
   humanPlayerId: string;
   selectedRegionId: string | null;
-  onClaim: (regionId: string, owner: string | null) => void;
   onBuild: (regionId: string, type: BuildingType) => void;
   onTrain: (regionId: string, type: UnitType, count: number) => void;
   onUpgrade: (regionId: string, type: UnitType, count: number) => void;
@@ -56,7 +55,6 @@ export function RegionPanel({
   players,
   humanPlayerId,
   selectedRegionId,
-  onClaim,
   onBuild,
   onTrain,
   onUpgrade,
@@ -331,18 +329,6 @@ export function RegionPanel({
           )}
         </section>
       )}
-
-      <section className="debug-section">
-        <div className="field-label">debug</div>
-        <div className="region-panel-actions">
-          {players.map((p) => (
-            <button key={p.id} style={{ borderColor: p.color }} onClick={() => onClaim(selectedRegionId, p.id)}>
-              {t('game.setOwner')}{p.name}
-            </button>
-          ))}
-          <button onClick={() => onClaim(selectedRegionId, null)}>{t('game.setNeutral')}</button>
-        </div>
-      </section>
     </div>
   );
 }

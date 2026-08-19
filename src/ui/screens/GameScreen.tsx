@@ -205,10 +205,6 @@ export function GameScreen({
           players={players}
           humanPlayerId={humanPlayerId}
           selectedRegionId={selectedRegionId}
-          onClaim={(regionId, owner) => {
-            engine.setRegionOwner(regionId, owner);
-            forceRender((n) => n + 1);
-          }}
           onBuild={(regionId, type) => {
             engine.startConstruction(regionId, type, humanPlayerId);
             forceRender((n) => n + 1);
