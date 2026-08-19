@@ -130,7 +130,7 @@ describe('knocking a building down', () => {
     expect(g.assaultRejection(NEXT_DOOR, 'p1')).toBe(null);
   });
 
-  it('grinds it down and destroys it, leaving the ground theirs', () => {
+  it('grinds it down, and the ground comes with it', () => {
     const g = newGame();
     g.setRegionOwner(NEXT_DOOR, 'p2');
     g.state.regions[NEXT_DOOR].building = { type: 'shop', hp: BUILDINGS.shop.hp };
@@ -145,7 +145,10 @@ describe('knocking a building down', () => {
 
     g.tick(COMBAT_ROUND_SECONDS * 25);
     expect(g.state.regions[NEXT_DOOR].building, 'down').toBe(undefined);
-    expect(g.state.regions[NEXT_DOOR].owner, 'ground still theirs — this was a raid').toBe('p2');
+    // Ground with something built on it is held from inside, so knocking the
+    // building down is what takes it (docs 6.6) — there is no separate step.
+    expect(g.state.regions[NEXT_DOOR].owner, 'and the ground with it').toBe('p1');
+    expect(g.unrestAt(NEXT_DOOR), 'taken off a player, so it riots (6.4)').toBeGreaterThan(0);
     expect(totalUnits(garrisonAt(g.state, NEXT_DOOR)), 'our raiders are still there').toBe(10);
   });
 

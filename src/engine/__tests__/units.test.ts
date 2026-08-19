@@ -95,10 +95,10 @@ describe('where units can be produced', () => {
   it('training costs gold and nothing else', () => {
     const g = newGame();
     g.state.players.p1.money = 10;
-    const before = g.state.players.p1.villagers;
+    const before = g.villagerCount('p1');
     expect(trainNow(g, 'taipei-1', 'p1', 'militia', 4)).toBe(4);
     expect(g.state.players.p1.money, '4 militia at 1 gold each').toBe(6);
-    expect(g.state.players.p1.villagers, 'villagers untouched').toBe(before);
+    expect(g.villagerCount('p1'), 'villagers untouched').toBe(before);
   });
 
   it('training is capped by gold on hand', () => {

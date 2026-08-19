@@ -7,6 +7,10 @@ import {
   buildingHp,
   GOLD_PER_VILLAGER_PER_MIN,
   GRANARY_FOOD_CAP,
+  MAX_STAFF,
+  STAFFABLE,
+  STAFF_BONUS,
+  STAFF_REPAIR_PER_SECOND,
   STACK_BONUS,
   VILLAGER_COST,
   WONDER_HOLD_SECONDS,
@@ -21,6 +25,7 @@ import {
   stackAtk,
   stackSpeed,
   totalUnits,
+  troopsOnly,
   type UnitCounts,
   type UnitType,
 } from './units';
@@ -198,6 +203,12 @@ export type OccupyRejection =
   | 'contested'
   /** A living core stands here — it has to be destroyed, not taken (docs 6.7). */
   | 'enemyCore'
+  /**
+   * Something of theirs is built here. Ground with a building on it isn't
+   * taken, it's stormed: knock the building down and the ground comes with it
+   * (docs 6.6).
+   */
+  | 'building'
   | 'alreadyYours';
 
 export type BuildRejection =
@@ -233,7 +244,6 @@ export class GameEngine {
         id: setup.id,
         name: setup.name,
         color: setup.color,
-        villagers: 0,
         populationCap: DEFAULT_POPULATION_CAP,
         money: STARTING_MONEY,
         food: 0,
@@ -308,7 +318,7 @@ export class GameEngine {
    * One per region per player, so reinforcements merge rather than piling up
    * as separate stacks — which keeps "the defender" a single target.
    */
-  private legionFor(regionId: string, playerId: PlayerId): Legion {
+  legionFor(regionId: string, playerId: PlayerId): Legion {
     const existing = this.legionsAt(regionId).find((l) => l.playerId === playerId);
     if (existing) return existing;
     const legion: Legion = {
@@ -573,7 +583,8 @@ export class GameEngine {
     if (this.cartsAvailable(playerId) < 1) return 'noCart';
     const player = this.state.players[playerId];
     if (!player) return 'noCart';
-    if (porters < 1 || porters > player.villagers) return 'noPorters';
+    if (porters < 1 || porters > (this.ownGarrisonAt(from, playerId).villager ?? 0))
+      return 'noPorters';
     if (player.food < CART_FOOD_LOAD) return 'noFood';
     if (from === to || !this.isCartTarget(to, playerId)) return 'noTarget';
     if (this.marchRoute(from, to, playerId) === null) {
@@ -612,7 +623,10 @@ export class GameEngine {
     if (!route || route.length === 0) return null;
 
     const player = this.state.players[playerId]!;
-    player.villagers -= porters;
+    // The porters come off the ground they set out from — they're people who
+    // were standing there, not a withdrawal from an abstract pool.
+    const origin = this.legionFor(from, playerId);
+    origin.units.villager = (origin.units.villager ?? 0) - porters;
     player.food -= CART_FOOD_LOAD;
 
     const [next, ...rest] = route;
@@ -698,8 +712,10 @@ export class GameEngine {
         cart.remainingSeconds += cart.totalSeconds;
         return false;
       }
-      // Home: the porters go back to earning and the cart is free again.
-      this.state.players[cart.playerId]!.villagers += cart.porters;
+      // Home: the porters are set down where the cart ends up, and go back
+      // to earning from there.
+      const home = this.legionFor(cart.to, cart.playerId);
+      home.units.villager = (home.units.villager ?? 0) + cart.porters;
       return true;
     }
 
@@ -1137,6 +1153,10 @@ export class GameEngine {
     if (region.isCore && region.owner !== null) return 'enemyCore';
     if (this.battleAt(regionId)) return 'contested';
     if (this.contestedAt(regionId, playerId)) return 'contested';
+    // Someone else's building standing here has to come down first — you
+    // can't walk onto ground that is still being held from inside.
+    const builder = this.buildingOwner(regionId);
+    if (region.building && builder !== null && builder !== playerId) return 'building';
     return null;
   }
 
@@ -1505,15 +1525,47 @@ export class GameEngine {
    * out would free up headroom to recruit a second army for nothing.
    */
   troopCount(playerId: PlayerId): number {
-    // Legions cover garrisons and columns on the road alike — a marching
-    // legion is still a legion. Only troops committed to a battle sit outside
-    // the list, so they're counted separately.
+    return this.countUnits(playerId, (units) => totalUnits(troopsOnly(units)));
+  }
+
+  /**
+   * Everyone on the map under this flag, civilians included — the number the
+   * population cap actually cares about.
+   */
+  unitCount(playerId: PlayerId): number {
+    return this.countUnits(playerId, totalUnits);
+  }
+
+  /**
+   * Villagers, wherever they are (docs 4.1, 4.2): walking, standing, fighting
+   * for their lives, or working inside a building. They are the only thing
+   * that earns, so this is the number the whole economy hangs off.
+   */
+  villagerCount(playerId: PlayerId): number {
+    const onFoot = this.countUnits(playerId, (units) => units.villager ?? 0);
+    return onFoot + this.staffCount(playerId);
+  }
+
+  /** Villagers working inside this player's buildings. */
+  staffCount(playerId: PlayerId): number {
+    return this.ownedRegionIds(playerId).reduce(
+      (sum, id) => sum + (this.state.regions[id].building?.staff ?? 0),
+      0,
+    );
+  }
+
+  /**
+   * Legions cover garrisons and columns on the road alike — a marching legion
+   * is still a legion. Only units committed to a battle sit outside the list,
+   * so they're counted separately.
+   */
+  private countUnits(playerId: PlayerId, measure: (units: UnitCounts) => number): number {
     const inLegions = this.state.legions
       .filter((l) => l.playerId === playerId)
-      .reduce((sum, l) => sum + totalUnits(l.units), 0);
+      .reduce((sum, l) => sum + measure(l.units), 0);
     const fighting = this.state.battles
       .filter((b) => b.attackerId === playerId)
-      .reduce((sum, b) => sum + totalUnits(b.attackerUnits), 0);
+      .reduce((sum, b) => sum + measure(b.attackerUnits), 0);
     return inLegions + fighting;
   }
 
@@ -1532,8 +1584,8 @@ export class GameEngine {
     // spoken for. Without this they'd arrive into a full population and the
     // cap sweep would quietly delete villagers to make room for them.
     return (
-      (player?.villagers ?? 0) +
-      this.troopCount(playerId) +
+      this.unitCount(playerId) +
+      this.staffCount(playerId) +
       researchers +
       this.porterCount(playerId) +
       this.queuedUnits(playerId)
@@ -1712,8 +1764,12 @@ export class GameEngine {
     const counts = this.buildingCounts(playerId);
     const aiMult = player?.aiDifficulty ? AI_OUTPUT_MULTIPLIER[player.aiDifficulty] : 1;
 
-    const shopMult = 1 + STACK_BONUS * (counts.shop ?? 0);
-    const farmMult = 1 + STACK_BONUS * (counts.farm ?? 0);
+    // A building is worth what its crew makes it worth (docs 4.2): nothing
+    // standing empty, and the old flat bonus when it's fully staffed. Housing
+    // is the exception — a roof houses people whether or not anyone works
+    // under it — so it keeps its flat contribution.
+    const shopMult = 1 + this.outputOf(playerId, 'shop');
+    const farmMult = 1 + this.outputOf(playerId, 'farm');
     // Housing is limit-capped at build time, but clamp here too so the number
     // shown can never disagree with the rule.
     const housingCount = Math.min(counts.housing ?? 0, BUILDING_LIMITS.housing ?? Infinity);
@@ -1729,7 +1785,7 @@ export class GameEngine {
       // Only villagers earn — population doing other jobs (soldiers,
       // researchers) contributes nothing.
       moneyPerMin:
-        (player?.villagers ?? 0) *
+        this.villagerCount(playerId) *
         GOLD_PER_VILLAGER_PER_MIN *
         shopMult *
         moneyTechMultiplier(techs) *
@@ -1754,14 +1810,84 @@ export class GameEngine {
     );
   }
 
-  /** Recruits villagers at VILLAGER_COST each. Returns how many were bought. */
+  /**
+   * Recruits villagers at VILLAGER_COST each. Returns how many were bought.
+   *
+   * They appear at the core and stand there (docs 4.2) — in the open, worth
+   * one hit point each. Getting them somewhere useful, and inside something,
+   * is the player's problem.
+   */
   buyVillagers(playerId: PlayerId, count: number): number {
     const affordable = Math.min(count, this.maxAffordableVillagers(playerId));
     if (affordable <= 0) return 0;
     const player = this.state.players[playerId];
     player.money -= affordable * VILLAGER_COST;
-    player.villagers += affordable;
+    const home = this.legionFor(player.coreRegionId, playerId);
+    home.units.villager = (home.units.villager ?? 0) + affordable;
     return affordable;
+  }
+
+  // ---- villagers at work (docs/game-design.md 4.2) -----------------------
+
+  /** Why villagers here can't move into the building, or null if they can. */
+  staffRejection(
+    regionId: string,
+    playerId: PlayerId,
+    count = 1,
+  ): 'noBuilding' | 'notStaffable' | 'notYours' | 'full' | 'noVillagers' | null {
+    const region = this.state.regions[regionId];
+    if (!region?.building) return 'noBuilding';
+    if (!STAFFABLE.includes(region.building.type)) return 'notStaffable';
+    if (region.owner !== playerId) return 'notYours';
+    if ((region.building.staff ?? 0) + count > MAX_STAFF) return 'full';
+    if ((this.ownGarrisonAt(regionId, playerId).villager ?? 0) < count) return 'noVillagers';
+    return null;
+  }
+
+  /** Moves villagers standing here into the building. Returns how many went in. */
+  staffBuilding(regionId: string, playerId: PlayerId, count = 1): number {
+    const region = this.state.regions[regionId];
+    if (!region?.building || this.staffRejection(regionId, playerId, 1) !== null) return 0;
+    const moving = Math.min(
+      count,
+      MAX_STAFF - (region.building.staff ?? 0),
+      this.ownGarrisonAt(regionId, playerId).villager ?? 0,
+    );
+    if (moving <= 0) return 0;
+    const legion = this.legionFor(regionId, playerId);
+    legion.units.villager = (legion.units.villager ?? 0) - moving;
+    region.building.staff = (region.building.staff ?? 0) + moving;
+    return moving;
+  }
+
+  /** Turns villagers back out of the building, onto the ground it stands on. */
+  unstaffBuilding(regionId: string, playerId: PlayerId, count = 1): number {
+    const region = this.state.regions[regionId];
+    if (!region?.building || region.owner !== playerId) return 0;
+    const leaving = Math.min(count, region.building.staff ?? 0);
+    if (leaving <= 0) return 0;
+    region.building.staff = (region.building.staff ?? 0) - leaving;
+    const legion = this.legionFor(regionId, playerId);
+    legion.units.villager = (legion.units.villager ?? 0) + leaving;
+    return leaving;
+  }
+
+  /**
+   * What a building is worth right now: nothing unstaffed, and STAFF_BONUS per
+   * villager inside up to a full crew (docs 4.2). A fully staffed building is
+   * worth exactly what a building used to be worth flat.
+   */
+  buildingOutput(regionId: string): number {
+    const building = this.state.regions[regionId]?.building;
+    if (!building) return 0;
+    return Math.min(building.staff ?? 0, MAX_STAFF) * STAFF_BONUS;
+  }
+
+  /** Summed output of every building of a type this player holds. */
+  private outputOf(playerId: PlayerId, type: BuildingType): number {
+    return this.ownedRegionIds(playerId)
+      .filter((id) => this.state.regions[id].building?.type === type)
+      .reduce((sum, id) => sum + this.buildingOutput(id), 0);
   }
 
   /** Why `playerId` can't start `type` here, or null if they can. */
@@ -2089,11 +2215,31 @@ export class GameEngine {
       const building = region.building!;
       building.hp -= damage;
       if (building.hp <= 0) {
-        // Down with everything in it — a depot's stores go with the depot.
+        // Down with everything in it — a depot's stores go with the depot,
+        // and the crew goes with the building (docs 4.2).
         region.building = undefined;
         region.wonderHeldSeconds = undefined;
         legion.assaulting = false;
+        // Knocking the building down is what takes the ground (docs 6.6):
+        // there is nothing left to hold it with.
+        if (region.owner !== legion.playerId) {
+          const takenFromPlayer = region.owner !== null;
+          this.setRegionOwner(regionId, legion.playerId);
+          if (takenFromPlayer) region.unrestSeconds = UNREST_SECONDS;
+        }
       }
+    }
+
+    // A crew patches its building back up while it's being knocked down
+    // (docs 4.2). Slow enough that an army still takes the place, fast enough
+    // that a raiding party can't nibble a staffed building to death.
+    for (const region of Object.values(this.state.regions)) {
+      const building = region.building;
+      const staff = building?.staff ?? 0;
+      if (!building || staff <= 0 || region.owner === null) continue;
+      const full = buildingHp(building.type, this.ownedTechs(region.owner));
+      if (building.hp >= full) continue;
+      building.hp = Math.min(full, building.hp + staff * STAFF_REPAIR_PER_SECOND * deltaSeconds);
     }
 
     // A depot hands out what it's holding to its owner's troops standing on it
@@ -2199,8 +2345,13 @@ export class GameEngine {
       // A lowered cap (e.g. housing demolished or captured) sheds headcount.
       // Villagers absorb it, since they're the uncommitted population —
       // troops already in the field aren't disbanded by a housing loss.
-      const over = this.population(player.id) - player.populationCap;
-      if (over > 0) player.villagers = Math.max(0, player.villagers - over);
+      // A lowered cap sheds villagers standing in the open at the core —
+      // they're the uncommitted population. People at work stay at work.
+      const over = Math.floor(this.population(player.id)) - player.populationCap;
+      if (over > 0) {
+        const home = this.legionFor(player.coreRegionId, player.id);
+        home.units.villager = Math.max(0, (home.units.villager ?? 0) - over);
+      }
       // Food still accrues continuously; only gold is batched.
       player.food = Math.min(eco.foodCap, player.food + eco.foodPerMin * minutes);
     }

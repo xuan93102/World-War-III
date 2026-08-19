@@ -1,5 +1,12 @@
 import { useState } from 'react';
-import { UNITS, UNIT_ORDER, isVehicle, totalUnits, type UnitType } from '../engine/units';
+import {
+  UNITS,
+  UNIT_ORDER,
+  isCivilian,
+  isVehicle,
+  totalUnits,
+  type UnitType,
+} from '../engine/units';
 import { SupplyBar } from './SupplyBar';
 import { useSettings } from '../settings/useSettings';
 import type { GameEngine } from '../engine/GameEngine';
@@ -153,7 +160,7 @@ export function UnitPanel({
             </span>
           </div>
 
-          {UNIT_ORDER.map((type) => {
+          {UNIT_ORDER.filter((type) => !isCivilian(type)).map((type) => {
             const def = UNITS[type];
             const canTrainHere = def.trainCost !== null;
             const trainRejection = canTrainHere

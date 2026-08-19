@@ -115,16 +115,17 @@ describe('standing on ground you do not hold', () => {
 });
 
 describe('what taking ground costs the loser', () => {
-  it('razes whatever they built on it', () => {
+  it('cannot simply be walked onto while their building still stands', () => {
     const g = newGame();
     g.setRegionOwner(NEXT_DOOR, 'p2');
     g.state.regions[NEXT_DOOR].building = { type: 'shop', hp: 250 };
     send(g, NEXT_DOOR, 4);
 
-    expect(g.occupy(NEXT_DOOR, 'p1')).toBe(true);
-    expect(g.state.regions[NEXT_DOOR].building, 'their shop burns with the ground').toBe(
-      undefined,
-    );
+    // Ground is held from inside what's built on it (docs 6.6): standing next
+    // to a shop is not taking the ground it stands on.
+    expect(g.occupyRejection(NEXT_DOOR, 'p1')).toBe('building');
+    expect(g.occupy(NEXT_DOOR, 'p1')).toBe(false);
+    expect(g.state.regions[NEXT_DOOR].owner, 'still theirs').toBe('p2');
   });
 
   it('leaves neutral ground and your own buildings alone', () => {

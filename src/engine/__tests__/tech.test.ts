@@ -122,11 +122,11 @@ describe('researchers', () => {
   it('take time, and take a population slot without costing a villager', () => {
     const g = withBuilding(newGame(), 'school');
     g.buyVillagers('p1', 20);
-    const villagers = g.state.players.p1.villagers;
+    const villagers = g.villagerCount('p1');
     const population = g.population('p1');
 
     g.trainResearcher('p1');
-    expect(g.state.players.p1.villagers, 'villagers untouched').toBe(villagers);
+    expect(g.villagerCount('p1'), 'villagers untouched').toBe(villagers);
     expect(g.population('p1'), 'but the slot is taken immediately').toBe(population + 1);
     expect(g.state.players.p1.researchers, 'not trained yet').toBe(0);
 

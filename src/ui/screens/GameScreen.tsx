@@ -225,6 +225,14 @@ export function GameScreen({
             engine.orderHere(regionId, humanPlayerId, order);
             forceRender((n) => n + 1);
           }}
+          onStaff={(regionId, count) => {
+            engine.staffBuilding(regionId, humanPlayerId, count);
+            forceRender((n) => n + 1);
+          }}
+          onUnstaff={(regionId, count) => {
+            engine.unstaffBuilding(regionId, humanPlayerId, count);
+            forceRender((n) => n + 1);
+          }}
           onStandDown={(regionId) => {
             engine.standDown(regionId, humanPlayerId);
             forceRender((n) => n + 1);

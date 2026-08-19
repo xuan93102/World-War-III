@@ -30,8 +30,10 @@ describe('an AI left alone', () => {
     const { engine, ai } = newMatch();
     play(engine, ai, 3);
 
-    const me = engine.state.players.ai;
-    expect(me.villagers, 'bought villagers with the starting purse').toBeGreaterThan(10);
+    expect(
+      engine.villagerCount('ai'),
+      'bought villagers with the starting purse',
+    ).toBeGreaterThan(10);
     expect(engine.economy('ai').moneyPerMin, 'which is income').toBeGreaterThan(10);
   });
 

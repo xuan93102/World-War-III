@@ -2,7 +2,15 @@ import type { BuildingType } from '../engine/buildings';
 import type { GameEngine } from '../engine/GameEngine';
 import type { TechId } from '../engine/tech';
 import type { AiDifficulty, PlayerId } from '../engine/types';
-import { UNITS, UNIT_ORDER, totalUnits, type UnitCounts } from '../engine/units';
+import { MAX_STAFF, STAFFABLE } from '../engine/buildings';
+import {
+  UNITS,
+  UNIT_ORDER,
+  isCivilian,
+  totalUnits,
+  troopsOnly,
+  type UnitCounts,
+} from '../engine/units';
 
 /** The cheapest `count` units out of a stack — chaff marches, elites hold. */
 function take(units: UnitCounts, count: number): UnitCounts {
@@ -10,6 +18,9 @@ function take(units: UnitCounts, count: number): UnitCounts {
   let left = count;
   for (const type of UNIT_ORDER) {
     if (left <= 0) break;
+    // Villagers are not chaff. They travel when they're sent somewhere to
+    // work, never as the cheap half of a column.
+    if (isCivilian(type)) continue;
     const have = units[type] ?? 0;
     if (have <= 0) continue;
     const taking = Math.min(have, left);
@@ -137,6 +148,7 @@ export class AiController {
     this.finishBusiness(engine);
     this.spend(engine, doctrine);
     this.build(engine);
+    this.staffBuildings(engine);
     this.study(engine);
     this.raiseTroops(engine, doctrine);
     this.moveArmies(engine, doctrine);
@@ -170,7 +182,8 @@ export class AiController {
     const me = engine.state.players[this.playerId];
     // Nothing is held back until the loop is turning — the opening ten gold
     // has to become ten villagers or there is no second minute.
-    const reserve = me.villagers >= doctrine.economyFirst ? doctrine.reserve : 0;
+    const reserve =
+      engine.villagerCount(this.playerId) >= doctrine.economyFirst ? doctrine.reserve : 0;
     const spare = me.money - reserve;
     if (spare <= 0) return;
 
@@ -225,6 +238,47 @@ export class AiController {
           return;
         }
       }
+    }
+  }
+
+  /**
+   * Gets villagers into the buildings that need them (docs 4.2).
+   *
+   * A building with nobody in it produces nothing at all now, so this is not
+   * an optimisation — an AI that skips it has no economy. Villagers are born
+   * at the core, so the job has two halves: put to work whoever is already
+   * standing on a building, and walk the rest to the nearest one that's short.
+   */
+  private staffBuildings(engine: GameEngine): void {
+    const mine = engine.ownedRegionIds(this.playerId);
+    for (const id of mine) {
+      if (engine.staffRejection(id, this.playerId, 1) === null) {
+        engine.staffBuilding(id, this.playerId, MAX_STAFF);
+      }
+    }
+
+    const short = mine.filter((id) => {
+      const building = engine.state.regions[id].building;
+      return (
+        building !== undefined &&
+        STAFFABLE.includes(building.type) &&
+        (building.staff ?? 0) < MAX_STAFF
+      );
+    });
+    if (short.length === 0) return;
+
+    // Anywhere of ours with villagers standing idle — the core, mostly, since
+    // that's where they appear.
+    for (const from of mine) {
+      const idle = engine.ownGarrisonAt(from, this.playerId).villager ?? 0;
+      if (idle <= 0) continue;
+      const target = short
+        .filter((id) => id !== from && engine.marchRoute(from, id, this.playerId) !== null)
+        .sort((a, b) => engine.map.distance(from, a) - engine.map.distance(from, b))[0];
+      if (!target) continue;
+      const wanted = MAX_STAFF - (engine.state.regions[target].building?.staff ?? 0);
+      engine.startMarch(from, target, this.playerId, { villager: Math.min(idle, wanted) });
+      return;
     }
   }
 
@@ -393,7 +447,10 @@ export class AiController {
   private myLegions(engine: GameEngine) {
     const marching = new Set(engine.state.marches.map((m) => m.legionId));
     return engine.state.legions.filter(
-      (l) => l.playerId === this.playerId && !marching.has(l.id) && totalUnits(l.units) > 0,
+      (l) =>
+        l.playerId === this.playerId &&
+        !marching.has(l.id) &&
+        totalUnits(troopsOnly(l.units)) > 0,
     );
   }
 
@@ -409,12 +466,13 @@ export class AiController {
     // bigger one is waiting forever. Whatever is fielded *is* the offensive.
     const capped = engine.populationRoom(this.playerId) <= 0;
     const biggest = legions.reduce(
-      (best, l) => (totalUnits(l.units) > totalUnits(best?.units ?? {}) ? l : best),
+      (best, l) =>
+        totalUnits(troopsOnly(l.units)) > totalUnits(troopsOnly(best?.units ?? {})) ? l : best,
       legions[0],
     );
 
     for (const legion of legions) {
-      const strength = totalUnits(legion.units);
+      const strength = totalUnits(troopsOnly(legion.units));
       // The core keeps a garrison back; everywhere else, anything idle moves.
       const spare = legion.regionId === home ? strength - doctrine.homeGuard : strength;
       if (spare <= 0) continue;

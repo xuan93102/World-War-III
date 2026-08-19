@@ -31,11 +31,11 @@ describe('a queued vehicle holds its population slot', () => {
 
     // Fill what's left, then let the tanks arrive.
     g.buyVillagers('p1', 10000);
-    const villagers = g.state.players.p1.villagers;
+    const villagers = g.villagerCount('p1');
     g.tick(UNITS.tank.buildSeconds * 5 + 10);
 
     expect(g.ownGarrisonAt(CORE, 'p1').tank, 'all five delivered').toBe(5);
-    expect(g.state.players.p1.villagers, 'and nobody was quietly deleted').toBe(villagers);
+    expect(g.villagerCount('p1'), 'and nobody was quietly deleted').toBe(villagers);
     expect(g.population('p1')).toBeLessThanOrEqual(cap);
   });
 

@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { CART_FOOD_LOAD } from '../supply';
-import { trainNow } from './helpers';
+import { trainNow, placeVillagers } from './helpers';
 
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
@@ -107,7 +107,7 @@ describe('pitching one', () => {
 describe('as a depot', () => {
   it('takes a cart’s load and hands it to the army camped there', () => {
     const g = newGame();
-    g.state.players.p1.villagers = 10;
+    placeVillagers(g, 'p1', 10);
     g.startConstruction(CORE, 'granary', 'p1');
     g.tick(46);
 

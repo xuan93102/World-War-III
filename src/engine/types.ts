@@ -49,7 +49,19 @@ export interface RegionState {
    * doesn't hold (docs 6.3) — every other building belongs to whoever owns the
    * region. Without it, a camp pitched on neutral land would have no side.
    */
-  building?: { type: BuildingType; hp: number; stock?: number; owner?: PlayerId };
+  building?: {
+    type: BuildingType;
+    hp: number;
+    stock?: number;
+    owner?: PlayerId;
+    /**
+     * Villagers working inside (docs 4.2). They are the building's whole
+     * bonus — an unstaffed building does nothing — they patch it up while it
+     * is being battered, and they are safe from everything except the
+     * building falling on them.
+     */
+    staff?: number;
+  };
   /** In-progress build, if any. Mutually exclusive with `building`. */
   construction?: {
     type: BuildingType;
@@ -76,12 +88,6 @@ export interface PlayerState {
   id: PlayerId;
   name: string;
   color: string;
-  /**
-   * Villagers on the payroll — the only population that earns gold. Troops
-   * are counted separately (they live on regions); total population is
-   * villagers + troops, via GameEngine.population().
-   */
-  villagers: number;
   populationCap: number;
   money: number;
   food: number;

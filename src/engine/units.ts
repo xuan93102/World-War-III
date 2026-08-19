@@ -1,6 +1,13 @@
+import { VILLAGER_COST } from './buildings';
 import type { TranslationKey } from '../settings/translations';
 
 export type UnitType =
+  /**
+   * The economy, on legs (docs 4.1). A villager is a person before it is a
+   * number: it is trained at the core, it walks, and an enemy column will
+   * cut it down. Being in UnitCounts is what gives it all of that for free.
+   */
+  | 'villager'
   | 'militia'
   | 'conscript'
   | 'volunteer'
@@ -65,6 +72,23 @@ export interface UnitDef {
  * military infrastructure. They're also what garrisons neutral land.
  */
 export const UNITS: Record<UnitType, UnitDef> = {
+  villager: {
+    type: 'villager',
+    nameKey: 'unit.villager',
+    // No teeth and no hide: a villager caught in the open is a casualty, not
+    // a combatant. What it does is earn, and staff what's built.
+    atk: 0,
+    hp: 1,
+    trainCost: VILLAGER_COST,
+    trainAt: 'core',
+    upgradeFrom: null,
+    upgradeCost: null,
+    speed: 1,
+    range: 0,
+    buildSeconds: 0,
+    upgradeSeconds: 0,
+    requiresTech: null,
+  },
   militia: {
     type: 'militia',
     nameKey: 'unit.militia',
@@ -184,6 +208,8 @@ export const UNITS: Record<UnitType, UnitDef> = {
  * and a mortar caught on its own dies first because it's the only thing there.
  */
 export const UNIT_ORDER: UnitType[] = [
+  // First to fall: a stack loses its civilians before it loses a soldier.
+  'villager',
   'militia',
   'conscript',
   'volunteer',
@@ -194,6 +220,21 @@ export const UNIT_ORDER: UnitType[] = [
   // stack loses — and the first when it's travelling alone.
   'scout',
 ];
+
+/** Nobody who fights: civilians travel in the same stacks but aren't troops. */
+export function isCivilian(type: UnitType): boolean {
+  return type === 'villager';
+}
+
+/** The fighting part of a stack — what an army is, minus the people it carries. */
+export function troopsOnly(counts: UnitCounts | undefined): UnitCounts {
+  if (!counts) return {};
+  const out: UnitCounts = {};
+  for (const type of UNIT_ORDER) {
+    if (!isCivilian(type) && (counts[type] ?? 0) > 0) out[type] = counts[type];
+  }
+  return out;
+}
 
 /** Built at the arsenal rather than trained (docs 6.5). */
 export const VEHICLE_TYPES: UnitType[] = ['tank', 'mortar'];

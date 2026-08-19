@@ -1654,3 +1654,39 @@
   font-size: 0.8rem;
   color: var(--text-dim);
 }
+
+/* ---------- villagers at work (docs 4.2) ---------- */
+
+.staff-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.staff-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-size: 0.85rem;
+}
+
+.staff-crew {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.staff-bonus {
+  font-size: 0.78rem;
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.staff-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}

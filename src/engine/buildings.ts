@@ -201,6 +201,31 @@ export const BUILDING_ORDER: BuildingType[] = [
 export const STACK_BONUS = 0.2;
 
 /**
+ * What one villager working inside a building is worth (docs 4.2). Ten of
+ * them — a full crew — come to STACK_BONUS, so a properly staffed building is
+ * worth exactly what a building used to be worth for free.
+ */
+export const STAFF_BONUS = 0.02;
+
+/** Villagers one building can put to work. */
+export const MAX_STAFF = 10;
+
+/**
+ * Hit points a villager patches back per second while its building is being
+ * knocked down (docs 4.2). Assaults deal atk/COMBAT_ROUND_SECONDS per second,
+ * so a full crew shrugs off about 25 points of attack — a raiding party, not
+ * an army.
+ */
+export const STAFF_REPAIR_PER_SECOND = 0.5;
+
+/**
+ * Buildings villagers can work in: everything that produces something.
+ * Housing is a roof, not a job, and the military buildings are not the
+ * economy — the fortress and camp are field works.
+ */
+export const STAFFABLE: BuildingType[] = ['shop', 'farm', 'granary', 'research', 'school'];
+
+/**
  * Per-building limits, for buildings whose stacking would otherwise run away.
  * Housing raises the population cap, and population *is* the money engine
  * now, so uncapped housing would compound into an unbounded economy.

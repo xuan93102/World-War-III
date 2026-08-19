@@ -32,3 +32,20 @@ export function upgradeNow(
   if (ordered > 0) g.tick(UNITS[type].upgradeSeconds * ordered + 1);
   return ordered;
 }
+
+/**
+ * Puts villagers on the ground without charging for them.
+ *
+ * Villagers are units standing somewhere now (docs 4.2), so a test that just
+ * wants a population says where it wants one — the core by default, which is
+ * where buying them puts them.
+ */
+export function placeVillagers(
+  g: GameEngine,
+  playerId: string,
+  count: number,
+  regionId = g.state.players[playerId].coreRegionId,
+): void {
+  const legion = g.legionFor(regionId, playerId);
+  legion.units.villager = (legion.units.villager ?? 0) + count;
+}

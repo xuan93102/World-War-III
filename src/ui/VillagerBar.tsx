@@ -13,7 +13,6 @@ interface VillagerBarProps {
  */
 export function VillagerBar({ engine, playerId, onBuy }: VillagerBarProps) {
   const { t } = useSettings();
-  const player = engine.state.players[playerId];
   const eco = engine.economy(playerId);
   const max = engine.maxAffordableVillagers(playerId);
 
@@ -22,7 +21,7 @@ export function VillagerBar({ engine, playerId, onBuy }: VillagerBarProps) {
       <span className="villager-count">
         {/* Villagers, not total population: once soldiers exist they'll be
             population too, but only villagers earn gold. */}
-        {t('game.villagers')} {Math.floor(player.villagers)}
+        {t('game.villagers')} {engine.villagerCount(playerId)}
         <em className="villager-sub">
           {t('game.population')} {engine.population(playerId)}/{eco.populationCap}
         </em>

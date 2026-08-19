@@ -4,12 +4,18 @@
 // to exercise through the UI.
 import { describe, expect, it } from 'vitest';
 import { GameEngine, STARTING_MONEY } from '../GameEngine';
-import { BASE_FOOD_CAP, BUILDINGS, GRANARY_FOOD_CAP, WONDER_HOLD_SECONDS } from '../buildings';
+import {
+  BASE_FOOD_CAP,
+  BUILDINGS,
+  GRANARY_FOOD_CAP,
+  MAX_STAFF,
+  WONDER_HOLD_SECONDS,
+} from '../buildings';
 import { FOOD_PER_MIN_BY_SIZE, MILITIA_BY_SIZE, SAFE_ZONE_HOPS, landSizeOf } from '../land';
 import { TAIWAN } from '../maps';
 import { garrisonAt } from '../regions';
 import { totalUnits } from '../units';
-import { trainNow } from './helpers';
+import { placeVillagers, trainNow } from './helpers';
 
 function newGame() {
   return new GameEngine([
@@ -24,7 +30,7 @@ describe('building system', () => {
   expect(STARTING_MONEY).toBe(10);
   expect(g.state.players.p1.money).toBe(STARTING_MONEY);
   expect(g.population('p1'), 'population must be bought').toBe(0);
-  expect(g.state.players.p1.villagers, 'no villagers yet').toBe(0);
+  expect(g.villagerCount('p1'), 'no villagers yet').toBe(0);
   expect(g.buildRejection('taipei-1', 'shop', 'p1'), 'buildings are out of reach at first').toBe('cannotAfford');
 });
 
@@ -98,7 +104,7 @@ describe('building system', () => {
   expect(g.state.regions['taipei-1'].construction).toBe(undefined);
 });
 
-  it('shops stack a +20% money bonus each', () => {
+  it('shops are worth what their crew makes them worth', () => {
   const g = newGame();
   g.state.players.p1.money = 10000;
   g.buyVillagers('p1', 100);
@@ -109,11 +115,24 @@ describe('building system', () => {
 
   g.startConstruction('taipei-2', 'shop', 'p1');
   g.tick(31);
-  expect(Math.abs(g.economy('p1').moneyPerMin - base * 1.2) < 1e-9, 'one shop = +20%').toBeTruthy();
+  expect(g.economy('p1').moneyPerMin, 'an empty shop earns nobody anything').toBe(base);
+
+  // Staff needs to be standing on the ground it works.
+  placeVillagers(g, 'p1', 10, 'taipei-2');
+  g.staffBuilding('taipei-2', 'p1', 5);
+  const half = g.economy('p1').moneyPerMin / g.villagerCount('p1');
+  expect(Math.abs(half - 1.1) < 1e-9, 'half a crew, half the bonus').toBeTruthy();
+
+  g.staffBuilding('taipei-2', 'p1', 5);
+  const full = g.economy('p1').moneyPerMin / g.villagerCount('p1');
+  expect(Math.abs(full - 1.2) < 1e-9, 'a full crew is the old flat +20%').toBeTruthy();
 
   g.startConstruction('taipei-3', 'shop', 'p1');
   g.tick(31);
-  expect(Math.abs(g.economy('p1').moneyPerMin - base * 1.4) < 1e-9, 'two shops = +40% (stacking, not multiplicative)').toBeTruthy();
+  placeVillagers(g, 'p1', 10, 'taipei-3');
+  g.staffBuilding('taipei-3', 'p1', 10);
+  const two = g.economy('p1').moneyPerMin / g.villagerCount('p1');
+  expect(Math.abs(two - 1.4) < 1e-9, 'two crewed shops stack, not multiply').toBeTruthy();
 });
 
   it('gold income comes from villagers, not territory', () => {
@@ -143,9 +162,11 @@ describe('building system', () => {
   g.state.players.p1.money = 10000;
   g.buyVillagers('p1', 50);
   g.setRegionOwner('taipei-2', 'p1');
+  placeVillagers(g, 'p1', 10, 'taipei-2');
   const before = g.economy('p1');
   g.startConstruction('taipei-2', 'farm', 'p1');
   g.tick(31);
+  g.staffBuilding('taipei-2', 'p1', 10);
   const after = g.economy('p1');
   expect(after.foodPerMin > before.foodPerMin, 'food up').toBeTruthy();
   expect(after.moneyPerMin, 'gold unchanged').toBe(before.moneyPerMin);
@@ -246,7 +267,7 @@ describe('villager economy', () => {
     const g = newGame();
     expect(g.buyVillagers('p1', 10), 'spends all 10 starting gold').toBe(10);
     expect(g.state.players.p1.money).toBe(0);
-    expect(g.state.players.p1.villagers, 'villagers recruited').toBe(10);
+    expect(g.villagerCount('p1'), 'villagers recruited').toBe(10);
     expect(g.population('p1'), 'villagers count toward population').toBe(10);
 
     g.tick(60);
@@ -258,7 +279,7 @@ describe('villager economy', () => {
     const counts: number[] = [];
     for (let minute = 0; minute < 6; minute++) {
       g.buyVillagers('p1', g.maxAffordableVillagers('p1'));
-      counts.push(g.state.players.p1.villagers);
+      counts.push(g.villagerCount('p1'));
       g.tick(60);
     }
     // 10 -> 20 -> 40 -> 80 -> 160 -> 200 (capped)
@@ -321,7 +342,7 @@ describe('villager economy', () => {
     g.demolish('taipei-2', 'p1');
     g.tick(1);
     expect(g.population('p1'), 'clamped to the lower cap').toBe(200);
-    expect(g.state.players.p1.villagers, 'the lost headcount was villagers').toBe(200);
+    expect(g.villagerCount('p1'), 'the lost headcount was villagers').toBe(200);
   });
 });
 
@@ -342,7 +363,7 @@ describe('population: villagers and troops share one cap', () => {
 
     const trained = trainNow(g, 'taipei-1', 'p1', 'militia', 40);
     expect(trained, 'militia come out of the core').toBe(40);
-    expect(g.state.players.p1.villagers, 'villagers are not converted').toBe(100);
+    expect(g.villagerCount('p1'), 'villagers are not converted').toBe(100);
     expect(g.troopCount('p1')).toBe(40);
     expect(g.population('p1'), 'troops count toward population').toBe(140);
     expect(g.economy('p1').moneyPerMin, 'income is unchanged by training').toBe(100);
@@ -513,18 +534,20 @@ describe('opening pacing', () => {
       pure.tick(60);
 
       // The builder buys a shop the first minute it can afford one, and
-      // reinvests in villagers otherwise.
+      // reinvests in villagers otherwise. A shop with nobody in it earns
+      // nothing (docs 4.2), so the crew goes in as soon as it stands.
       if (!built && builder.startConstruction('taipei-1', 'shop', 'p1')) {
         built = true;
       } else {
         builder.buyVillagers('p1', builder.maxAffordableVillagers('p1'));
       }
       builder.tick(60);
+      builder.staffBuilding('taipei-1', 'p1', MAX_STAFF);
 
       villagersAt.push({
         minute,
-        pure: pure.state.players.p1.villagers,
-        builder: builder.state.players.p1.villagers,
+        pure: pure.villagerCount('p1'),
+        builder: builder.villagerCount('p1'),
       });
     }
 
@@ -537,10 +560,12 @@ describe('opening pacing', () => {
       midGame.builder,
     );
 
-    // ...but the shop's multiplier refills the gap once the cap is the
-    // binding constraint, so building early is not a lasting setback.
+    // ...but the crewed shop's multiplier all but refills the gap once the
+    // cap is the binding constraint, so building early is not a lasting
+    // setback. It doesn't quite draw level inside six minutes any more: the
+    // bonus only arrives as the crew walks in, which is the point of 4.2.
     const end = villagersAt[villagersAt.length - 1];
-    expect(end.builder, 'the builder catches up at the cap').toBe(end.pure);
+    expect(end.pure - end.builder, 'the gap has all but closed').toBeLessThanOrEqual(5);
     expect(
       builder.economy('p1').moneyPerMin,
       'and ends richer, because the shop keeps paying',

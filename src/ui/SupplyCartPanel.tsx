@@ -28,7 +28,8 @@ export function SupplyCartPanel({ engine, regionId, playerId, onDispatch }: Supp
 
   if (!isGranary && stock <= 0 && carts.length === 0) return null;
 
-  const villagers = engine.state.players[playerId]?.villagers ?? 0;
+  // Porters come from the people actually standing at the granary now.
+  const villagers = engine.ownGarrisonAt(regionId, playerId).villager ?? 0;
   const take = Math.min(porters, Math.max(1, villagers));
   const targets = isGranary ? engine.cartTargets(regionId, playerId) : [];
   const rejection = target ? engine.cartRejection(regionId, target, playerId, take) : null;

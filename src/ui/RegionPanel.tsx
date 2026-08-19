@@ -3,6 +3,7 @@ import { BuildingIcon } from './buildingIcons';
 import { FOOD_PER_MIN_BY_SIZE, landSizeOf, type LandSize } from '../engine/land';
 import { totalUnits, type UnitCounts, type UnitType } from '../engine/units';
 import { UnitPanel } from './UnitPanel';
+import { StaffPanel } from './StaffPanel';
 import { OrdersPanel } from './OrdersPanel';
 import { SupplyCartPanel } from './SupplyCartPanel';
 import { ArsenalPanel } from './ArsenalPanel';
@@ -24,6 +25,8 @@ interface RegionPanelProps {
   onMarch: (from: string, to: string, units: UnitCounts, onArrival?: 'assault' | 'occupy') => void;
   onOrderHere: (regionId: string, order: 'assault' | 'occupy') => void;
   onStandDown: (regionId: string) => void;
+  onStaff: (regionId: string, count: number) => void;
+  onUnstaff: (regionId: string, count: number) => void;
   onQueueVehicles: (regionId: string, type: UnitType, count: number) => void;
   onCancelProduction: (index: number) => void;
   onBombard: (from: string, to: string) => void;
@@ -61,6 +64,8 @@ export function RegionPanel({
   onMarch,
   onOrderHere,
   onStandDown,
+  onStaff,
+  onUnstaff,
   onQueueVehicles,
   onCancelProduction,
   onBombard,
@@ -193,6 +198,14 @@ export function RegionPanel({
           <p className="hint-text">{t('assault.underway')}</p>
         </section>
       )}
+
+      <StaffPanel
+        engine={engine}
+        regionId={selectedRegionId}
+        playerId={humanPlayerId}
+        onStaff={onStaff}
+        onUnstaff={onUnstaff}
+      />
 
       <UnitPanel
         engine={engine}

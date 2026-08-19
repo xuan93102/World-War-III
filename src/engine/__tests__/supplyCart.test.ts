@@ -9,7 +9,7 @@ import {
   FOOD_PER_SOLDIER_FULL,
   cartHopSeconds,
 } from '../supply';
-import { trainNow } from './helpers';
+import { trainNow, placeVillagers } from './helpers';
 
 const CORE = 'taipei-1';
 const NEXT_DOOR = 'taipei-2';
@@ -60,7 +60,7 @@ describe('how fast a cart rolls', () => {
 describe('dispatching', () => {
   it('needs a granary, a spare cart, porters and a load', () => {
     const g = newGame();
-    g.state.players.p1.villagers = 10;
+    placeVillagers(g, 'p1', 10);
     build(g, NEXT_DOOR, 'fortress');
 
     expect(g.cartRejection(CORE, NEXT_DOOR, 'p1', 5), 'the core is not a granary').toBe(
@@ -80,7 +80,7 @@ describe('dispatching', () => {
 
   it('will only go somewhere there is something to supply', () => {
     const g = newGame();
-    g.state.players.p1.villagers = 10;
+    placeVillagers(g, 'p1', 10);
     build(g, CORE, 'granary');
     const empty = g.map.region(CORE).neighbors[0];
     expect(g.cartRejection(CORE, empty, 'p1', 5)).toBe('noTarget');
@@ -91,13 +91,13 @@ describe('dispatching', () => {
 
   it('takes the porters off the payroll but not out of the population', () => {
     const g = newGame();
-    g.state.players.p1.villagers = 10;
+    placeVillagers(g, 'p1', 10);
     build(g, CORE, 'granary');
     legionAt(g, NEXT_DOOR, 2, 0.5);
     const populationBefore = g.population('p1');
 
     g.dispatchCart(CORE, NEXT_DOOR, 'p1', 4);
-    expect(g.state.players.p1.villagers, 'four stopped earning').toBe(6);
+    expect(g.villagerCount('p1'), 'four stopped earning').toBe(6);
     expect(g.population('p1'), 'but they still take up room').toBe(populationBefore);
     expect(g.cartsAvailable('p1'), 'the only cart is out').toBe(0);
   });
@@ -115,7 +115,7 @@ describe('dispatching', () => {
 describe('a delivery', () => {
   it('fills the army it reaches, then walks home and frees the cart', () => {
     const g = newGame();
-    g.state.players.p1.villagers = 10;
+    placeVillagers(g, 'p1', 10);
     build(g, CORE, 'granary');
     const legion = legionAt(g, NEXT_DOOR, 5, 0.4);
 
@@ -129,13 +129,13 @@ describe('a delivery', () => {
 
     g.tick(g.state.carts[0].totalSeconds + 1);
     expect(g.state.carts.length, 'home').toBe(0);
-    expect(g.state.players.p1.villagers, 'porters back on the payroll').toBe(10);
+    expect(g.villagerCount('p1'), 'porters back on the payroll').toBe(10);
     expect(g.cartsAvailable('p1')).toBe(1);
   });
 
   it('only buys as much bar as its load covers', () => {
     const g = newGame();
-    g.state.players.p1.villagers = 10;
+    placeVillagers(g, 'p1', 10);
     build(g, CORE, 'granary');
     // 100 militia from empty would need 1000 food; a cart carries 500, so it
     // should land exactly halfway.
@@ -150,7 +150,7 @@ describe('a delivery', () => {
 
   it('stocks a fortress, which then tops up whoever stands there', () => {
     const g = newGame();
-    g.state.players.p1.villagers = 10;
+    placeVillagers(g, 'p1', 10);
     build(g, CORE, 'granary');
     build(g, NEXT_DOOR, 'fortress');
 
@@ -174,7 +174,7 @@ describe('a delivery', () => {
 describe('interception', () => {
   it('hands the load to whoever it walks into, porters and all', () => {
     const g = newGame();
-    g.state.players.p1.villagers = 10;
+    placeVillagers(g, 'p1', 10);
     build(g, CORE, 'granary');
     legionAt(g, NEXT_DOOR, 2, 0.5);
 
@@ -198,6 +198,6 @@ describe('interception', () => {
     const gained = g.state.players.p2.food - enemyFoodBefore;
     expect(gained, 'they took the load').toBeGreaterThanOrEqual(CART_FOOD_LOAD);
     expect(gained, 'and only the load').toBeLessThan(CART_FOOD_LOAD + 50);
-    expect(g.state.players.p1.villagers, 'the porters are lost with it').toBe(5);
+    expect(g.villagerCount('p1'), 'the porters are lost with it').toBe(5);
   });
 });
