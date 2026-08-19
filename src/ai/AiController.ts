@@ -2,7 +2,7 @@ import type { BuildingType } from '../engine/buildings';
 import type { GameEngine } from '../engine/GameEngine';
 import type { TechId } from '../engine/tech';
 import type { AiDifficulty, PlayerId } from '../engine/types';
-import { UNIT_ORDER, totalUnits, type UnitCounts } from '../engine/units';
+import { UNITS, UNIT_ORDER, totalUnits, type UnitCounts } from '../engine/units';
 
 /** The cheapest `count` units out of a stack — chaff marches, elites hold. */
 function take(units: UnitCounts, count: number): UnitCounts {
@@ -63,6 +63,13 @@ interface Doctrine {
    * someone walks in and takes the ground they stand on.
    */
   armyShare: number;
+  /**
+   * Share of that army allowed to be vehicles. Uncapped, the arsenal eats the
+   * whole surplus — vehicles are the only thing left to buy once the
+   * population is full, and the AI ends up with three hundred mortars and no
+   * one to stand in front of them.
+   */
+  vehicleShare: number;
 }
 
 const DOCTRINE: Record<AiDifficulty, Doctrine> = {
@@ -75,6 +82,7 @@ const DOCTRINE: Record<AiDifficulty, Doctrine> = {
     offensiveSize: Infinity,
     attacks: false,
     armyShare: 0.15,
+    vehicleShare: 0.1,
   },
   normal: {
     reserve: 40,
@@ -84,6 +92,7 @@ const DOCTRINE: Record<AiDifficulty, Doctrine> = {
     offensiveSize: 40,
     attacks: true,
     armyShare: 0.25,
+    vehicleShare: 0.2,
   },
   hard: {
     reserve: 60,
@@ -93,6 +102,7 @@ const DOCTRINE: Record<AiDifficulty, Doctrine> = {
     offensiveSize: 30,
     attacks: true,
     armyShare: 0.35,
+    vehicleShare: 0.25,
   },
 };
 
@@ -191,6 +201,10 @@ export class AiController {
       { type: 'granary', upTo: 1 },
       { type: 'farm', upTo: 3 },
     ];
+    // Only worth its 150 food once there is something to build in it.
+    if (engine.hasTech(this.playerId, 'mortarCorps') || engine.hasTech(this.playerId, 'mainBattleTank')) {
+      wanted.splice(6, 0, { type: 'arsenal', upTo: 1 });
+    }
     const sites = engine
       .ownedRegionIds(this.playerId)
       .filter((id) => !engine.state.regions[id].building && !engine.state.regions[id].construction);
@@ -233,8 +247,13 @@ export class AiController {
       'consumerIndustry',
       'rifles',
       'bodyArmour',
+      // Eyes before guns: the AI only attacks what it can see (nearestEnemy),
+      // so without scouts it spends the whole match shadow-boxing neutrals.
+      'scouts',
+      'mortarCorps',
       'autoRifles',
       'compositeArmour',
+      'mainBattleTank',
       'roadNetwork',
     ];
 
@@ -267,22 +286,106 @@ export class AiController {
   /** Keeps troops coming while there's room and gold for them. */
   private raiseTroops(engine: GameEngine, doctrine: Doctrine): void {
     const me = engine.state.players[this.playerId];
+    // Promoting what it already has comes first: a marine is fifty times a
+    // militiaman's attack for four gold, which no amount of recruiting beats.
+    this.promote(engine, doctrine);
+    this.queueVehicles(engine, doctrine);
+
     if (engine.populationRoom(this.playerId) <= 0) return;
-    if (this.armyRoom(engine, doctrine) <= 0) return;
+    const room = this.armyRoom(engine, doctrine);
+    if (room <= 0) return;
     // Never spend the last of the purse on soldiers: the villager loop is what
     // pays for the next ones.
     if (me.money < doctrine.reserve / 2) return;
 
-    // An academy is worth using if there is one; militia otherwise.
+    // In batches, not one at a time. A decision every two or three seconds
+    // buying a single soldier can't keep up with an economy earning a thousand
+    // a minute — the AI was ending matches sitting on unspendable gold.
     for (const type of ['conscript', 'militia'] as const) {
-      const sites = engine.trainingSites(this.playerId, type);
-      for (const site of sites) {
-        if (engine.trainRejection(site, this.playerId, type, 1) === null) {
-          engine.trainUnits(site, this.playerId, type, 1);
+      const batch = Math.min(room, Math.floor((me.money - doctrine.reserve / 2) / 4));
+      if (batch < 1) return;
+      for (const site of engine.trainingSites(this.playerId, type)) {
+        if (engine.trainRejection(site, this.playerId, type, batch) === null) {
+          engine.trainUnits(site, this.playerId, type, batch);
           return;
         }
       }
     }
+  }
+
+  /**
+   * Walks the infantry ladder at an academy (docs 6.1).
+   *
+   * Upgrading is the only way past conscripts, and it happens where they
+   * stand, so this looks at academies rather than at the army. Marines first:
+   * the ladder is worth climbing to the top before it is climbed wide.
+   */
+  private promote(engine: GameEngine, doctrine: Doctrine): void {
+    const me = engine.state.players[this.playerId];
+    if (me.money < doctrine.reserve) return;
+    for (const site of this.academies(engine)) {
+      for (const type of ['marine', 'volunteer'] as const) {
+        const have = engine.ownGarrisonAt(site, this.playerId)[UNITS[type].upgradeFrom!] ?? 0;
+        if (have <= 0) continue;
+        const batch = Math.min(have, Math.floor((me.money - doctrine.reserve) / UNITS[type].upgradeCost!));
+        if (batch < 1) continue;
+        if (engine.upgradeRejection(site, this.playerId, type, batch) === null) {
+          engine.upgradeUnits(site, this.playerId, type, batch);
+          return;
+        }
+      }
+    }
+  }
+
+  /** Armour, once there's an arsenal and money that isn't doing anything. */
+  private queueVehicles(engine: GameEngine, doctrine: Doctrine): void {
+    const me = engine.state.players[this.playerId];
+    // Vehicles are slow to build and paid for up front, so they come out of
+    // genuine surplus — never out of the money that keeps troops coming.
+    if (me.money < doctrine.reserve * 4) return;
+    // And they stay a minority of the army: past the population ceiling they
+    // are the only thing gold can still buy, so nothing else stops them.
+    const cap = engine.economy(this.playerId).populationCap * doctrine.armyShare * doctrine.vehicleShare;
+    if (this.vehicleCount(engine) >= cap) return;
+    for (const site of engine.arsenals(this.playerId)) {
+      for (const type of ['tank', 'mortar'] as const) {
+        if (engine.buildVehicleRejection(site, this.playerId, type, 1) === null) {
+          engine.queueVehicles(site, this.playerId, type, 1);
+          return;
+        }
+      }
+    }
+  }
+
+  /**
+   * Is this an academy holding troops it can still afford to promote? Gated on
+   * the money being there, so a broke AI marches out instead of standing
+   * around waiting for a promotion it can't pay for.
+   */
+  private awaitingPromotion(engine: GameEngine, regionId: string, doctrine: Doctrine): boolean {
+    if (engine.state.regions[regionId].building?.type !== 'academy') return false;
+    const money = engine.state.players[this.playerId].money;
+    if (money < doctrine.reserve) return false;
+    const here = engine.ownGarrisonAt(regionId, this.playerId);
+    return (here.conscript ?? 0) > 0 || (here.volunteer ?? 0) > 0;
+  }
+
+  /** Vehicles fielded and vehicles still on the slipway (docs 6.5). */
+  private vehicleCount(engine: GameEngine): number {
+    const standing = engine.state.legions
+      .filter((l) => l.playerId === this.playerId)
+      .reduce((sum, l) => sum + (l.units.tank ?? 0) + (l.units.mortar ?? 0), 0);
+    const queued = engine.state.players[this.playerId].production.reduce(
+      (sum, batch) => sum + batch.remaining,
+      0,
+    );
+    return standing + queued;
+  }
+
+  private academies(engine: GameEngine): string[] {
+    return engine
+      .ownedRegionIds(this.playerId)
+      .filter((id) => engine.state.regions[id].building?.type === 'academy');
   }
 
   // ---- armies ------------------------------------------------------------
@@ -318,6 +421,11 @@ export class AiController {
 
       // Sitting on ground that's still contested? finishBusiness has it.
       if (engine.assaultRejection(legion.regionId, this.playerId) === null) continue;
+
+      // Standing at an academy with promotions still to come: wait for them.
+      // Marching the conscripts out the moment they're trained is why the AI
+      // fought whole matches with the bottom rung of the ladder.
+      if (this.awaitingPromotion(engine, legion.regionId, doctrine)) continue;
 
       const expedition = capped ? Math.min(doctrine.expeditionSize, spare) : doctrine.expeditionSize;
       const offensive = capped ? Math.min(doctrine.offensiveSize, spare) : doctrine.offensiveSize;

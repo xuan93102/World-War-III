@@ -127,3 +127,62 @@ describe('two AIs', () => {
     expect(engine.ownedRegionCount('a') + engine.ownedRegionCount('b')).toBeGreaterThan(2);
   });
 });
+
+describe('the ladder and the arsenal', () => {
+  /** Puts the AI in a position to promote: an academy, conscripts, money. */
+  function readyToPromote() {
+    const { engine, ai } = newMatch('hard');
+    const site = engine.map.region(AI_CORE).neighbors[0];
+    engine.setRegionOwner(site, 'ai');
+    engine.state.regions[site].building = { type: 'academy', hp: 300 };
+    engine.state.players.ai.money = 500;
+    return { engine, ai, site };
+  }
+
+  it('promotes conscripts standing at an academy', () => {
+    const { engine, ai, site } = readyToPromote();
+    engine.state.legions.push({
+      id: 'squad',
+      playerId: 'ai',
+      units: { conscript: 10 },
+      supply: 1,
+      regionId: site,
+    });
+
+    ai.decide(engine);
+    const here = engine.ownGarrisonAt(site, 'ai');
+    expect(here.conscript ?? 0, 'conscripts went off to be trained').toBeLessThan(10);
+  });
+
+  it('holds them at the academy instead of marching them off first', () => {
+    const { engine, ai, site } = readyToPromote();
+    engine.state.legions.push({
+      id: 'squad',
+      playerId: 'ai',
+      units: { conscript: 30 },
+      supply: 1,
+      regionId: site,
+    });
+
+    ai.decide(engine);
+    expect(engine.state.marches.some((m) => m.from === site), 'stayed put').toBe(false);
+  });
+
+  it('keeps vehicles a minority of the army', () => {
+    const { engine, ai } = newMatch('hard');
+    const site = engine.map.region(AI_CORE).neighbors[0];
+    engine.setRegionOwner(site, 'ai');
+    engine.state.regions[site].building = { type: 'arsenal', hp: 300 };
+    engine.state.players.ai.techs.push('mortarCorps');
+    // More gold than the whole match would ever produce: the only thing that
+    // should stop the arsenal is the doctrine.
+    engine.state.players.ai.money = 100000;
+
+    for (let i = 0; i < 200; i++) ai.decide(engine);
+
+    const queued = engine.state.players.ai.production.reduce((n, b) => n + b.remaining, 0);
+    const cap = engine.economy('ai').populationCap * 0.35 * 0.25;
+    expect(queued, 'stopped at its share of the army').toBeLessThanOrEqual(Math.ceil(cap));
+    expect(queued, 'but did build some').toBeGreaterThan(0);
+  });
+});
