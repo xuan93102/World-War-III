@@ -96,7 +96,7 @@ const zhTW = {
   'help.rulesMountain': '中央山脈把東西部隔開，只有5個穿山點可以通行。',
   'help.rulesWonder': '蓋出奇觀並守住3分鐘即可獲勝。',
 
-  'help.notImplemented': '尚未實作：AI 行為與PVP連線。目前可用面板下方的 debug 按鈕直接指定地塊歸屬，以便測試。',
+  'help.notImplemented': '尚未實作：PVP連線。電腦對手會自己發展、擴張與進攻，三種難度行為不同。面板下方的 debug 按鈕可直接指定地塊歸屬，以便測試。',
 
   'game.regions': '區塊',
   'game.population': '人口',
@@ -483,7 +483,7 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'help.rulesMountain': '中央山脉把东西部隔开，只有5个穿山点可以通行。',
   'help.rulesWonder': '盖出奇观并守住3分钟即可获胜。',
 
-  'help.notImplemented': '尚未实作：AI 行为与PVP连线。目前可用面板下方的 debug 按钮直接指定地块归属，以便测试。',
+  'help.notImplemented': '尚未实作：PVP连线。电脑对手会自己发展、扩张与进攻，三种难度行为不同。面板下方的 debug 按钮可直接指定地块归属，以便测试。',
 
   'game.regions': '区块',
   'game.population': '人口',

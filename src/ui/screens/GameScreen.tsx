@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GameEngine, type PlayerSetup } from '../../engine/GameEngine';
 import { useSettings } from '../../settings/useSettings';
+import { AiController } from '../../ai/AiController';
 import { HUD } from '../HUD';
 import { MapView } from '../MapView';
 import { TechPanel } from '../TechPanel';
@@ -44,6 +45,14 @@ export function GameScreen({
   const [paused, setPaused] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
   const lastTimeRef = useRef<number>(performance.now());
+  // One controller per AI seat, built once per match (docs 13). They take the
+  // same orders a human does — the engine has no idea which is which.
+  const seatsRef = useRef<AiController[]>([]);
+  if (seatsRef.current.length === 0) {
+    seatsRef.current = Object.values(engine.state.players)
+      .filter((p) => p.aiDifficulty !== undefined)
+      .map((p) => new AiController(p.id, p.aiDifficulty!));
+  }
 
   const winner = engine.getWinner();
   const isOver = winner !== null;
@@ -61,6 +70,7 @@ export function GameScreen({
       const deltaSeconds = (now - lastTimeRef.current) / 1000;
       lastTimeRef.current = now;
       engine.tick(deltaSeconds);
+      for (const seat of seatsRef.current) seat.update(engine, deltaSeconds);
       forceRender((n) => n + 1);
     }, TICK_INTERVAL_MS);
     return () => clearInterval(intervalId);
