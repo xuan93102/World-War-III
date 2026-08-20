@@ -126,17 +126,9 @@ describe('the fortress techs', () => {
     expect(g.state.regions[NEXT_DOOR].building!.hp).toBe(REINFORCED_FORTRESS_HP);
   });
 
-  it('make troops on their own fortress hit harder and take less', () => {
+  it('cannot be attacked into at all, which leaves bastion works unreachable', () => {
     const g = withFortress(newGame());
     g.state.players.p1.techs.push('bastionWorks');
-    g.state.legions.push({
-      id: 'garrison',
-      playerId: 'p1',
-      units: { militia: 20 },
-      supply: 1,
-      regionId: NEXT_DOOR,
-    });
-    // p2 attacks into it, so p1 is the defender standing on their own bastion.
     g.state.players.p2.money = 1000;
     g.setRegionOwner('taipei-3', 'p2');
     g.state.legions.push({
@@ -146,19 +138,13 @@ describe('the fortress techs', () => {
       supply: 1,
       regionId: 'taipei-3',
     });
-    g.startMarch('taipei-3', NEXT_DOOR, 'p2', { militia: 20 });
-    g.tick(g.marchSeconds('taipei-3', NEXT_DOOR, 'p2') + 1);
 
-    const battle = g.battleAt(NEXT_DOOR)!;
-    expect(battle.defenderId).toBe('p1');
-    const attackersBefore = 20;
-    g.tick(5);
-
-    // The defenders deal 20 × 1.2 = 24, so two attackers die instead of one…
-    const attackersLeft = g.battleAt(NEXT_DOOR)?.attackerUnits.militia ?? 0;
-    expect(attackersBefore - attackersLeft, 'bastion bonus on the way out').toBe(2);
-    // …and take 20 × 0.8 = 16, which kills one of them instead of two.
-    expect(g.ownGarrisonAt(NEXT_DOOR, 'p1').militia, 'and on the way in').toBe(19);
+    // A held fortress is terrain now (docs 5.3): there is no edge leading
+    // into it, so the attack that this tech's bonus was written for can no
+    // longer be launched. The bonus itself still exists in combat — nothing
+    // can reach a position to trigger it.
+    expect(g.startMarch('taipei-3', NEXT_DOOR, 'p2', { militia: 20 })).toBe(null);
+    expect(g.battleAt(NEXT_DOOR), 'no fight to be had').toBeFalsy();
     expect(BASTION_BONUS).toBe(0.2);
   });
 });

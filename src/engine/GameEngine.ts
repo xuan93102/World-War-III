@@ -387,7 +387,22 @@ export class GameEngine {
    */
   private canEnter(regionId: string, playerId: PlayerId): boolean {
     if (!this.state.regions[regionId]) return false;
+    if (this.fortressSeals(regionId, playerId)) return false;
     return !this.blockingForceAt(regionId, playerId);
+  }
+
+  /**
+   * Is a fortress here closed against this player (docs 5.3)?
+   *
+   * A held pass is terrain, not an obstacle: the region drops out of route
+   * planning entirely for everyone but its owner, exactly as the central
+   * range does. Nothing walks through it while it stands — the way past is to
+   * shell it down from outside (docs 6.5) or to go round.
+   */
+  fortressSeals(regionId: string, playerId: PlayerId): boolean {
+    const region = this.state.regions[regionId];
+    if (region?.building?.type !== 'fortress') return false;
+    return region.owner !== null && region.owner !== playerId;
   }
 
   /** Whether arriving here would be a peaceful landing rather than an attack. */
@@ -410,7 +425,14 @@ export class GameEngine {
       (id) => this.canEnter(id, playerId),
       (a, b) =>
         terrainRejection(this.map, a, b, this.hasMountainRoad(playerId)) === null &&
-        (!heavy || !this.map.isPass(a, b) || vehiclesCrossPasses(techs)),
+        (!heavy || !this.map.isPass(a, b) || vehiclesCrossPasses(techs)) &&
+        // A held fortress is terrain, so it closes the road rather than
+        // merely being unpleasant to walk into (docs 5.3). It has to be said
+        // here rather than in canEnter: a route's *destination* is exempt
+        // from canEnter — marching onto enemy ground is an attack, which is
+        // a legal order — and a sealed pass is not somewhere you may attack
+        // into either. There is no edge that leads in.
+        !this.fortressSeals(b, playerId),
     );
   }
 
@@ -1037,6 +1059,15 @@ export class GameEngine {
   private completeHop(march: March): boolean {
     const target = this.state.regions[march.to];
 
+    // A fortress went up across the column's path while it was walking. The
+    // road is shut (docs 5.3), so it halts where it stands rather than
+    // bursting through a gate that closed behind its orders.
+    if (this.fortressSeals(march.to, march.playerId)) {
+      const column = this.state.legions.find((l) => l.id === march.legionId);
+      if (column) this.landColumn(march.from, column);
+      return true;
+    }
+
     // Walking into ground someone else holds starts a fight rather than a
     // landing. This is also how interception works: a route is planned around
     // hostile ground, so if an enemy has moved into the column's path since it
@@ -1085,22 +1116,8 @@ export class GameEngine {
 
     const next = march.route[0];
     if (next === undefined) {
-      // Land the column: it merges into whatever this player already has here,
-      // supply averaging by headcount so relief actually relieves.
       const column = this.state.legions.find((l) => l.id === march.legionId);
-      const garrison = this.legionFor(march.to, march.playerId);
-      if (column && column !== garrison) {
-        const had = totalUnits(garrison.units);
-        const joining = totalUnits(column.units);
-        if (had + joining > 0) {
-          garrison.supply = (garrison.supply * had + column.supply * joining) / (had + joining);
-        }
-        // The order came with the column, so it has to survive the column
-        // being folded into whatever was already standing here.
-        if (column.onArrival) garrison.onArrival = column.onArrival;
-        garrison.units = addUnits(garrison.units, column.units);
-        this.state.legions = this.state.legions.filter((l) => l !== column);
-      }
+      if (column) this.landColumn(march.to, column);
       return true;
     }
 
@@ -1114,6 +1131,27 @@ export class GameEngine {
     // fraction of a second at every stop.
     march.remainingSeconds += march.totalSeconds;
     return false;
+  }
+
+  /**
+   * Sets a column down in a region: it merges into whatever this player
+   * already has there, supply averaging by headcount so relief actually
+   * relieves, and any standing order it carried survives the merge.
+   */
+  private landColumn(regionId: string, column: Legion): void {
+    const garrison = this.legionFor(regionId, column.playerId);
+    if (column === garrison) {
+      column.regionId = regionId;
+      return;
+    }
+    const had = totalUnits(garrison.units);
+    const joining = totalUnits(column.units);
+    if (had + joining > 0) {
+      garrison.supply = (garrison.supply * had + column.supply * joining) / (had + joining);
+    }
+    if (column.onArrival) garrison.onArrival = column.onArrival;
+    garrison.units = addUnits(garrison.units, column.units);
+    this.state.legions = this.state.legions.filter((l) => l !== column);
   }
 
   ownedRegions(playerId: PlayerId): RegionState[] {
