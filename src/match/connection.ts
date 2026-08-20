@@ -16,8 +16,20 @@ export type ConnectionState =
   | { at: 'gone' }
   | { at: 'failed'; why: 'noRoom' | 'roomFull' | 'noRelay' };
 
+/**
+ * Where the relay lives.
+ *
+ * Set VITE_RELAY_URL at build time to point a deployed game at a deployed
+ * relay. Without it we assume one is running beside the dev server.
+ *
+ * The scheme follows the page's: a browser on an HTTPS page refuses a plain
+ * ws:// socket as mixed content, so a deployed game talking to a ws:// relay
+ * fails silently and completely. Hosting platforms terminate TLS in front of
+ * the relay, so the server itself needs to know nothing about this.
+ */
 export const DEFAULT_RELAY_URL =
-  import.meta.env?.VITE_RELAY_URL ?? `ws://${location.hostname}:8787`;
+  import.meta.env?.VITE_RELAY_URL ??
+  `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.hostname}:8787`;
 
 export class Connection {
   private socket: WebSocket;
