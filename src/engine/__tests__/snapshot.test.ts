@@ -241,3 +241,22 @@ describe('a real match, swept for leaks', () => {
     }
   }, 200000);
 });
+
+describe('what a snapshot spends its bytes on', () => {
+  it('sends no more precision than anyone could see', () => {
+    const g = new GameEngine([
+      { id: 'blue', name: 'A', color: '#00f', coreRegionId: BLUE_CORE, aiDifficulty: 'hard' },
+      { id: 'red', name: 'B', color: '#f00', coreRegionId: RED_CORE, aiDifficulty: 'hard' },
+    ]);
+    const seats = [new AiController('blue', 'hard'), new AiController('red', 'hard')];
+    for (let step = 0; step < 10 * 60 * 10; step++) {
+      g.tick(TICK_SECONDS);
+      for (const seat of seats) seat.update(g, TICK_SECONDS);
+    }
+
+    const wire = JSON.stringify(snapshotFor(g, 'blue'));
+    // Supply, hit points and countdowns all grow a tail of floating-point
+    // noise. Seventeen digits of it, five times a second, is a lot of nothing.
+    expect(wire.match(/\d+\.\d{4,}/g) ?? [], 'runaway fractions on the wire').toEqual([]);
+  }, 120000);
+});

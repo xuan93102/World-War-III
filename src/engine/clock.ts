@@ -37,3 +37,17 @@ export function fixedSteps(banked: number): { steps: number; left: number } {
   const steps = Math.min(wanted, MAX_CATCH_UP_STEPS);
   return { steps, left: wanted > steps ? 0 : banked - steps * TICK_SECONDS };
 }
+
+/**
+ * Snaps a running total back onto a clean tenth of a millisecond.
+ *
+ * A tenth of a second is not a number a computer can hold exactly, so adding
+ * it fifteen thousand times leaves a match clock reading 1499.9999999997312
+ * instead of 1500. Nothing in the rules notices — both ends drift by exactly
+ * the same amount, so it costs no determinism — but it spreads through every
+ * derived number, and it goes over the wire as seventeen digits where four
+ * would do.
+ */
+export function pinned(seconds: number): number {
+  return Math.round(seconds * 1e4) / 1e4;
+}

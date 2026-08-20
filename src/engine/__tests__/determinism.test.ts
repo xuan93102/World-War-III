@@ -113,3 +113,19 @@ describe('splitting real time into steps', () => {
     expect(fixedSteps(TICK_SECONDS / 2).steps).toBe(0);
   });
 });
+
+describe('the match clock', () => {
+  it('does not drift over an hour of tenths', () => {
+    const { engine } = newMatch();
+    for (let step = 0; step < 36_000; step++) engine.tick(TICK_SECONDS);
+    // Adding 0.1 thirty-six thousand times is not 3600 unless somebody keeps
+    // it honest: before this it read 3599.999999999662.
+    expect(engine.state.elapsedSeconds).toBe(3600);
+  });
+
+  it('keeps the payout countdown clean too', () => {
+    const { engine } = newMatch();
+    for (let step = 0; step < 6_000; step++) engine.tick(TICK_SECONDS);
+    expect(Number.isInteger(engine.state.secondsUntilPayout * 10)).toBe(true);
+  });
+});

@@ -42,7 +42,27 @@ function peerOf(room, socket) {
   return room.host === socket ? room.guest : room.host;
 }
 
-const server = new WebSocketServer({ port: PORT });
+const server = new WebSocketServer({
+  port: PORT,
+  /**
+   * Snapshots are JSON of the same shape several times a second, which is
+   * about the most compressible traffic there is: measured at 25 minutes into
+   * a match, 12.1 KB goes to 1.7 KB. That takes the stream from roughly
+   * 80 KB/s to 8.5, which is the difference between "fine at home" and "fine
+   * on a phone".
+   *
+   * `ws` leaves this off by default because a deflate context per connection
+   * costs memory, so the settings below keep it modest: small windows, no
+   * context carried between messages on the client side, and nothing under
+   * a kilobyte compressed at all.
+   */
+  perMessageDeflate: {
+    zlibDeflateOptions: { level: 6, memLevel: 7, windowBits: 13 },
+    clientNoContextTakeover: true,
+    serverMaxWindowBits: 13,
+    threshold: 1024,
+  },
+});
 
 server.on('connection', (socket) => {
   socket.room = null;

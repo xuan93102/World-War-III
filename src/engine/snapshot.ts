@@ -68,18 +68,37 @@ export function snapshotFor(engine: GameEngine, viewerId: PlayerId): GameState {
   // Through JSON on the way out: it drops the undefined fields the hiding
   // functions leave behind, and it is what goes on the wire anyway — so a
   // snapshot that can't be serialised fails here rather than in a match.
+  //
+  // Fractions are trimmed on the way past. Supply, hit points and countdowns
+  // are all carrying a tail of floating-point noise that no player will ever
+  // see the end of, and seventeen digits of it travel five times a second.
+  // The host keeps its exact numbers; only the copy is rounded, and the next
+  // snapshot corrects whatever the guest predicted from it.
   return JSON.parse(
-    JSON.stringify({
-      regions,
-      players,
-      legions,
-      marches,
-      carts,
-      battles,
-      elapsedSeconds: engine.state.elapsedSeconds,
-      secondsUntilPayout: engine.state.secondsUntilPayout,
-    }),
+    JSON.stringify(
+      {
+        regions,
+        players,
+        legions,
+        marches,
+        carts,
+        battles,
+        elapsedSeconds: engine.state.elapsedSeconds,
+        secondsUntilPayout: engine.state.secondsUntilPayout,
+      },
+      trimFractions,
+    ),
   ) as GameState;
+}
+
+/**
+ * Three decimal places is finer than anything the game shows: a thousandth of
+ * a hit point, a tenth of a percent of supply, a millisecond of a countdown.
+ */
+function trimFractions(_key: string, value: unknown): unknown {
+  return typeof value === 'number' && !Number.isInteger(value)
+    ? Math.round(value * 1e3) / 1e3
+    : value;
 }
 
 /** A region nobody of ours has eyes on: a name on the map and nothing else. */

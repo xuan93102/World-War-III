@@ -16,6 +16,7 @@ import {
   WONDER_HOLD_SECONDS,
   type BuildingType,
 } from './buildings';
+import { pinned } from './clock';
 import { FOOD_PER_MIN_BY_SIZE, MILITIA_BY_SIZE, landSizeOf, safeZoneAround } from './land';
 import {
   UNITS,
@@ -2103,7 +2104,7 @@ export class GameEngine {
   }
 
   tick(deltaSeconds: number): void {
-    this.state.elapsedSeconds += deltaSeconds;
+    this.state.elapsedSeconds = pinned(this.state.elapsedSeconds + deltaSeconds);
     const minutes = deltaSeconds / 60;
 
     // Battles resolve BEFORE marches, and the order matters: a march landing
@@ -2443,7 +2444,7 @@ export class GameEngine {
 
     // Gold payout. The loop covers a delta larger than one interval, which
     // real ticks never produce but tests and long stalls can.
-    this.state.secondsUntilPayout -= deltaSeconds;
+    this.state.secondsUntilPayout = pinned(this.state.secondsUntilPayout - deltaSeconds);
     while (this.state.secondsUntilPayout <= 0) {
       this.state.secondsUntilPayout += PAYOUT_INTERVAL_SECONDS;
       for (const player of Object.values(this.state.players)) {
