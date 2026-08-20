@@ -90,6 +90,9 @@ interface Doctrine {
    * one to stand in front of them.
    */
   vehicleShare: number;
+  /** Trenches to dig at the gate, and fortresses to shut passes with. */
+  trenches: number;
+  fortresses: number;
 }
 
 const DOCTRINE: Record<AiDifficulty, Doctrine> = {
@@ -103,6 +106,8 @@ const DOCTRINE: Record<AiDifficulty, Doctrine> = {
     attacks: false,
     armyShare: 0.15,
     vehicleShare: 0.1,
+    trenches: 1,
+    fortresses: 1,
   },
   normal: {
     reserve: 40,
@@ -113,6 +118,8 @@ const DOCTRINE: Record<AiDifficulty, Doctrine> = {
     attacks: true,
     armyShare: 0.25,
     vehicleShare: 0.2,
+    trenches: 2,
+    fortresses: 1,
   },
   hard: {
     reserve: 60,
@@ -123,6 +130,8 @@ const DOCTRINE: Record<AiDifficulty, Doctrine> = {
     attacks: true,
     armyShare: 0.35,
     vehicleShare: 0.25,
+    trenches: 2,
+    fortresses: 2,
   },
 };
 
@@ -166,6 +175,9 @@ export class AiController {
 
     this.finishBusiness(engine);
     this.spend(engine, doctrine);
+    // Before the wish list, not after: the economy will happily put a shop
+    // on the last empty field, and then there is nowhere left to dig.
+    this.fortify(engine, doctrine);
     this.build(engine);
     this.staffBuildings(engine);
     this.study(engine);
@@ -261,6 +273,86 @@ export class AiController {
   }
 
   /**
+   * Digs in (docs 5.3).
+   *
+   * Both defensive buildings are worth exactly what their position is worth,
+   * which is why neither belongs in the wish list above: that puts a building
+   * on the first empty field it finds, and a trench in the wrong field is a
+   * hundred food and a building slot spent on nothing. So they get chosen by
+   * where, not by how many.
+   *
+   *  - A **fortress** shuts a road for good — nothing of theirs may pass
+   *    through it at all. That is worth its three hundred food at a mountain
+   *    pass, where there is no way round, and much less anywhere else.
+   *  - A **trench** doesn't shut anything; it stops whoever walks onto it and
+   *    makes them fight their way out. That buys time, so it goes at the gate:
+   *    the ground of ours nearest them.
+   *
+   * Neither is built before we have met somebody. Fortifying a border that
+   * nobody has come near is the cheapest way to lose on economy.
+   */
+  private fortify(engine: GameEngine, doctrine: Doctrine): void {
+    if (!this.seesEnemy(engine)) return;
+    if (engine.villagerCount(this.playerId) < doctrine.economyFirst) return;
+
+    const counts = engine.buildingCounts(this.playerId);
+    const building = (type: BuildingType) =>
+      (counts[type] ?? 0) +
+      engine
+        .ownedRegionIds(this.playerId)
+        .filter((id) => engine.state.regions[id].construction?.type === type).length;
+
+    if (building('fortress') < doctrine.fortresses) {
+      const gate = this.unsealedPass(engine);
+      if (gate && engine.buildRejection(gate, 'fortress', this.playerId) === null) {
+        engine.startConstruction(gate, 'fortress', this.playerId);
+        return;
+      }
+    }
+
+    if (building('trench') < doctrine.trenches) {
+      // The nearest ground to them that is still free: the actual frontline
+      // usually has a shop on it by the time anybody turns up.
+      const front = this.frontline(engine, (id) => {
+        const region = engine.state.regions[id];
+        return !region.building && !region.construction;
+      });
+      if (front && engine.buildRejection(front, 'trench', this.playerId) === null) {
+        engine.startConstruction(front, 'trench', this.playerId);
+      }
+    }
+  }
+
+  /**
+   * A mountain pass of ours with nothing built on it — the one place a
+   * fortress is worth what it costs, because there is no way round a mountain
+   * (docs 3.2). The one nearest them is the one they'll come through.
+   */
+  private unsealedPass(engine: GameEngine): string | null {
+    const theirCores = Object.values(engine.state.players)
+      .filter((p) => p.id !== this.playerId && p.coreHp > 0)
+      .map((p) => p.coreRegionId);
+    if (theirCores.length === 0) return null;
+
+    let best: string | null = null;
+    let bestDistance = Infinity;
+    for (const id of engine.ownedRegionIds(this.playerId)) {
+      const region = engine.state.regions[id];
+      if (region.building || region.construction) continue;
+      const guardsAPass = engine.map
+        .region(id)
+        .neighbors.some((neighbor) => engine.map.isPass(id, neighbor));
+      if (!guardsAPass) continue;
+      const distance = Math.min(...theirCores.map((core) => engine.map.distance(id, core)));
+      if (distance < bestDistance || (distance === bestDistance && (best === null || id < best))) {
+        best = id;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
+  /**
    * Gets villagers into the buildings that need them (docs 4.2).
    *
    * A building with nobody in it produces nothing at all now, so this is not
@@ -318,6 +410,9 @@ export class AiController {
       'intensiveFarming',
       'financialCentre',
       'consumerIndustry',
+      // Cheap, and the only way to a fortress. Ahead of the firepower line
+      // because a shut pass is worth more than a better rifle (docs 5.3).
+      'fieldworks',
       'rifles',
       'bodyArmour',
       // Eyes before guns: the AI only attacks what it can see (nearestEnemy),
@@ -588,25 +683,29 @@ export class AiController {
    * (docs 9), so this needs no scouting, and it only shifts when the border
    * does, which is what makes it a rally point an army can actually reach.
    */
-  private frontline(engine: GameEngine): string {
+  private frontline(engine: GameEngine): string;
+  private frontline(engine: GameEngine, usable: (id: string) => boolean): string | null;
+  private frontline(engine: GameEngine, usable?: (id: string) => boolean): string | null {
     const home = engine.state.players[this.playerId].coreRegionId;
     const theirCores = Object.values(engine.state.players)
       .filter((p) => p.id !== this.playerId && p.coreHp > 0)
       .map((p) => p.coreRegionId);
-    if (theirCores.length === 0) return home;
+    if (theirCores.length === 0) return usable ? null : home;
 
-    let best = home;
+    let best: string | null = null;
     let bestDistance = Infinity;
     for (const id of engine.ownedRegionIds(this.playerId)) {
+      if (usable && !usable(id)) continue;
       const distance = Math.min(...theirCores.map((core) => engine.map.distance(id, core)));
       // Ordered by id on a tie, so the rally point doesn't flicker between
       // two equally forward regions and split the army between them.
-      if (distance < bestDistance || (distance === bestDistance && id < best)) {
+      if (distance < bestDistance || (distance === bestDistance && (best === null || id < best))) {
         best = id;
         bestDistance = distance;
       }
     }
-    return best;
+    // Without a filter this is the rally point, which always needs an answer.
+    return best ?? (usable ? null : home);
   }
 
   /** The closest unclaimed region it could actually reach. */

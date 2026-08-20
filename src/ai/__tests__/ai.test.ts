@@ -5,6 +5,7 @@ import { AiController } from '../AiController';
 import { GameEngine } from '../../engine/GameEngine';
 import type { AiDifficulty } from '../../engine/types';
 import { totalUnits, troopsOnly } from '../../engine/units';
+import { placeVillagers } from '../../engine/__tests__/helpers';
 
 const HUMAN_CORE = 'taipei-1';
 const AI_CORE = 'kaohsiung-1';
@@ -233,5 +234,77 @@ describe('war, not a parade', () => {
   it('actually takes ground off the other player', () => {
     const { takenFromPlayer } = machineWar(30);
     expect(takenFromPlayer, 'regions changed hands between the two of them').toBeGreaterThan(0);
+  });
+});
+
+describe('digging in', () => {
+  /** An AI that holds a mountain pass, has met the enemy, and can pay. */
+  function atThePass() {
+    const engine = new GameEngine([
+      { id: 'p1', name: 'A', color: '#00f', coreRegionId: HUMAN_CORE },
+      { id: 'ai', name: 'AI', color: '#f00', coreRegionId: AI_CORE, aiDifficulty: 'hard' },
+    ]);
+    const ai = new AiController('ai', 'hard');
+    const me = engine.state.players.ai;
+    me.money = 5000;
+    me.food = 5000;
+    me.techs.push('fieldworks');
+    placeVillagers(engine, 'ai', 60);
+
+    // A region of ours with a mountain pass on its border.
+    const pass = engine.map.regions.find((r) =>
+      r.neighbors.some((n) => engine.map.isPass(r.id, n)),
+    )!.id;
+    engine.setRegionOwner(pass, 'ai');
+    // And an enemy in plain sight, so we know there is a war on.
+    const border = engine.map.region(AI_CORE).neighbors[0];
+    engine.setRegionOwner(border, 'p1');
+    return { engine, ai, pass };
+  }
+
+  it('shuts a pass with a fortress rather than building one anywhere', () => {
+    const { engine, ai, pass } = atThePass();
+    for (let think = 0; think < 5; think++) ai.decide(engine);
+
+    const region = engine.state.regions[pass];
+    // A fortress is worth its three hundred food where there is no way round
+    // it, and much less anywhere else (docs 5.3).
+    expect(
+      region.building?.type === 'fortress' || region.construction?.type === 'fortress',
+      'fortified the pass',
+    ).toBe(true);
+  });
+
+  it('digs a trench on the ground nearest them', () => {
+    const { engine, ai } = atThePass();
+    // No pass to shut: the fortress option is off, the trench is not.
+    engine.state.players.ai.techs.length = 0;
+    for (let think = 0; think < 5; think++) ai.decide(engine);
+
+    const dug = engine
+      .ownedRegionIds('ai')
+      .filter((id) => engine.state.regions[id].construction?.type === 'trench');
+    expect(dug.length, 'dug in somewhere').toBeGreaterThan(0);
+    // And at the gate: nothing of ours is closer to them than the trench is.
+    const theirCore = engine.state.players.p1.coreRegionId;
+    const distances = engine
+      .ownedRegionIds('ai')
+      .filter((id) => !engine.state.regions[id].building)
+      .map((id) => engine.map.distance(id, theirCore));
+    expect(engine.map.distance(dug[0], theirCore)).toBe(Math.min(...distances));
+  });
+
+  it('does not fortify a border nobody has come near', () => {
+    const { engine, ai, pass } = atThePass();
+    // Take the enemy back out of sight. Spending three hundred food on a wall
+    // against nobody is the cheapest way to lose on economy.
+    for (const id of engine.ownedRegionIds('p1')) engine.setRegionOwner(id, null);
+    for (let think = 0; think < 5; think++) ai.decide(engine);
+
+    expect(engine.state.regions[pass].construction?.type).not.toBe('fortress');
+    const dug = engine
+      .ownedRegionIds('ai')
+      .filter((id) => engine.state.regions[id].construction?.type === 'trench');
+    expect(dug, 'nothing dug').toEqual([]);
   });
 });
