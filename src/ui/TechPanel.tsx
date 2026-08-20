@@ -1,3 +1,4 @@
+import type { Order } from '../engine/orders';
 import {
   CORE_UPGRADE,
   MAX_CORE_LEVEL,
@@ -16,7 +17,8 @@ interface TechPanelProps {
   engine: GameEngine;
   playerId: string;
   onClose: () => void;
-  onChanged: () => void;
+  /** Research is an order like any other (docs 15.2) — the screen issues it. */
+  onOrder: (order: Order) => void;
 }
 
 /** Only the reasons worth spelling out; the rest are obvious from the row. */
@@ -26,7 +28,7 @@ const REJECTION_KEY: Partial<Record<ResearchRejection, TranslationKey>> = {
   cannotAfford: 'tech.cannotAfford',
 };
 
-export function TechPanel({ engine, playerId, onClose, onChanged }: TechPanelProps) {
+export function TechPanel({ engine, playerId, onClose, onOrder }: TechPanelProps) {
   const { t } = useSettings();
   const player = engine.state.players[playerId];
 
@@ -85,10 +87,7 @@ export function TechPanel({ engine, playerId, onClose, onChanged }: TechPanelPro
             <button
               className="btn btn-sm"
               disabled={rejection !== null}
-              onClick={() => {
-                engine.startResearch(playerId, def.id);
-                onChanged();
-              }}
+              onClick={() => onOrder({ type: 'research', techId: def.id })}
             >
               {t('tech.research')}
             </button>
@@ -121,10 +120,7 @@ export function TechPanel({ engine, playerId, onClose, onChanged }: TechPanelPro
             <button
               className="btn btn-sm"
               disabled={coreRejection !== null}
-              onClick={() => {
-                engine.startCoreUpgrade(playerId);
-                onChanged();
-              }}
+              onClick={() => onOrder({ type: 'upgradeCore' })}
             >
               {t('tech.upgradeCore')}（{t('game.money')} {upgradeCost.costMoney}・
               {t('game.food')} {upgradeCost.costFood}・{upgradeCost.seconds}s）
@@ -147,10 +143,7 @@ export function TechPanel({ engine, playerId, onClose, onChanged }: TechPanelPro
             <button
               className="btn btn-sm"
               disabled={researcherRejection !== null}
-              onClick={() => {
-                engine.trainResearcher(playerId);
-                onChanged();
-              }}
+              onClick={() => onOrder({ type: 'trainResearcher' })}
             >
               {t('tech.trainResearcher')}（{t('game.money')} {researcherCost(player.researchers)}）
             </button>

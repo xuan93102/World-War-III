@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GameEngine, type PlayerSetup } from '../../engine/GameEngine';
 import { TICK_SECONDS, fixedSteps } from '../../engine/clock';
+import { applyOrder, type Order } from '../../engine/orders';
 import { useSettings } from '../../settings/useSettings';
 import { AiController } from '../../ai/AiController';
 import { HUD } from '../HUD';
@@ -71,6 +72,17 @@ export function GameScreen({
       .map((p) => new AiController(p.id, p.aiDifficulty!));
   }
 
+  /**
+   * The one place a local order reaches the engine (docs 15.2). Everything
+   * the player can do goes through here as data, which is what lets the same
+   * action later be handed to a host instead of to our own engine.
+   */
+  const issue = (order: Order) => {
+    if (humanPlayerId === null) return;
+    applyOrder(engine, humanPlayerId, order);
+    forceRender((n) => n + 1);
+  };
+
   const winner = engine.getWinner();
   const isOver = winner !== null;
   // Freeze the clock while paused, once the match is decided, or while the
@@ -137,10 +149,7 @@ export function GameScreen({
           <VillagerBar
             engine={engine}
             playerId={humanPlayerId}
-            onBuy={(count) => {
-              engine.buyVillagers(humanPlayerId, count);
-              forceRender((n) => n + 1);
-            }}
+            onBuy={(count) => issue({ type: 'buyVillagers', count })}
           />
         )}
         <div className="topbar-actions">
@@ -220,70 +229,26 @@ export function GameScreen({
           players={players}
           humanPlayerId={humanPlayerId}
           selectedRegionId={selectedRegionId}
-          onBuild={(regionId, type) => {
-            engine.startConstruction(regionId, type, humanPlayerId);
-            forceRender((n) => n + 1);
-          }}
-          onTrain={(regionId, type, count) => {
-            engine.trainUnits(regionId, humanPlayerId, type, count);
-            forceRender((n) => n + 1);
-          }}
-          onUpgrade={(regionId, type, count) => {
-            engine.upgradeUnits(regionId, humanPlayerId, type, count);
-            forceRender((n) => n + 1);
-          }}
-          onRetreat={(regionId) => {
-            engine.retreat(regionId, humanPlayerId);
-            forceRender((n) => n + 1);
-          }}
-          onOrderHere={(regionId, order) => {
-            engine.orderHere(regionId, humanPlayerId, order);
-            forceRender((n) => n + 1);
-          }}
-          onStaff={(regionId, count) => {
-            engine.staffBuilding(regionId, humanPlayerId, count);
-            forceRender((n) => n + 1);
-          }}
-          onUnstaff={(regionId, count) => {
-            engine.unstaffBuilding(regionId, humanPlayerId, count);
-            forceRender((n) => n + 1);
-          }}
-          onStandDown={(regionId) => {
-            engine.standDown(regionId, humanPlayerId);
-            forceRender((n) => n + 1);
-          }}
-          onQueueVehicles={(regionId, type, count) => {
-            engine.queueVehicles(regionId, humanPlayerId, type, count);
-            forceRender((n) => n + 1);
-          }}
-          onCancelProduction={(index) => {
-            engine.cancelProduction(humanPlayerId, index);
-            forceRender((n) => n + 1);
-          }}
-          onBombard={(from, to) => {
-            engine.bombard(from, to, humanPlayerId);
-            forceRender((n) => n + 1);
-          }}
-          onCeaseFire={(regionId) => {
-            engine.ceaseFire(regionId, humanPlayerId);
-            forceRender((n) => n + 1);
-          }}
-          onDispatchCart={(from, to, porters) => {
-            engine.dispatchCart(from, to, humanPlayerId, porters);
-            forceRender((n) => n + 1);
-          }}
-          onMarch={(from, to, units, onArrival) => {
-            engine.startMarch(from, to, humanPlayerId, units, onArrival);
-            forceRender((n) => n + 1);
-          }}
-          onCancelBuild={(regionId) => {
-            engine.cancelConstruction(regionId, humanPlayerId);
-            forceRender((n) => n + 1);
-          }}
-          onDemolish={(regionId) => {
-            engine.demolish(regionId, humanPlayerId);
-            forceRender((n) => n + 1);
-          }}
+          onBuild={(regionId, building) => issue({ type: 'build', regionId, building })}
+          onTrain={(regionId, unit, count) => issue({ type: 'train', regionId, unit, count })}
+          onUpgrade={(regionId, unit, count) => issue({ type: 'upgrade', regionId, unit, count })}
+          onRetreat={(regionId) => issue({ type: 'retreat', regionId })}
+          onOrderHere={(regionId, order) => issue({ type: 'orderHere', regionId, order })}
+          onStaff={(regionId, count) => issue({ type: 'staff', regionId, count })}
+          onUnstaff={(regionId, count) => issue({ type: 'unstaff', regionId, count })}
+          onStandDown={(regionId) => issue({ type: 'standDown', regionId })}
+          onQueueVehicles={(regionId, unit, count) =>
+            issue({ type: 'queueVehicles', regionId, unit, count })
+          }
+          onCancelProduction={(index) => issue({ type: 'cancelProduction', index })}
+          onBombard={(from, to) => issue({ type: 'bombard', from, to })}
+          onCeaseFire={(regionId) => issue({ type: 'ceaseFire', regionId })}
+          onDispatchCart={(from, to, porters) => issue({ type: 'dispatchCart', from, to, porters })}
+          onMarch={(from, to, units, onArrival) =>
+            issue({ type: 'march', from, to, units, onArrival })
+          }
+          onCancelBuild={(regionId) => issue({ type: 'cancelBuild', regionId })}
+          onDemolish={(regionId) => issue({ type: 'demolish', regionId })}
         />
         )}
       </div>
@@ -293,7 +258,7 @@ export function GameScreen({
           engine={engine}
           playerId={humanPlayerId}
           onClose={() => setShowTech(false)}
-          onChanged={() => forceRender((n) => n + 1)}
+          onOrder={issue}
         />
       )}
 
