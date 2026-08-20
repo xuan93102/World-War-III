@@ -8,7 +8,7 @@
 // here.
 import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
-import { applyOrder, type Order } from '../orders';
+import { applyOrder, parseOrder, type Order } from '../orders';
 import { BUILDINGS } from '../buildings';
 import { TICK_SECONDS } from '../clock';
 import { placeVillagers, trainNow } from './helpers';
@@ -135,5 +135,75 @@ describe('an order that cannot be carried out', () => {
     expect(g.state.players.p1.money, 'their order did not spend my gold').toBe(myMoney);
     expect(g.state.players.p2.money, 'it spent theirs').toBeLessThan(theirMoney);
     expect(g.ownGarrisonAt(RED, 'p2').villager, 'and the villagers are at their core').toBe(10);
+  });
+});
+
+describe('an order arriving from a stranger', () => {
+  it('is refused unless it is shaped like an order', () => {
+    const rubbish: unknown[] = [
+      null,
+      undefined,
+      42,
+      'march',
+      [],
+      {},
+      { type: 'nonsense' },
+      { type: 'buyVillagers' },
+      { type: 'buyVillagers', count: 'lots' },
+      { type: 'buyVillagers', count: 1.5 },
+      { type: 'buyVillagers', count: -1 },
+      { type: 'buyVillagers', count: Number.NaN },
+      { type: 'build', regionId: 'taipei-1' },
+      { type: 'march', from: 'taipei-1', to: 'taipei-2' },
+      { type: 'march', from: 'taipei-1', to: 'taipei-2', units: [] },
+      { type: 'march', from: 'taipei-1', to: 'taipei-2', units: { militia: -4 } },
+      { type: 'march', from: 'taipei-1', to: 'taipei-2', units: { dragon: 4 } },
+      { type: 'march', from: 'taipei-1', to: 'taipei-2', units: {}, onArrival: 'flee' },
+      { type: 'orderHere', regionId: 'taipei-1', order: 'surrender' },
+      { type: 'research' },
+      { type: 'staff', regionId: 'taipei-1' },
+    ];
+    for (const value of rubbish) {
+      expect(parseOrder(value), `let through: ${JSON.stringify(value)}`).toBe(null);
+    }
+  });
+
+  it('is refused when it names something that does not exist', () => {
+    // This is the one that matters: the engine looks these up in tables and
+    // throws on a miss, so an unparsed order could stop a host dead.
+    expect(parseOrder({ type: 'research', techId: 'timeTravel' })).toBe(null);
+    expect(parseOrder({ type: 'train', regionId: 'taipei-1', unit: 'dragon', count: 1 })).toBe(null);
+    expect(parseOrder({ type: 'build', regionId: 'taipei-1', building: 'castle' })).toBe(null);
+    // …and a prototype-chain name is not a unit either.
+    expect(parseOrder({ type: 'train', regionId: 'a', unit: 'toString', count: 1 })).toBe(null);
+  });
+
+  it('would otherwise have brought the engine down', () => {
+    const g = new GameEngine([
+      { id: 'p1', name: 'A', color: '#00f', coreRegionId: CORE },
+      { id: 'p2', name: 'B', color: '#f00', coreRegionId: RED },
+    ]);
+    // Proof that the guard earns its place, not just that it exists.
+    expect(() => applyOrder(g, 'p1', { type: 'research', techId: 'timeTravel' as never })).toThrow();
+    const parsed = parseOrder({ type: 'research', techId: 'timeTravel' });
+    expect(parsed).toBe(null);
+  });
+
+  it('lets every real order through unchanged', () => {
+    for (const order of everyOrder(CORE, RED)) {
+      const wire = JSON.parse(JSON.stringify(order));
+      expect(parseOrder(wire), `refused a real order: ${order.type}`).toEqual(order);
+    }
+  });
+
+  it('drops the extra fields a sender bolted on', () => {
+    const parsed = parseOrder({
+      type: 'buyVillagers',
+      count: 5,
+      playerId: 'p2',
+      andAlso: 'give me gold',
+    });
+    // Notably playerId: an order never says who gave it (docs 15.2).
+    expect(parsed).toEqual({ type: 'buyVillagers', count: 5 });
   });
 });

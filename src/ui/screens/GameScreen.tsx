@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { GameEngine, type PlayerSetup } from '../../engine/GameEngine';
 import { TICK_SECONDS, fixedSteps } from '../../engine/clock';
 import { applyOrder, type Order } from '../../engine/orders';
+import { aiSeats, localPlayerId, type Seat } from '../../match/seats';
 import { useSettings } from '../../settings/useSettings';
 import { AiController } from '../../ai/AiController';
 import { HUD } from '../HUD';
@@ -25,11 +26,8 @@ const SPEEDS = [1, 2, 4, 8];
 
 interface GameScreenProps {
   setups: PlayerSetup[];
-  /**
-   * The seat the local player controls, or null when nobody is playing and
-   * the match is only being watched.
-   */
-  humanPlayerId: string | null;
+  /** Who is playing each side (docs 15.4) — a human here, a machine, or someone else's machine. */
+  seats: Seat[];
   /** Pause is single-player only; a networked match can't unilaterally stop. */
   canPause: boolean;
   onQuit: () => void;
@@ -38,7 +36,7 @@ interface GameScreenProps {
 
 export function GameScreen({
   setups,
-  humanPlayerId,
+  seats,
   canPause,
   onQuit,
   onPlayAgain,
@@ -48,7 +46,9 @@ export function GameScreen({
   // starts a fresh game, so this deliberately ignores later `setups` changes.
   const engine = useMemo(() => new GameEngine(setups), []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Nobody in a seat: no fog, no orders, and the clock can be wound forward.
+  // Whose eyes we're looking through, and whether anyone here is playing at
+  // all — watching two machines is simply a match with no human seat.
+  const humanPlayerId = localPlayerId(seats);
   const spectating = humanPlayerId === null;
 
   const [, forceRender] = useState(0);
@@ -67,9 +67,7 @@ export function GameScreen({
   // same orders a human does — the engine has no idea which is which.
   const seatsRef = useRef<AiController[]>([]);
   if (seatsRef.current.length === 0) {
-    seatsRef.current = Object.values(engine.state.players)
-      .filter((p) => p.aiDifficulty !== undefined)
-      .map((p) => new AiController(p.id, p.aiDifficulty!));
+    seatsRef.current = aiSeats(seats).map((seat) => new AiController(seat.playerId, seat.difficulty));
   }
 
   /**

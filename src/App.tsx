@@ -2,6 +2,7 @@ import { useState } from 'react';
 import './App.css';
 import type { PlayerSetup } from './engine/GameEngine';
 import type { AiDifficulty } from './engine/types';
+import type { Seat } from './match/seats';
 import { SettingsProvider } from './settings/SettingsContext';
 import { useSettings } from './settings/useSettings';
 import { GameScreen } from './ui/screens/GameScreen';
@@ -21,8 +22,8 @@ const HUMAN_ID = 'p1';
 interface MatchConfig {
   setups: PlayerSetup[];
   canPause: boolean;
-  /** null when nobody is playing — both seats are machines and we watch. */
-  humanPlayerId: string | null;
+  /** Who drives each side (docs 15.4). No human seat means we're watching. */
+  seats: Seat[];
 }
 
 function AppShell() {
@@ -43,7 +44,10 @@ function AppShell() {
   const beginPve = ({ difficulty, playerCore, opponentCore }: SetupResult) => {
     setMatch({
       canPause: true,
-      humanPlayerId: HUMAN_ID,
+      seats: [
+        { by: 'human', playerId: HUMAN_ID },
+        { by: 'ai', playerId: 'p2', difficulty },
+      ],
       setups: [
         { id: HUMAN_ID, name: t('game.playerA'), color: PLAYER_COLOR, coreRegionId: playerCore },
         {
@@ -69,7 +73,10 @@ function AppShell() {
   }: SetupResult) => {
     setMatch({
       canPause: true,
-      humanPlayerId: null,
+      seats: [
+        { by: 'ai', playerId: HUMAN_ID, difficulty },
+        { by: 'ai', playerId: 'p2', difficulty: opponentDifficulty },
+      ],
       setups: [
         {
           id: HUMAN_ID,
@@ -139,7 +146,7 @@ function AppShell() {
         <GameScreen
           key={matchKey}
           setups={match.setups}
-          humanPlayerId={match.humanPlayerId}
+          seats={match.seats}
           canPause={match.canPause}
           onQuit={() => setScreen('menu')}
           onPlayAgain={() => setMatchKey((k) => k + 1)}
