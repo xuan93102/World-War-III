@@ -288,6 +288,30 @@ export class GameEngine {
     };
   }
 
+  /**
+   * An engine wrapped around a state that came from somewhere else — a
+   * snapshot off the wire, or a saved match (docs 15.3).
+   *
+   * The point is that a guest needs no special interface: give it one of
+   * these over the filtered state it was sent, and every derived reading the
+   * panels ask for works exactly as it does at home. It is not ticked by its
+   * owner; the state is replaced as snapshots arrive.
+   */
+  static fromState(state: GameState, mapId: string = DEFAULT_MAP_ID): GameEngine {
+    const engine = new GameEngine(
+      Object.values(state.players).map((p) => ({
+        id: p.id,
+        name: p.name,
+        color: p.color,
+        coreRegionId: p.coreRegionId,
+        aiDifficulty: p.aiDifficulty,
+      })),
+      mapId,
+    );
+    engine.state = state;
+    return engine;
+  }
+
   // ---- legions (docs/game-design.md 7) -----------------------------------
 
   private nextMarchId = 1;
