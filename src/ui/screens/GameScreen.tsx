@@ -3,6 +3,10 @@ import { GameEngine, type PlayerSetup } from '../../engine/GameEngine';
 import { TICK_SECONDS, fixedSteps } from '../../engine/clock';
 import { applyOrder, type Order } from '../../engine/orders';
 import { aiSeats, localPlayerId, type Seat } from '../../match/seats';
+import { snapshotFor } from '../../engine/snapshot';
+import { parseOrder } from '../../engine/orders';
+import type { Connection } from '../../match/connection';
+import type { GameState } from '../../engine/types';
 import { useSettings } from '../../settings/useSettings';
 import { AiController } from '../../ai/AiController';
 import { HUD } from '../HUD';
@@ -21,6 +25,13 @@ import { VillagerBar } from '../VillagerBar';
  */
 const FRAME_INTERVAL_MS = 200;
 
+/**
+ * How often the host posts the guest a fresh view of the world. Every frame:
+ * the whole state is 4-16 KB, so there's nothing yet to be clever about, and
+ * the guest smooths the gaps by stepping its own copy in between.
+ */
+const SNAPSHOT_INTERVAL_MS = FRAME_INTERVAL_MS;
+
 /** Fast-forward, for watching a match nobody is steering. */
 const SPEEDS = [1, 2, 4, 8];
 
@@ -30,6 +41,8 @@ interface GameScreenProps {
   seats: Seat[];
   /** Pause is single-player only; a networked match can't unilaterally stop. */
   canPause: boolean;
+  /** Present in a networked match: which end we are, and the wire (docs 15.4). */
+  net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string };
   onQuit: () => void;
   onPlayAgain: () => void;
 }
@@ -38,6 +51,7 @@ export function GameScreen({
   setups,
   seats,
   canPause,
+  net,
   onQuit,
   onPlayAgain,
 }: GameScreenProps) {
@@ -60,9 +74,13 @@ export function GameScreen({
   const [showTech, setShowTech] = useState(false);
   const [paused, setPaused] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
+  // The other end went away (docs 15.5). The clock stops rather than running
+  // on against nobody, because whatever happens next is not a match.
+  const [peerGone, setPeerGone] = useState(false);
   const lastTimeRef = useRef<number>(performance.now());
   // Real time that has passed but not yet been spent on whole steps.
   const bankedRef = useRef(0);
+  const lastSentRef = useRef(0);
   // One controller per AI seat, built once per match (docs 13). They take the
   // same orders a human does — the engine has no idea which is which.
   const seatsRef = useRef<AiController[]>([]);
@@ -77,15 +95,45 @@ export function GameScreen({
    */
   const issue = (order: Order) => {
     if (humanPlayerId === null) return;
+    // The guest does it locally *and* asks for it to be done for real. The
+    // local copy is a prediction: it makes the button feel immediate, and
+    // the next snapshot is the truth if the two disagree (docs 15.4).
+    if (net?.role === 'guest') net.connection.send({ t: 'order', order });
     applyOrder(engine, humanPlayerId, order);
     forceRender((n) => n + 1);
   };
+
+  // What the other end has to say. Orders if we're the host, the world if
+  // we're the guest.
+  const incoming = useRef<GameState | null>(null);
+  useEffect(() => {
+    if (!net) return;
+    net.connection.onState = (state) => setPeerGone(state.at === 'gone');
+    net.connection.onMessage = (data) => {
+      if (typeof data !== 'object' || data === null) return;
+      const message = data as { t?: unknown; order?: unknown; state?: unknown };
+      if (net.role === 'host' && message.t === 'order') {
+        // Parsed before it goes anywhere near the engine, and carried out as
+        // the player whose socket it arrived on — never as whoever it claims.
+        const order = parseOrder(message.order);
+        if (order) applyOrder(engine, net.opponentId, order);
+        return;
+      }
+      if (net.role === 'guest' && message.t === 'snapshot') {
+        incoming.current = message.state as GameState;
+      }
+    };
+    return () => {
+      net.connection.onMessage = () => {};
+      net.connection.onState = () => {};
+    };
+  }, [net, engine]);
 
   const winner = engine.getWinner();
   const isOver = winner !== null;
   // Freeze the clock while paused, once the match is decided, or while the
   // quit confirmation is up — otherwise resources keep ticking behind a modal.
-  const clockStopped = paused || isOver || confirmQuit;
+  const clockStopped = paused || isOver || confirmQuit || peerGone;
 
   useEffect(() => {
     if (clockStopped) return;
@@ -102,14 +150,28 @@ export function GameScreen({
       bankedRef.current += deltaSeconds * (spectating ? speed : 1);
       const { steps, left } = fixedSteps(bankedRef.current);
       bankedRef.current = left;
+      // A snapshot that has arrived replaces everything: it is the truth,
+      // and whatever the guest predicted since the last one was a guess.
+      if (incoming.current) {
+        engine.state = incoming.current;
+        incoming.current = null;
+      }
       for (let step = 0; step < steps; step++) {
         engine.tick(TICK_SECONDS);
-        for (const seat of seatsRef.current) seat.update(engine, TICK_SECONDS);
+        // Only the machine that owns a controller runs it. A guest ticking
+        // its own copy is smoothing the gaps between snapshots, not playing.
+        if (net?.role !== 'guest') {
+          for (const seat of seatsRef.current) seat.update(engine, TICK_SECONDS);
+        }
+      }
+      if (net?.role === 'host' && now - lastSentRef.current >= SNAPSHOT_INTERVAL_MS) {
+        lastSentRef.current = now;
+        net.connection.send({ t: 'snapshot', state: snapshotFor(engine, net.opponentId) });
       }
       if (steps > 0) forceRender((n) => n + 1);
     }, FRAME_INTERVAL_MS);
     return () => clearInterval(intervalId);
-  }, [engine, clockStopped, spectating, speed]);
+  }, [engine, clockStopped, spectating, speed, net]);
 
   const players = Object.values(engine.state.players);
   const intel: Record<string, ReturnType<GameEngine['intelOn']>> = {};
@@ -258,6 +320,19 @@ export function GameScreen({
           onClose={() => setShowTech(false)}
           onOrder={issue}
         />
+      )}
+
+      {peerGone && !isOver && (
+        <Modal
+          title={t('pvp.opponentLeft')}
+          actions={
+            <button className="btn btn-primary" onClick={onQuit}>
+              {t('result.toMenu')}
+            </button>
+          }
+        >
+          <p className="modal-body">{t('pvp.opponentLeftBody')}</p>
+        </Modal>
       )}
 
       {confirmQuit && !isOver && (

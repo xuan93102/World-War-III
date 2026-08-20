@@ -3,6 +3,7 @@ import './App.css';
 import type { PlayerSetup } from './engine/GameEngine';
 import type { AiDifficulty } from './engine/types';
 import type { Seat } from './match/seats';
+import type { Connection } from './match/connection';
 import { SettingsProvider } from './settings/SettingsContext';
 import { useSettings } from './settings/useSettings';
 import { GameScreen } from './ui/screens/GameScreen';
@@ -10,7 +11,7 @@ import { HelpScreen } from './ui/screens/HelpScreen';
 import { MainMenu } from './ui/screens/MainMenu';
 import { ModeSelect } from './ui/screens/ModeSelect';
 import { PveSetup } from './ui/screens/PveSetup';
-import { PvpLobby } from './ui/screens/PvpLobby';
+import { PvpLobby, type PvpMatch } from './ui/screens/PvpLobby';
 import { SettingsScreen } from './ui/screens/SettingsScreen';
 
 type Screen = 'menu' | 'mode' | 'pvp' | 'pve' | 'spectate' | 'settings' | 'help' | 'game';
@@ -24,6 +25,8 @@ interface MatchConfig {
   canPause: boolean;
   /** Who drives each side (docs 15.4). No human seat means we're watching. */
   seats: Seat[];
+  /** Present when somebody in this match is on another machine. */
+  net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string };
 }
 
 function AppShell() {
@@ -98,6 +101,20 @@ function AppShell() {
     setScreen('game');
   };
 
+  // A networked match: the lobby has already agreed the board and who is
+  // who, so there is nothing left to decide here.
+  const beginPvp = ({ setups, seats, role, connection, opponentId }: PvpMatch) => {
+    setMatch({
+      // Nobody can stop a clock the other end is also watching.
+      canPause: false,
+      seats,
+      setups,
+      net: { role, connection, opponentId },
+    });
+    setMatchKey((k) => k + 1);
+    setScreen('game');
+  };
+
   switch (screen) {
     case 'menu':
       return (
@@ -117,7 +134,16 @@ function AppShell() {
         />
       );
     case 'pvp':
-      return <PvpLobby onBack={() => setScreen('mode')} />;
+      return (
+        <PvpLobby
+          playerColor={PLAYER_COLOR}
+          opponentColor={OPPONENT_COLOR}
+          hostName={t('pvp.hostSide')}
+          guestName={t('pvp.guestSide')}
+          onBegin={beginPvp}
+          onBack={() => setScreen('mode')}
+        />
+      );
     case 'pve':
       return (
         <PveSetup
@@ -148,7 +174,11 @@ function AppShell() {
           setups={match.setups}
           seats={match.seats}
           canPause={match.canPause}
-          onQuit={() => setScreen('menu')}
+          net={match.net}
+          onQuit={() => {
+            match.net?.connection.close();
+            setScreen('menu');
+          }}
           onPlayAgain={() => setMatchKey((k) => k + 1)}
         />
       ) : null;
