@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { CORE_HP } from '../buildings';
 import { COMBAT_ROUND_SECONDS } from '../combat';
-import { stackAtk } from '../units';
+import { siegeAtk } from '../units';
 
 const CORE = 'taipei-1';
 const ENEMY_CORE = 'taipei-5';
@@ -107,7 +107,9 @@ describe('knocking it down', () => {
 
     g.tick(COMBAT_ROUND_SECONDS);
     const dealt = CORE_HP - g.state.players.p2.coreHp;
-    expect(dealt, 'one round of 20 militia').toBeCloseTo(stackAtk({ militia: 20 }), 5);
+    // Militia bring half their attack against anything built (docs 6.6), the
+    // core included — twenty of them are worth ten men at a wall.
+    expect(dealt, 'one round of 20 militia').toBeCloseTo(siegeAtk({ militia: 20 }), 5);
   });
 
   it('stops at zero and hands the match over', () => {

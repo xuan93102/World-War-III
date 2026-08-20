@@ -59,6 +59,13 @@ export interface UnitDef {
    * Only scouts are.
    */
   hidden?: boolean;
+  /**
+   * How much of this unit's attack counts against something built (docs
+   * 6.6). Defaults to all of it; militia bring half, because a mob with
+   * small arms is not a way to take down a building, and letting it be one
+   * made militia the only unit anybody needed.
+   */
+  siegeMultiplier?: number;
 }
 
 /**
@@ -103,6 +110,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     buildSeconds: 5,
     upgradeSeconds: 0,
     requiresTech: null,
+    siegeMultiplier: 0.5,
   },
   conscript: {
     type: 'conscript',
@@ -278,6 +286,19 @@ export function rangedAtk(counts: UnitCounts | undefined, hops: number): number 
 export function stackAtk(counts: UnitCounts | undefined): number {
   if (!counts) return 0;
   return UNIT_ORDER.reduce((sum, type) => sum + (counts[type] ?? 0) * UNITS[type].atk, 0);
+}
+
+/**
+ * What a stack is worth against a building or a core (docs 6.6), as opposed
+ * to against people. Not everything that can kill a man can bring down a wall.
+ */
+export function siegeAtk(counts: UnitCounts | undefined): number {
+  if (!counts) return 0;
+  return UNIT_ORDER.reduce(
+    (sum, type) =>
+      sum + (counts[type] ?? 0) * UNITS[type].atk * (UNITS[type].siegeMultiplier ?? 1),
+    0,
+  );
 }
 
 /** Combined hit points of a stack. */

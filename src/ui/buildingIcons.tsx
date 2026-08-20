@@ -33,6 +33,7 @@ const BUILDING_COLOR: Record<BuildingType, string> = {
   school: '#4a90d9', // blue — learning
   research: '#9b59d0', // purple — science
   fortress: '#8d7355', // stone brown
+  trench: '#6b7a52', // dug earth and sandbags
   camp: '#7b8b5a', // canvas olive — a tent, not a building
   wonder: '#ffd54a', // bright gold — the win condition
 };
@@ -183,6 +184,15 @@ function glyph(key: IconKey, p: Palette) {
           {isoBox(5.5, 19, 3, 7, p)}
           {isoBox(18.5, 19, 3, 7, p)}
           <path d="M9.6 19.4 V17.2 A2.4 2.4 0 0 1 12 17.2 V20.6 Z" fill={p.detail} />
+        </>
+      );
+    case 'trench': // a cut in the ground behind a parapet of sandbags
+      return (
+        <>
+          <path d="M2.5 18.5 H21.5 L18 22 H6 Z" fill={p.left} />
+          <path d="M6 18.5 H18 L15.5 15.5 H8.5 Z" fill={p.detail} />
+          {isoBox(6, 15.5, 3, 1.6, p)}
+          {isoBox(18, 15.5, 3, 1.6, p)}
         </>
       );
     case 'camp': // ridge tent beside a crate

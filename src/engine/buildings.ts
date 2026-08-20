@@ -11,6 +11,8 @@ export type BuildingType =
   | 'school'
   | 'research'
   | 'fortress'
+  /** Dug across a road to be walked into, not looked at (docs 5.3). */
+  | 'trench'
   | 'wonder'
   /** A forward depot an army pitches in the field (docs 6.3). */
   | 'camp';
@@ -90,7 +92,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.granary',
     descKey: 'building.granary.desc',
     category: 'globalUnlock',
-    costMoney: 50,
+    costMoney: 100,
     costFood: 150,
     buildSeconds: 45,
     hp: 300,
@@ -101,7 +103,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.academy',
     descKey: 'building.academy.desc',
     category: 'globalUnlock',
-    costMoney: 50,
+    costMoney: 100,
     costFood: 150,
     buildSeconds: 45,
     hp: 300,
@@ -114,7 +116,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.arsenal',
     descKey: 'building.arsenal.desc',
     category: 'globalUnlock',
-    costMoney: 50,
+    costMoney: 100,
     costFood: 150,
     buildSeconds: 45,
     hp: 300,
@@ -126,7 +128,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.school',
     descKey: 'building.school.desc',
     category: 'local',
-    costMoney: 40,
+    costMoney: 80,
     costFood: 0,
     buildSeconds: 45,
     hp: 250,
@@ -138,7 +140,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.research',
     descKey: 'building.research.desc',
     category: 'local',
-    costMoney: 40,
+    costMoney: 80,
     costFood: 0,
     buildSeconds: 45,
     hp: 250,
@@ -150,7 +152,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.fortress',
     descKey: 'building.fortress.desc',
     category: 'local',
-    costMoney: 80,
+    costMoney: 160,
     costFood: 300,
     buildSeconds: 60,
     hp: 1000,
@@ -159,12 +161,25 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     requiresTech: 'fieldworks',
     lockedReasonKey: 'building.locked.fortress',
   },
+  trench: {
+    type: 'trench',
+    nameKey: 'building.trench',
+    descKey: 'building.trench.desc',
+    category: 'local',
+    costMoney: 50,
+    costFood: 100,
+    buildSeconds: 30,
+    // Tougher than a shed, nothing like a fortress: it is meant to cost an
+    // attacker time, not to be impossible.
+    hp: 500,
+    implemented: true,
+  },
   camp: {
     type: 'camp',
     nameKey: 'building.camp',
     descKey: 'building.camp.desc',
     category: 'local',
-    costMoney: 15,
+    costMoney: 30,
     costFood: 0,
     buildSeconds: 20,
     hp: 200,
@@ -175,7 +190,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.wonder',
     descKey: 'building.wonder.desc',
     category: 'local',
-    costMoney: 300,
+    costMoney: 3000,
     costFood: 2000,
     buildSeconds: 300,
     hp: 2000,
@@ -193,6 +208,7 @@ export const BUILDING_ORDER: BuildingType[] = [
   'school',
   'research',
   'fortress',
+  'trench',
   'camp',
   'wonder',
 ];

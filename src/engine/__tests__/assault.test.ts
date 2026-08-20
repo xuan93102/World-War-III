@@ -6,7 +6,7 @@ import { GameEngine } from '../GameEngine';
 import { BUILDINGS } from '../buildings';
 import { COMBAT_ROUND_SECONDS } from '../combat';
 import { MARCH_SECONDS_PER_HOP } from '../movement';
-import { totalUnits } from '../units';
+import { siegeAtk, totalUnits } from '../units';
 import { garrisonAt } from '../regions';
 import { trainNow } from './helpers';
 
@@ -138,12 +138,13 @@ describe('knocking a building down', () => {
     g.assault(NEXT_DOOR, 'p1');
 
     g.tick(COMBAT_ROUND_SECONDS);
+    // Half of ten: a mob with small arms is half a siege engine (docs 6.6).
     expect(g.state.regions[NEXT_DOOR].building!.hp, '10 militia, one round').toBeCloseTo(
-      BUILDINGS.shop.hp - 10,
+      BUILDINGS.shop.hp - siegeAtk({ militia: 10 }),
       5,
     );
 
-    g.tick(COMBAT_ROUND_SECONDS * 25);
+    g.tick(COMBAT_ROUND_SECONDS * 50);
     expect(g.state.regions[NEXT_DOOR].building, 'down').toBe(undefined);
     // Ground with something built on it is held from inside, so knocking the
     // building down is what takes it (docs 6.6) — there is no separate step.
@@ -197,7 +198,7 @@ describe('knocking a building down', () => {
     };
     send(g, NEXT_DOOR, 20);
     g.assault(NEXT_DOOR, 'p1');
-    g.tick(COMBAT_ROUND_SECONDS * 11);
+    g.tick(COMBAT_ROUND_SECONDS * 21);
 
     expect(g.state.regions[NEXT_DOOR].building, 'tent and stores both gone').toBe(undefined);
   });

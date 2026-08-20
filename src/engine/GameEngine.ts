@@ -22,6 +22,7 @@ import {
   UNIT_ORDER,
   isVehicle,
   rangedAtk,
+  siegeAtk,
   stackAtk,
   stackSpeed,
   totalUnits,
@@ -1071,6 +1072,17 @@ export class GameEngine {
       this.setRegionOwner(march.to, march.playerId);
     }
 
+    // A trench is dug to be walked into (docs 5.3). A column that steps onto
+    // one doesn't march through it — this hop is where the road ends, and it
+    // has to fight its way out. That's the whole building: it doesn't stop
+    // anyone entering, it stops them leaving without a fight.
+    const stopped = this.state.legions.find((l) => l.id === march.legionId);
+    if (stopped && this.trenchAgainst(march.to, march.playerId)) {
+      march.route = [];
+      march.destination = march.to;
+      stopped.onArrival = 'assault';
+    }
+
     const next = march.route[0];
     if (next === undefined) {
       // Land the column: it merges into whatever this player already has here,
@@ -1337,6 +1349,19 @@ export class GameEngine {
     if (!legion?.assaulting) return false;
     legion.assaulting = false;
     return true;
+  }
+
+  /**
+   * Is there a trench here belonging to somebody else (docs 5.3)?
+   *
+   * Public because it's a thing the player needs to be told before they order
+   * a march through it, not a surprise sprung on the column when it arrives.
+   */
+  trenchAgainst(regionId: string, playerId: PlayerId): boolean {
+    const building = this.state.regions[regionId]?.building;
+    if (building?.type !== 'trench') return false;
+    const owner = this.buildingOwner(regionId);
+    return owner !== null && owner !== playerId;
   }
 
   /** Whether this player's own fortress stands here, bastion works and all. */
@@ -2194,8 +2219,10 @@ export class GameEngine {
       const techs = this.ownedTechs(legion.playerId);
       // Siege munitions only help against what's built, not against people.
       const siege = target === 'building' ? siegeDamageMultiplier(techs) : 1;
+      // And what the stack is worth is measured differently against a wall
+      // than against a man — militia bring half their attack (docs 6.6).
       const damage =
-        ((stackAtk(legion.units) *
+        ((siegeAtk(legion.units) *
           attackMultiplier(techs) *
           supplyAttackMultiplier(legion.supply) *
           siege) /
