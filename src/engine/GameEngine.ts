@@ -394,10 +394,10 @@ export class GameEngine {
   /**
    * Is a fortress here closed against this player (docs 5.3)?
    *
-   * A held pass is terrain, not an obstacle: the region drops out of route
-   * planning entirely for everyone but its owner, exactly as the central
-   * range does. Nothing walks through it while it stands — the way past is to
-   * shell it down from outside (docs 6.5) or to go round.
+   * A held pass is a wall across the road: nothing marches *through* it, so
+   * the region drops out of route planning the way the central range does.
+   * It is still somewhere you can march *to* — that's a siege, and knocking
+   * the gate down is the only way the road ever opens.
    */
   fortressSeals(regionId: string, playerId: PlayerId): boolean {
     const region = this.state.regions[regionId];
@@ -425,14 +425,7 @@ export class GameEngine {
       (id) => this.canEnter(id, playerId),
       (a, b) =>
         terrainRejection(this.map, a, b, this.hasMountainRoad(playerId)) === null &&
-        (!heavy || !this.map.isPass(a, b) || vehiclesCrossPasses(techs)) &&
-        // A held fortress is terrain, so it closes the road rather than
-        // merely being unpleasant to walk into (docs 5.3). It has to be said
-        // here rather than in canEnter: a route's *destination* is exempt
-        // from canEnter — marching onto enemy ground is an attack, which is
-        // a legal order — and a sealed pass is not somewhere you may attack
-        // into either. There is no edge that leads in.
-        !this.fortressSeals(b, playerId),
+        (!heavy || !this.map.isPass(a, b) || vehiclesCrossPasses(techs)),
     );
   }
 
@@ -458,6 +451,10 @@ export class GameEngine {
     if (!this.state.regions[from]) return 'notOwner';
     if (!stackContains(this.ownGarrisonAt(from, playerId), units)) return 'noUnits';
     if (from === to) return 'notAdjacent';
+    // Standing at the gate is not the same as being through it (docs 5.3).
+    // Marching in to besiege a fortress is allowed; marching on past one
+    // that is still standing is exactly what it exists to prevent.
+    if (this.fortressSeals(from, playerId)) return 'fortressHolds';
     if (this.marchRoute(from, to, playerId, units) !== null) return null;
     // No route. Say which wall they hit: a sealed pass reads very differently
     // from "there's no way through", and both are actionable.
@@ -1059,20 +1056,19 @@ export class GameEngine {
   private completeHop(march: March): boolean {
     const target = this.state.regions[march.to];
 
-    // A fortress went up across the column's path while it was walking. The
-    // road is shut (docs 5.3), so it halts where it stands rather than
-    // bursting through a gate that closed behind its orders.
+    // A gate here is where the road ends (docs 5.3): a column that walks up
+    // to a standing fortress stops in front of it, whatever it was aiming at
+    // beyond. Getting through means knocking it down first.
     if (this.fortressSeals(march.to, march.playerId)) {
-      const column = this.state.legions.find((l) => l.id === march.legionId);
-      if (column) this.landColumn(march.from, column);
-      return true;
+      march.route = [];
+      march.destination = march.to;
     }
 
     // Walking into ground someone else holds starts a fight rather than a
     // landing. This is also how interception works: a route is planned around
     // hostile ground, so if an enemy has moved into the column's path since it
     // set out, it walks straight into them.
-    if (!this.canEnter(march.to, march.playerId)) {
+    if (this.blockingForceAt(march.to, march.playerId)) {
       const column = this.state.legions.find((l) => l.id === march.legionId);
       this.engage(
         march.to,

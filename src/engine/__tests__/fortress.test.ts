@@ -1,5 +1,5 @@
-// A held fortress is terrain (docs/game-design.md 5.3): the region drops out
-// of route planning for everyone but its owner.
+// A held fortress is a wall across the road (docs/game-design.md 5.3):
+// nothing marches through it, but it can be marched *at* and knocked down.
 import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { BUILDINGS } from '../buildings';
@@ -12,8 +12,8 @@ function newGame() {
     { id: 'p1', name: 'A', color: '#00f', coreRegionId: CORE },
     { id: 'p2', name: 'B', color: '#f00', coreRegionId: 'kaohsiung-1' },
   ]);
-  g.state.players.p1.money = 2000;
-  g.state.players.p1.food = 2000;
+  g.state.players.p1.money = 3000;
+  g.state.players.p1.food = 3000;
   return g;
 }
 
@@ -22,25 +22,22 @@ function fortify(g: GameEngine, regionId: string, owner: string) {
   g.state.regions[regionId].building = { type: 'fortress', hp: BUILDINGS.fortress.hp };
 }
 
-/** The gate, and somewhere two hops out that a route might have crossed it to reach. */
+/** The gate, and somewhere beyond it a route might otherwise have crossed to. */
 function gate(g: GameEngine) {
-  const middle = g.map.region(CORE).neighbors[0];
-  const beyond = g.map.region(middle).neighbors.find((id) => id !== CORE)!;
-  return { middle, beyond };
+  // A pair where the road to 'beyond' genuinely runs through 'middle' —
+  // otherwise a column just walks around the gate, which is correct
+  // behaviour and would make the test prove nothing.
+  for (const middle of g.map.region(CORE).neighbors) {
+    for (const beyond of g.map.region(middle).neighbors) {
+      if (beyond === CORE) continue;
+      const route = g.marchRoute(CORE, beyond, 'p1');
+      if (route && route[0] === middle) return { middle, beyond };
+    }
+  }
+  throw new Error('no road through a neighbour on this map');
 }
 
 describe('an enemy fortress', () => {
-  it('cannot be marched into at all — not even as an attack', () => {
-    const g = newGame();
-    const { middle } = gate(g);
-    expect(g.marchRoute(CORE, middle, 'p1'), 'reachable before it is built').not.toBe(null);
-
-    fortify(g, middle, 'p2');
-    // Ordinary enemy ground is a legal destination even when you can't pass
-    // through it — that's what an attack is. A sealed pass is not.
-    expect(g.marchRoute(CORE, middle, 'p1'), 'sealed, like the range itself').toBe(null);
-  });
-
   it('is not a region any route is planned through', () => {
     const g = newGame();
     const { middle, beyond } = gate(g);
@@ -52,44 +49,74 @@ describe('an enemy fortress', () => {
     expect(route === null || !route.includes(middle), 'never routed through the gate').toBe(true);
   });
 
-  it('refuses the march outright rather than starting one', () => {
+  it('can still be marched at, because that is how you take it down', () => {
     const g = newGame();
     const { middle } = gate(g);
     fortify(g, middle, 'p2');
     trainNow(g, CORE, 'p1', 'militia', 20);
 
-    expect(g.startMarch(CORE, middle, 'p1', { militia: 20 })).toBe(null);
-    expect(g.state.marches.length, 'nobody set off').toBe(0);
+    expect(g.marchRoute(CORE, middle, 'p1'), 'the gate itself is a legal target').not.toBe(null);
+    expect(g.startMarch(CORE, middle, 'p1', { militia: 20 }, 'assault')).not.toBe(null);
+  });
+
+  it('pins whoever walks up to it until the gate is down', () => {
+    const g = newGame();
+    const { middle, beyond } = gate(g);
+    fortify(g, middle, 'p2');
+    trainNow(g, CORE, 'p1', 'militia', 20);
+    g.startMarch(CORE, middle, 'p1', { militia: 20 });
+    for (let second = 0; second < 40; second++) g.tick(1);
+
+    expect(g.ownGarrisonAt(middle, 'p1').militia, 'standing at the gate').toBe(20);
+    // This is the whole point: they got to the gate, and the road past it is
+    // still shut. They have to knock it down before they go anywhere.
+    expect(g.marchRejection(middle, beyond, 'p1', { militia: 20 })).toBe('fortressHolds');
+    expect(g.startMarch(middle, beyond, 'p1', { militia: 20 })).toBe(null);
+  });
+
+  it('opens the road once it is knocked down', () => {
+    const g = newGame();
+    const { middle, beyond } = gate(g);
+    fortify(g, middle, 'p2');
+    trainNow(g, CORE, 'p1', 'militia', 200);
+    g.startMarch(CORE, middle, 'p1', { militia: 200 }, 'assault');
+    for (let second = 0; second < 300; second++) g.tick(1);
+
+    expect(g.state.regions[middle].building, 'gate down').toBe(undefined);
+    expect(g.state.regions[middle].owner, 'and the ground with it').toBe('p1');
+    expect(g.startMarch(middle, beyond, 'p1', { militia: 20 }), 'road open').not.toBe(null);
+  });
+
+  it('stops a column that was aiming past it, in front of it', () => {
+    const g = newGame();
+    const { middle, beyond } = gate(g);
+    g.setRegionOwner(middle, 'p2');
+    trainNow(g, CORE, 'p1', 'militia', 20);
+    // Set out while the road is open; the gate closes behind the orders.
+    const march = g.startMarch(CORE, beyond, 'p1', { militia: 20 })!;
+    expect(march.destination).toBe(beyond);
+    g.state.regions[middle].building = { type: 'fortress', hp: BUILDINGS.fortress.hp };
+
+    for (let second = 0; second < 60; second++) g.tick(1);
+    expect(g.ownGarrisonAt(middle, 'p1').militia, 'stopped at the gate').toBe(20);
+    expect(g.ownGarrisonAt(beyond, 'p1').militia ?? 0, 'never got past').toBe(0);
   });
 
   it('does not seal against its own owner', () => {
     const g = newGame();
-    const { middle } = gate(g);
+    const { middle, beyond } = gate(g);
     fortify(g, middle, 'p1');
-    expect(g.marchRoute(CORE, middle, 'p1'), 'our own gate stands open to us').not.toBe(null);
+    const route = g.marchRoute(CORE, beyond, 'p1');
+    expect(route, 'our own gate stands open to us').not.toBe(null);
+    expect(g.marchRejection(middle, beyond, 'p1', {}), 'and we walk out of it freely').not.toBe(
+      'fortressHolds',
+    );
   });
 
-  it('halts a column that was already walking when the gate closed', () => {
-    const g = newGame();
-    const { middle } = gate(g);
-    g.setRegionOwner(middle, 'p2');
-    trainNow(g, CORE, 'p1', 'militia', 20);
-    g.startMarch(CORE, middle, 'p1', { militia: 20 });
-
-    // The wall goes up mid-march.
-    g.state.regions[middle].building = { type: 'fortress', hp: BUILDINGS.fortress.hp };
-    for (let second = 0; second < 60; second++) g.tick(1);
-
-    expect(g.ownGarrisonAt(middle, 'p1').militia ?? 0, 'never got in').toBe(0);
-    expect(g.ownGarrisonAt(CORE, 'p1').militia, 'turned back to where it set off').toBe(20);
-    expect(g.state.marches.length, 'and the march is over').toBe(0);
-  });
-
-  it('can still be shelled down from outside, which reopens the road', () => {
+  it('can also be shelled down from outside without closing on it', () => {
     const g = newGame();
     const { middle } = gate(g);
     fortify(g, middle, 'p2');
-    // Guns on the near side: a mortar reaches two regions without closing.
     g.state.legions.push({
       id: 'guns',
       playerId: 'p1',
@@ -100,8 +127,6 @@ describe('an enemy fortress', () => {
 
     expect(g.bombard(CORE, middle, 'p1'), 'in range and in sight').toBe(true);
     for (let second = 0; second < 300; second++) g.tick(1);
-
     expect(g.state.regions[middle].building, 'fortress down').toBe(undefined);
-    expect(g.marchRoute(CORE, middle, 'p1'), 'and the road is open again').not.toBe(null);
   });
 });

@@ -22,6 +22,8 @@ export type MarchRejection =
   | 'noUnits'
   | 'passLocked'
   | 'contested'
+  /** An enemy fortress stands on the ground they're on: nothing leaves it. */
+  | 'fortressHolds'
   | 'noRoute';
 
 /** Seconds for one hop between two adjacent regions. */
