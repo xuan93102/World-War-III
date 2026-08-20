@@ -368,9 +368,14 @@ export function GameScreen({
               <button className="btn" onClick={onQuit}>
                 {t('result.toMenu')}
               </button>
-              <button className="btn btn-primary" onClick={onPlayAgain}>
-                {t('result.playAgain')}
-              </button>
+              {/* A rematch is something two people agree to. Restarting on
+                  our own would leave the other end playing a match that no
+                  longer exists. */}
+              {!net && (
+                <button className="btn btn-primary" onClick={onPlayAgain}>
+                  {t('result.playAgain')}
+                </button>
+              )}
             </>
           }
         >

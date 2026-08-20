@@ -23,11 +23,16 @@ export type RelayMessage =
   | { t: 'error'; why: 'noRoom' | 'roomFull' }
   | { t: 'msg'; data: unknown };
 
-/** Host to guest: here is the match, and here is how it stands. */
+/**
+ * Host to guest: here is the match, and here is how it stands.
+ *
+ * There is no 'the match is over' message and there doesn't need to be — a
+ * core at zero rides in the snapshot (docs 15.3), so the guest works out the
+ * result from the same state everything else is read from.
+ */
 export type HostMessage =
   | { t: 'start'; setups: PlayerSetup[]; seats: Seat[]; you: PlayerId }
-  | { t: 'snapshot'; state: GameState }
-  | { t: 'over'; winnerId: PlayerId | null };
+  | { t: 'snapshot'; state: GameState };
 
 /** Guest to host: this is what I want done. Never who I am. */
 export type GuestMessage = { t: 'order'; order: unknown };
