@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { AiController } from '../AiController';
 import { GameEngine } from '../../engine/GameEngine';
 import type { AiDifficulty } from '../../engine/types';
-import { totalUnits } from '../../engine/units';
+import { totalUnits, troopsOnly } from '../../engine/units';
 
 const HUMAN_CORE = 'taipei-1';
 const AI_CORE = 'kaohsiung-1';
@@ -186,5 +186,52 @@ describe('the ladder and the arsenal', () => {
     const cap = engine.economy('ai').populationCap * 0.35 * 0.25;
     expect(queued, 'stopped at its share of the army').toBeLessThanOrEqual(Math.ceil(cap));
     expect(queued, 'but did build some').toBeGreaterThan(0);
+  });
+});
+
+describe('war, not a parade', () => {
+  /** Two seats, played out headless. */
+  function machineWar(minutes: number) {
+    const engine = new GameEngine([
+      { id: 'a', name: 'A', color: '#00f', coreRegionId: HUMAN_CORE, aiDifficulty: 'hard' },
+      { id: 'b', name: 'B', color: '#f00', coreRegionId: AI_CORE, aiDifficulty: 'hard' },
+    ]);
+    const seats = [new AiController('a', 'hard'), new AiController('b', 'hard')];
+    const owner = new Map<string, string | null>();
+    let takenFromPlayer = 0;
+    for (let elapsed = 0; elapsed < minutes * 60; elapsed += 1) {
+      engine.tick(1);
+      for (const seat of seats) seat.update(engine, 1);
+      for (const region of engine.map.regions) {
+        const now = engine.state.regions[region.id].owner;
+        const was = owner.get(region.id);
+        if (was !== undefined && was !== null && now !== null && was !== now) takenFromPlayer++;
+        owner.set(region.id, now);
+      }
+      if (engine.getWinner()) break;
+    }
+    return { engine, takenFromPlayer };
+  }
+
+  it('masses an army instead of leaving it strung out on the road', () => {
+    const { engine } = machineWar(20);
+    const marching = new Set(engine.state.marches.map((m) => m.legionId));
+    const biggest = (id: string) =>
+      Math.max(
+        0,
+        ...engine.state.legions
+          .filter((l) => l.playerId === id && !marching.has(l.id))
+          .map((l) => totalUnits(troopsOnly(l.units))),
+      );
+
+    // The failure this guards against is a rally point recomputed every cycle:
+    // the whole army lives permanently in transit, in columns of one, and
+    // never reaches fighting weight however many troops get trained.
+    expect(Math.max(biggest('a'), biggest('b')), 'someone has a real army').toBeGreaterThan(12);
+  });
+
+  it('actually takes ground off the other player', () => {
+    const { takenFromPlayer } = machineWar(30);
+    expect(takenFromPlayer, 'regions changed hands between the two of them').toBeGreaterThan(0);
   });
 });

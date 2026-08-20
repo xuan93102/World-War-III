@@ -44,6 +44,15 @@ function take(units: UnitCounts, count: number): UnitCounts {
  * one is worth nothing until the numbers underneath it have been playtested.
  */
 
+/**
+ * The fewest soldiers worth sending anywhere at all.
+ *
+ * Below this a column is not a force, it's a casualty walking — and an army
+ * split into columns this size can never mass into anything that threatens a
+ * player, however many of them there are.
+ */
+const MIN_COLUMN = 6;
+
 /** How often each difficulty stops to think, in seconds. */
 const DECISION_INTERVAL: Record<AiDifficulty, number> = {
   easy: 6,
@@ -100,7 +109,7 @@ const DOCTRINE: Record<AiDifficulty, Doctrine> = {
     economyFirst: 30,
     homeGuard: 10,
     expeditionSize: 12,
-    offensiveSize: 40,
+    offensiveSize: 30,
     attacks: true,
     armyShare: 0.25,
     vehicleShare: 0.2,
@@ -110,7 +119,7 @@ const DOCTRINE: Record<AiDifficulty, Doctrine> = {
     economyFirst: 40,
     homeGuard: 12,
     expeditionSize: 15,
-    offensiveSize: 30,
+    offensiveSize: 24,
     attacks: true,
     armyShare: 0.35,
     vehicleShare: 0.25,
@@ -119,6 +128,16 @@ const DOCTRINE: Record<AiDifficulty, Doctrine> = {
 
 export class AiController {
   private sinceDecision = 0;
+  /**
+   * Where reinforcements gather, remembered between decisions.
+   *
+   * Recomputing this every cycle is what broke the army: the obvious answer —
+   * "wherever our biggest stack is" — moves the moment two columns merge, so
+   * every column that arrived was immediately re-tasked somewhere else and
+   * the whole army lived permanently on the road. A rally point is a decision
+   * you make once and keep until the ground is lost.
+   */
+  private rallyPoint: string | null = null;
   readonly playerId: PlayerId;
   readonly difficulty: AiDifficulty;
 
@@ -465,11 +484,25 @@ export class AiController {
     // Once the population is capped the army can't grow, so waiting for a
     // bigger one is waiting forever. Whatever is fielded *is* the offensive.
     const capped = engine.populationRoom(this.playerId) <= 0;
+    // The biggest stack is the field army: what everything else reinforces,
+    // and the only thing that ever attacks a player.
     const biggest = legions.reduce(
       (best, l) =>
         totalUnits(troopsOnly(l.units)) > totalUnits(troopsOnly(best?.units ?? {})) ? l : best,
       legions[0],
     );
+    // Have we actually run into them? Knowing where their core stands isn't
+    // contact — every player knows that from the setup screen. Using that as
+    // the trigger would put the AI on a war footing in the first minute and
+    // stop it ever developing.
+    const atWar = doctrine.attacks && this.seesEnemy(engine);
+    // Contact made and the field army still too small to be worth sending:
+    // everything comes home to it. Expansion is what an army does when it
+    // isn't needed at the front — chasing the last few neutral fields while a
+    // war is on is how it stayed permanently below fighting weight.
+    const massing =
+      atWar && totalUnits(troopsOnly(biggest?.units ?? {})) < doctrine.offensiveSize;
+    const rally = this.rallyFor(engine);
 
     for (const legion of legions) {
       const strength = totalUnits(troopsOnly(legion.units));
@@ -485,29 +518,50 @@ export class AiController {
       // fought whole matches with the bottom rung of the ladder.
       if (this.awaitingPromotion(engine, legion.regionId, doctrine)) continue;
 
-      const expedition = capped ? Math.min(doctrine.expeditionSize, spare) : doctrine.expeditionSize;
-      const offensive = capped ? Math.min(doctrine.offensiveSize, spare) : doctrine.offensiveSize;
+      // At the cap the army can't grow, so a column waits for what it can
+      // actually get — but never below MIN_COLUMN. Without that floor a
+      // capped AI sends every straggler off alone, and an army of a hundred
+      // and fifty spends the match as fifty columns of one, none of them ever
+      // big enough to threaten anybody.
+      const expedition = Math.max(
+        MIN_COLUMN,
+        capped ? Math.min(doctrine.expeditionSize, spare) : doctrine.expeditionSize,
+      );
+      const offensive = Math.max(
+        doctrine.expeditionSize,
+        capped ? Math.min(doctrine.offensiveSize, spare) : doctrine.offensiveSize,
+      );
 
-      const neutral = spare >= expedition ? this.nearestNeutral(engine, legion.regionId) : null;
+      // A war is won by one army, not by twenty patrols. Once we know where
+      // the enemy is, the field army gathers until it is worth sending and
+      // then goes — and it never wanders off after free ground in the
+      // meantime, which is what kept it too small to threaten anyone.
+      const isField = legion.regionId === rally;
+      if (isField && atWar && spare < offensive) continue;
+
+      const neutral =
+        spare >= expedition && !(isField && atWar) && !massing
+          ? this.nearestNeutral(engine, legion.regionId)
+          : null;
       const enemy =
         doctrine.attacks && spare >= offensive
           ? this.nearestEnemy(engine, legion.regionId)
           : null;
-      // A column big enough to fight takes whichever is nearer; a small one
-      // only ever goes for free ground. Without the comparison the AI would
-      // never attack while a single neutral region was left on the map.
-      let target: string | null =
-        neutral && enemy
-          ? engine.map.distance(legion.regionId, enemy) <=
-            engine.map.distance(legion.regionId, neutral)
-            ? enemy
-            : neutral
-          : (enemy ?? neutral);
+      // A column that can fight a player goes for the player. Free ground is
+      // the consolation prize, not the priority — picking whichever happened
+      // to be nearer meant the war never started while a single neutral
+      // region was left within reach.
+      let target: string | null = enemy ?? neutral;
 
-      // Too small to do anything on its own: go and join the main body rather
-      // than stand around. Scattered thirds never add up to a push.
-      if (!target && biggest && biggest !== legion && legion.regionId !== home) {
-        target = biggest.regionId;
+      // Anything that isn't the field army and isn't big enough to be one
+      // goes and joins it, wherever it is. Scattered thirds never add up to a
+      // push, and a soldier walking to the front is worth more than a soldier
+      // holding a field nobody is contesting.
+      // Once the army is out, only genuinely small stacks trail back to the
+      // rally. A column that can still take ground keeps working instead of
+      // commuting home every time the front moves.
+      if (!target && !isField && (massing || spare < doctrine.expeditionSize)) {
+        target = rally;
       }
       if (!target || target === legion.regionId) continue;
 
@@ -515,16 +569,71 @@ export class AiController {
     }
   }
 
+  /**
+   * The staging ground, held steady until it stops being ours.
+   *
+   * It's kept across decisions on purpose: an army only ever gathers if the
+   * place it is gathering at stays put long enough to walk to.
+   */
+  private rallyFor(engine: GameEngine): string {
+    const current = this.rallyPoint;
+    if (current && engine.state.regions[current]?.owner === this.playerId) return current;
+    this.rallyPoint = this.frontline(engine);
+    return this.rallyPoint;
+  }
+
+  /**
+   * The ground of ours closest to the enemy core — where an invasion would
+   * stage from. Core positions are common knowledge from the setup screen on
+   * (docs 9), so this needs no scouting, and it only shifts when the border
+   * does, which is what makes it a rally point an army can actually reach.
+   */
+  private frontline(engine: GameEngine): string {
+    const home = engine.state.players[this.playerId].coreRegionId;
+    const theirCores = Object.values(engine.state.players)
+      .filter((p) => p.id !== this.playerId && p.coreHp > 0)
+      .map((p) => p.coreRegionId);
+    if (theirCores.length === 0) return home;
+
+    let best = home;
+    let bestDistance = Infinity;
+    for (const id of engine.ownedRegionIds(this.playerId)) {
+      const distance = Math.min(...theirCores.map((core) => engine.map.distance(id, core)));
+      // Ordered by id on a tie, so the rally point doesn't flicker between
+      // two equally forward regions and split the army between them.
+      if (distance < bestDistance || (distance === bestDistance && id < best)) {
+        best = id;
+        bestDistance = distance;
+      }
+    }
+    return best;
+  }
+
   /** The closest unclaimed region it could actually reach. */
   private nearestNeutral(engine: GameEngine, from: string): string | null {
     return this.nearest(engine, from, (id) => engine.state.regions[id].owner === null);
   }
 
+  /** Have we laid eyes on ground they actually hold? That's contact. */
+  private seesEnemy(engine: GameEngine): boolean {
+    return engine.map.regions.some((region) => {
+      const owner = engine.state.regions[region.id].owner;
+      return (
+        owner !== null && owner !== this.playerId && engine.canSee(region.id, this.playerId)
+      );
+    });
+  }
+
   /** The closest region held by someone else — their core included. */
   private nearestEnemy(engine: GameEngine, from: string): string | null {
     return this.nearest(engine, from, (id) => {
-      const owner = engine.state.regions[id].owner;
-      return owner !== null && owner !== this.playerId && engine.canSee(id, this.playerId);
+      const region = engine.state.regions[id];
+      if (region.owner === null || region.owner === this.playerId) return false;
+      // Where their core stands is common knowledge from the setup screen on
+      // (docs 9), so an army always knows which way the war is — otherwise a
+      // massed army with no scouts out simply stands there, unable to name a
+      // single thing to march on.
+      return region.isCore || engine.canSee(id, this.playerId);
     });
   }
 
