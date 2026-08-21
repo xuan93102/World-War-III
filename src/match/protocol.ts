@@ -14,7 +14,8 @@ import type { Seat } from './seats';
 
 /** What the relay itself says. */
 export type RelayMessage =
-  | { t: 'room'; code: string }
+  /** The token is the key back into this room if our socket dies (docs 15.8). */
+  | { t: 'room'; code: string; token: string }
   | { t: 'joined'; code: string }
   /** The other side turned up. */
   | { t: 'peer' }
@@ -65,6 +66,10 @@ export function asRelayMessage(value: unknown): RelayMessage | null {
   const t = (value as { t?: unknown }).t;
   switch (t) {
     case 'room':
+      return typeof (value as { code?: unknown }).code === 'string' &&
+        typeof (value as { token?: unknown }).token === 'string'
+        ? (value as RelayMessage)
+        : null;
     case 'joined':
       return typeof (value as { code?: unknown }).code === 'string'
         ? (value as RelayMessage)

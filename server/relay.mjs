@@ -21,8 +21,8 @@ const PORT = Number(process.env.PORT ?? 8787);
 const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const CODE_LENGTH = 6;
 
-/** Rooms with nobody in them are swept after this long. */
-const EMPTY_ROOM_MS = 60_000;
+/** How often the sweeper looks for rooms nobody came back to. */
+const SWEEP_INTERVAL_MS = 60_000;
 
 /**
  * A snapshot is a few kilobytes and compresses to about one. Anything a
@@ -43,7 +43,16 @@ const LOBBY_GRACE_MS = 120_000;
 /** Sockets that stop answering are dropped after two missed rounds. */
 const HEARTBEAT_MS = 30_000;
 
-/** code -> { host, guest, emptySince } */
+/**
+ * How long a room is held open for somebody who dropped out of it.
+ *
+ * A wifi blip, a lid closing, a phone changing networks: the match is still
+ * sitting in the other player's browser, and throwing the room away the
+ * instant a socket dies would end matches that nobody meant to end.
+ */
+const RECONNECT_GRACE_MS = 180_000;
+
+/** code -> { host, guest, emptySince, token } */
 const rooms = new Map();
 
 function newCode() {
@@ -130,12 +139,35 @@ server.on('connection', (socket) => {
 
     if (message.t === 'host') {
       if (socket.room) return;
+
+      // Coming back to a room we opened. The token is what makes this safe:
+      // the code alone is shouted down a phone and shared in chat, so anyone
+      // who heard it could otherwise walk into the empty host seat of a match
+      // in progress.
+      if (typeof message.code === 'string' && typeof message.token === 'string') {
+        const room = rooms.get(message.code.toUpperCase());
+        if (!room || room.host || room.token !== message.token) {
+          return send(socket, { t: 'error', why: 'noRoom' });
+        }
+        room.host = socket;
+        room.emptySince = null;
+        socket.room = message.code.toUpperCase();
+        clearTimeout(socket.lobbyTimer);
+        send(socket, { t: 'room', code: socket.room, token: room.token });
+        if (room.guest) {
+          send(socket, { t: 'peer' });
+          send(room.guest, { t: 'peer' });
+        }
+        return;
+      }
+
       if (rooms.size >= MAX_ROOMS) return send(socket, { t: 'error', why: 'roomFull' });
       const code = newCode();
-      rooms.set(code, { host: socket, guest: null, emptySince: null });
+      const token = newCode() + newCode();
+      rooms.set(code, { host: socket, guest: null, emptySince: null, token });
       socket.room = code;
       clearTimeout(socket.lobbyTimer);
-      send(socket, { t: 'room', code });
+      send(socket, { t: 'room', code, token });
       return;
     }
 
@@ -151,6 +183,8 @@ server.on('connection', (socket) => {
       clearTimeout(socket.lobbyTimer);
       send(socket, { t: 'joined', code });
       send(room.host, { t: 'peer' });
+      // The one coming back needs to know somebody is still there too.
+      if (room.host) send(socket, { t: 'peer' });
       return;
     }
 
@@ -171,6 +205,7 @@ server.on('connection', (socket) => {
     if (room.host === socket) room.host = null;
     else room.guest = null;
     if (!room.host && !room.guest) room.emptySince = Date.now();
+    else room.emptySince = null;
   });
 });
 
@@ -192,9 +227,9 @@ setInterval(() => {
 setInterval(() => {
   const now = Date.now();
   for (const [code, room] of rooms) {
-    if (room.emptySince !== null && now - room.emptySince > EMPTY_ROOM_MS) rooms.delete(code);
+    if (room.emptySince !== null && now - room.emptySince > RECONNECT_GRACE_MS) rooms.delete(code);
   }
-}, EMPTY_ROOM_MS).unref();
+}, SWEEP_INTERVAL_MS).unref();
 
 // Same reasoning one level up: whatever goes wrong with a listening socket,
 // the answer is not to stop relaying for the people already in a room.

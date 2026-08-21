@@ -79,9 +79,10 @@ export function GameScreen({
   const [showTech, setShowTech] = useState(false);
   const [paused, setPaused] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
-  // The other end went away (docs 15.5). The clock stops rather than running
-  // on against nobody, because whatever happens next is not a match.
-  const [peerGone, setPeerGone] = useState(false);
+  // Nobody to play against just now (docs 15.8): either their socket died or
+  // ours did. The clock stops rather than running on against nobody, and the
+  // room is held open — a lid closing is not a match ending.
+  const [away, setAway] = useState<'them' | 'us' | 'lost' | null>(null);
   const lastTimeRef = useRef<number>(performance.now());
   // Real time that has passed but not yet been spent on whole steps.
   const bankedRef = useRef(0);
@@ -120,7 +121,23 @@ export function GameScreen({
   const incoming = useRef<GameState | null>(null);
   useEffect(() => {
     if (!net) return;
-    net.connection.onState = (state) => setPeerGone(state.at === 'gone');
+    net.connection.onState = (state) => {
+      if (state.at === 'gone') return setAway('them');
+      if (state.at === 'reconnecting') return setAway('us');
+      // Given up: the room is gone, which is what a relay restart or a long
+      // enough absence looks like. Saying 'reconnecting' at this point would
+      // be waiting for something that is not coming.
+      if (state.at === 'failed') return setAway('lost');
+      if (state.at !== 'together') return;
+      // Somebody walked back in. The host is the one holding the match, so it
+      // says what the match is again and posts a fresh view of it; the guest
+      // rebuilds from that and carries on where it left off.
+      setAway(null);
+      if (net.role === 'host') {
+        net.connection.send({ t: 'start', setups, seats, you: net.opponentId });
+        net.connection.send({ t: 'snapshot', state: snapshotFor(engine, net.opponentId) });
+      }
+    };
     net.connection.onMessage = (data) => {
       if (typeof data !== 'object' || data === null) return;
       const message = data as { t?: unknown; order?: unknown; state?: unknown };
@@ -157,7 +174,8 @@ export function GameScreen({
   }, [isOver]);
   // Freeze the clock while paused, once the match is decided, or while the
   // quit confirmation is up — otherwise resources keep ticking behind a modal.
-  const clockStopped = paused || isOver || confirmQuit || peerGone || (replay?.done ?? false);
+  const clockStopped =
+    paused || isOver || confirmQuit || away !== null || (replay?.done ?? false);
 
   useEffect(() => {
     if (clockStopped) return;
@@ -354,16 +372,31 @@ export function GameScreen({
         />
       )}
 
-      {peerGone && !isOver && (
+      {away && !isOver && (
         <Modal
-          title={t('pvp.opponentLeft')}
+          title={t(
+            away === 'them'
+              ? 'pvp.opponentLeft'
+              : away === 'us'
+                ? 'pvp.weLeft'
+                : 'pvp.matchLost',
+          )}
           actions={
-            <button className="btn btn-primary" onClick={onQuit}>
+            <button className="btn" onClick={onQuit}>
               {t('result.toMenu')}
             </button>
           }
         >
-          <p className="modal-body">{t('pvp.opponentLeftBody')}</p>
+          <p className="modal-body">
+            {away !== 'lost' && <span className="spinner" aria-hidden="true" />}
+            {t(
+              away === 'them'
+                ? 'pvp.opponentLeftBody'
+                : away === 'us'
+                  ? 'pvp.weLeftBody'
+                  : 'pvp.matchLostBody',
+            )}
+          </p>
         </Modal>
       )}
 
