@@ -53,33 +53,24 @@ describe('standing on ground you do not hold', () => {
 
   it('can march on through, leaving the ground alone', () => {
     const g = newGame();
-    const beyond = g.map
-      .region(NEXT_DOOR)
-      .neighbors.find((id) => id !== CORE && g.map.distance(CORE, id) === 2)!;
-    g.setRegionOwner(NEXT_DOOR, 'p2');
+    // Ask the engine for a two-hop road, then hand the middle of it to them.
+    // Routes are pure geography now (docs 8.1), so which way it goes is not
+    // something to arrange with walls of troops — it is simply asked.
+    const beyond = g.map.regions
+      .map((r) => r.id)
+      .find((id) => g.marchRoute(CORE, id, 'p1')?.length === 2)!;
+    const across = g.marchRoute(CORE, beyond, 'p1')![0];
+    g.setRegionOwner(across, 'p2');
     g.state.regions[beyond].units = {};
-    // Seal every other way in with enemy armies — a militia garrison
-    // wouldn't stop anyone (docs 8.1) — so the only clear path to `beyond` is
-    // across their region. Docs 6.6 needs neither the deed to the ground on
-    // the way nor a continuous front.
-    for (const n of g.map.region(beyond).neighbors) {
-      if (n === NEXT_DOOR || n === CORE) continue;
-      g.state.legions.push({
-        id: `wall-${n}`,
-        playerId: 'p2',
-        units: { militia: 5 },
-        supply: 1,
-        regionId: n,
-      });
-    }
 
     trainNow(g, CORE, 'p1', 'militia', 4);
-    const route = g.marchRoute(CORE, beyond, 'p1');
-    expect(route, 'a way through their land').toEqual([NEXT_DOOR, beyond]);
+    expect(g.marchRoute(CORE, beyond, 'p1'), 'still the same road').toEqual([across, beyond]);
     g.startMarch(CORE, beyond, 'p1', { militia: 4 });
     g.tick(MARCH_SECONDS_PER_HOP * 2 + 2);
 
-    expect(g.state.regions[NEXT_DOOR].owner, 'passed over, not taken').toBe('p2');
+    // Docs 6.6 needs neither the deed to the ground on the way nor a
+    // continuous front: they walked over it and left it alone.
+    expect(g.state.regions[across].owner, 'passed over, not taken').toBe('p2');
     expect(totalUnits(garrisonAt(g.state, beyond)), 'arrived beyond').toBe(4);
   });
 

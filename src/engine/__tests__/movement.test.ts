@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { GameEngine } from '../GameEngine';
 import { MARCH_SECONDS_PER_HOP, MARCH_SECONDS_VIA_PASS, marchSeconds } from '../movement';
+import { BUILDINGS } from '../buildings';
 import { garrisonAt } from '../regions';
 import { totalUnits } from '../units';
 import { TAIWAN } from '../maps';
@@ -117,13 +118,18 @@ describe('march orders', () => {
     ).toBe(true);
   });
 
-  it('will not route a march *through* an enemy army', () => {
+  it('routes straight through an enemy army, and meets it there', () => {
     const g = withTroops(newGame());
     const next = g.map.region(CORE).neighbors[0];
     const beyond = g.map
       .region(next)
       .neighbors.find((id) => id !== CORE && !g.map.region(CORE).neighbors.includes(id))!;
-    // Park an enemy army on every way in, so there's no clear approach left.
+
+    // A route is geography (docs 8.1): only a mountain or a held fortress
+    // closes a road. Park armies on every approach and the road is still
+    // there — walking into them is what starts a fight, and a route that
+    // steered around every enemy would make interception impossible to
+    // arrange and the map impossible to read.
     for (const n of g.map.region(beyond).neighbors) {
       if (n === CORE) continue;
       g.state.legions.push({
@@ -134,7 +140,15 @@ describe('march orders', () => {
         regionId: n,
       });
     }
-    expect(g.marchRejection(CORE, beyond, 'p1', { militia: 1 })).toBe('noRoute');
+
+    const route = g.marchRoute(CORE, beyond, 'p1');
+    expect(route, 'the road is still a road').not.toBe(null);
+    expect(g.marchRejection(CORE, beyond, 'p1', { militia: 1 })).toBe(null);
+
+    // And the column meets what is standing on it.
+    g.startMarch(CORE, beyond, 'p1', { militia: 5 });
+    g.tick(MARCH_SECONDS_PER_HOP + 1);
+    expect(g.battleAt(route![0]), 'walked into them').not.toBe(null);
   });
 
   it('seals mountain passes until the road tech exists', () => {
@@ -267,5 +281,38 @@ describe('arrival', () => {
     g.tick(MARCH_SECONDS_PER_HOP);
     expect(garrisonAt(g.state, NEXT_DOOR)).toEqual({ militia: 1, conscript: 2 });
     expect(garrisonAt(g.state, CORE), 'remainder holds the core').toEqual({ militia: 3 });
+  });
+});
+
+describe('what a route is made of', () => {
+  it('is the shortest way there, whoever is standing about', () => {
+    const g = withTroops(newGame());
+    const far = g.map.regions.find((r) => g.map.distance(CORE, r.id) === 3)!.id;
+    const clear = g.marchRoute(CORE, far, 'p1')!;
+
+    // Put an army of theirs on every step of it. The road does not move.
+    for (const step of clear) {
+      g.state.legions.push({
+        id: `sit-${step}`,
+        playerId: 'p2',
+        units: { militia: 3 },
+        supply: 1,
+        regionId: step,
+      });
+    }
+    expect(g.marchRoute(CORE, far, 'p1'), 'the same road as before').toEqual(clear);
+  });
+
+  it('bends only for a mountain or a gate', () => {
+    const g = withTroops(newGame());
+    const far = g.map.regions.find((r) => g.map.distance(CORE, r.id) === 3)!.id;
+    const clear = g.marchRoute(CORE, far, 'p1')!;
+
+    // A fortress on the first step, on the other hand, is a wall.
+    g.setRegionOwner(clear[0], 'p2');
+    g.state.regions[clear[0]].building = { type: 'fortress', hp: BUILDINGS.fortress.hp };
+
+    const detour = g.marchRoute(CORE, far, 'p1');
+    expect(detour === null || !detour.includes(clear[0]), 'went round it or not at all').toBe(true);
   });
 });

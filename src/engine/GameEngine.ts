@@ -411,9 +411,22 @@ export class GameEngine {
    * you just don't hold it until you occupy it.
    */
   private canEnter(regionId: string, playerId: PlayerId): boolean {
+    return this.openToMarch(regionId, playerId) && !this.blockingForceAt(regionId, playerId);
+  }
+
+  /**
+   * Whether a road runs through here at all (docs 8.1).
+   *
+   * Geography, and nothing else: a mountain and a held fortress close a road,
+   * an army standing on one does not. Armies are what you *meet* on a road —
+   * walking into them is what starts a fight (docs 6.2.1), and that is the
+   * whole of interception. A route that steered around every enemy would make
+   * interception impossible to arrange and the map impossible to read: the
+   * way somewhere would change depending on things you cannot see.
+   */
+  private openToMarch(regionId: string, playerId: PlayerId): boolean {
     if (!this.state.regions[regionId]) return false;
-    if (this.fortressSeals(regionId, playerId)) return false;
-    return !this.blockingForceAt(regionId, playerId);
+    return !this.fortressSeals(regionId, playerId);
   }
 
   /**
@@ -447,7 +460,7 @@ export class GameEngine {
       this.map,
       from,
       to,
-      (id) => this.canEnter(id, playerId),
+      (id) => this.openToMarch(id, playerId),
       (a, b) =>
         terrainRejection(this.map, a, b, this.hasMountainRoad(playerId)) === null &&
         (!heavy || !this.map.isPass(a, b) || vehiclesCrossPasses(techs)),
@@ -479,7 +492,12 @@ export class GameEngine {
     // Standing at the gate is not the same as being through it (docs 5.3).
     // Marching in to besiege a fortress is allowed; marching on past one
     // that is still standing is exactly what it exists to prevent.
-    if (this.fortressSeals(from, playerId)) return 'fortressHolds';
+    // A gate lets an army up to it and not past it (docs 5.3). The way out is
+    // the way in — without that, calling off a siege would strand them there.
+    if (this.fortressSeals(from, playerId)) {
+      const standing = this.legionsAt(from).find((l) => l.playerId === playerId);
+      if (standing?.cameFrom !== to) return 'fortressHolds';
+    }
     if (this.marchRoute(from, to, playerId, units) !== null) return null;
     // No route. Say which wall they hit: a sealed pass reads very differently
     // from "there's no way through", and both are actionable.
@@ -1138,7 +1156,7 @@ export class GameEngine {
     const next = march.route[0];
     if (next === undefined) {
       const column = this.state.legions.find((l) => l.id === march.legionId);
-      if (column) this.landColumn(march.to, column);
+      if (column) this.landColumn(march.to, column, march.from);
       return true;
     }
 
@@ -1159,10 +1177,11 @@ export class GameEngine {
    * already has there, supply averaging by headcount so relief actually
    * relieves, and any standing order it carried survives the merge.
    */
-  private landColumn(regionId: string, column: Legion): void {
+  private landColumn(regionId: string, column: Legion, cameFrom?: string): void {
     const garrison = this.legionFor(regionId, column.playerId);
     if (column === garrison) {
       column.regionId = regionId;
+      if (cameFrom) column.cameFrom = cameFrom;
       return;
     }
     const had = totalUnits(garrison.units);
@@ -1171,6 +1190,7 @@ export class GameEngine {
       garrison.supply = (garrison.supply * had + column.supply * joining) / (had + joining);
     }
     if (column.onArrival) garrison.onArrival = column.onArrival;
+    if (cameFrom) garrison.cameFrom = cameFrom;
     garrison.units = addUnits(garrison.units, column.units);
     this.state.legions = this.state.legions.filter((l) => l !== column);
   }
@@ -1407,6 +1427,12 @@ export class GameEngine {
     const legion = this.legionsAt(regionId).find((l) => l.playerId === playerId);
     if (!legion?.assaulting) return false;
     legion.assaulting = false;
+    // Calling off a siege at a gate means leaving, and there is one way out:
+    // back the way they came (docs 5.3). Standing there having given up would
+    // be neither a siege nor a withdrawal.
+    if (this.fortressSeals(regionId, playerId) && legion.cameFrom) {
+      this.startMarch(regionId, legion.cameFrom, playerId, legion.units);
+    }
     return true;
   }
 

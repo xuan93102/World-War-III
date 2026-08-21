@@ -193,6 +193,14 @@ export interface Legion {
   /** Where it stands, or the region it set out from while marching. */
   regionId: string;
   /**
+   * The last place it walked in from (docs 5.3).
+   *
+   * Only one thing needs it: a fortress lets an army up to the gate and not
+   * past it, so the way out is back the way you came. Without a memory of
+   * that, calling off a siege would leave the army standing there forever.
+   */
+  cameFrom?: string;
+  /**
    * A standing order to batter what's built here — an enemy building, or a
    * core (docs 6.6, 6.7). Marching is movement only, so attacking a structure
    * is something the army is told to do and keeps doing until the target is

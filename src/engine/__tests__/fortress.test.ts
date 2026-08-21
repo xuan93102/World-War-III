@@ -130,3 +130,38 @@ describe('an enemy fortress', () => {
     expect(g.state.regions[middle].building, 'fortress down').toBe(undefined);
   });
 });
+
+describe('leaving a gate you cannot break', () => {
+  it('lets them go back the way they came, and no further', () => {
+    const g = newGame();
+    const { middle, beyond } = gate(g);
+    fortify(g, middle, 'p2');
+    trainNow(g, CORE, 'p1', 'militia', 20);
+    g.startMarch(CORE, middle, 'p1', { militia: 20 });
+    for (let second = 0; second < 40; second++) g.tick(1);
+
+    // Forward is still shut — that is what the fortress is for.
+    expect(g.marchRejection(middle, beyond, 'p1', { militia: 20 })).toBe('fortressHolds');
+    // Back is not: an army walked up to the gate, it can walk away from it.
+    expect(g.marchRejection(middle, CORE, 'p1', { militia: 20 })).toBe(null);
+  });
+
+  it('walks them out when the siege is called off', () => {
+    const g = newGame();
+    const { middle } = gate(g);
+    fortify(g, middle, 'p2');
+    trainNow(g, CORE, 'p1', 'militia', 20);
+    g.startMarch(CORE, middle, 'p1', { militia: 20 }, 'assault');
+    for (let second = 0; second < 40; second++) g.tick(1);
+    expect(g.legionsAt(middle).find((l) => l.playerId === 'p1')?.assaulting, 'besieging').toBe(
+      true,
+    );
+
+    expect(g.standDown(middle, 'p1')).toBe(true);
+    for (let second = 0; second < 40; second++) g.tick(1);
+
+    // Calling it off is leaving: they are back where they set out from.
+    expect(g.ownGarrisonAt(CORE, 'p1').militia, 'came home').toBe(20);
+    expect(g.ownGarrisonAt(middle, 'p1').militia ?? 0, 'nobody left at the gate').toBe(0);
+  });
+});
