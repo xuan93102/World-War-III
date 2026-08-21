@@ -6,6 +6,7 @@ import { GameEngine } from '../../engine/GameEngine';
 import type { AiDifficulty } from '../../engine/types';
 import { totalUnits, troopsOnly } from '../../engine/units';
 import { placeVillagers } from '../../engine/__tests__/helpers';
+import { BUILDINGS } from '../../engine/buildings';
 
 const HUMAN_CORE = 'taipei-1';
 const AI_CORE = 'kaohsiung-1';
@@ -306,5 +307,68 @@ describe('digging in', () => {
       .ownedRegionIds('ai')
       .filter((id) => engine.state.regions[id].construction?.type === 'trench');
     expect(dug, 'nothing dug').toEqual([]);
+  });
+});
+
+describe('clearing a slot', () => {
+  /** Every region ours, all built on, with a trench stranded in the middle. */
+  function fullyBuilt() {
+    const engine = new GameEngine([
+      { id: 'p1', name: 'A', color: '#00f', coreRegionId: HUMAN_CORE },
+      { id: 'ai', name: 'AI', color: '#f00', coreRegionId: AI_CORE, aiDifficulty: 'hard' },
+    ]);
+    const ai = new AiController('ai', 'hard');
+    const me = engine.state.players.ai;
+    me.money = 5000;
+    me.food = 5000;
+    placeVillagers(engine, 'ai', 60);
+
+    // A ring of ours around one region, so that middle one has our ground on
+    // every side — nobody can walk onto whatever is standing there.
+    const middle = engine.map.region(AI_CORE).neighbors[0];
+    engine.setRegionOwner(middle, 'ai');
+    for (const n of engine.map.region(middle).neighbors) engine.setRegionOwner(n, 'ai');
+    engine.state.regions[middle].building = { type: 'trench', hp: BUILDINGS.trench.hp };
+    // Everything else of ours is spoken for, so there is nowhere left to build.
+    for (const id of engine.ownedRegionIds('ai')) {
+      if (id === middle || engine.state.regions[id].isCore) continue;
+      if (!engine.state.regions[id].building) {
+        engine.state.regions[id].building = { type: 'shop', hp: BUILDINGS.shop.hp };
+      }
+    }
+    return { engine, ai, middle };
+  }
+
+  it('pulls down a defence nobody can reach when it needs the ground', () => {
+    const { engine, ai, middle } = fullyBuilt();
+    for (let think = 0; think < 3; think++) ai.decide(engine);
+
+    // A trench stops whoever walks onto it; with our own ground on every side
+    // of it, nobody ever will. The border moved and it did not.
+    expect(engine.state.regions[middle].building?.type).not.toBe('trench');
+  });
+
+  it('leaves it alone while there is anywhere else to build', () => {
+    const { engine, ai, middle } = fullyBuilt();
+    // One empty field is all it takes: pulling a building down is a pure loss
+    // unless the ground under it is worth more than it is. One decision, since
+    // the next one will have built on that field and be short again.
+    const spare = engine.map.regions.find(
+      (r) => engine.state.regions[r.id].owner === null,
+    )!.id;
+    engine.setRegionOwner(spare, 'ai');
+
+    ai.decide(engine);
+    expect(engine.state.regions[middle].building?.type, 'still there').toBe('trench');
+  });
+
+  it('never pulls down a defence that is still on the border', () => {
+    const { engine, ai, middle } = fullyBuilt();
+    // Hand one neighbour back: the trench is a border post again.
+    const exposed = engine.map.region(middle).neighbors[0];
+    engine.setRegionOwner(exposed, 'p1');
+
+    for (let think = 0; think < 3; think++) ai.decide(engine);
+    expect(engine.state.regions[middle].building?.type, 'still doing its job').toBe('trench');
   });
 });

@@ -252,7 +252,6 @@ export class AiController {
     const sites = engine
       .ownedRegionIds(this.playerId)
       .filter((id) => !engine.state.regions[id].building && !engine.state.regions[id].construction);
-    if (sites.length === 0) return;
 
     const counts = engine.buildingCounts(this.playerId);
     const building = (type: BuildingType) =>
@@ -261,6 +260,16 @@ export class AiController {
         .ownedRegionIds(this.playerId)
         .filter((id) => engine.state.regions[id].construction?.type === type).length;
 
+    const stillWanted = wanted.some(({ type, upTo }) => building(type) < upTo);
+    if (sites.length === 0) {
+      // Nowhere left to build and still something worth building: clear a
+      // slot rather than stop developing. Nothing else in here demolishes,
+      // because pulling a building down is a pure loss unless the ground it
+      // stands on is worth more than it is.
+      if (stillWanted) this.clearASlot(engine);
+      return;
+    }
+
     for (const { type, upTo } of wanted) {
       if (building(type) >= upTo) continue;
       for (const site of sites) {
@@ -268,6 +277,33 @@ export class AiController {
           engine.startConstruction(site, type, this.playerId);
           return;
         }
+      }
+    }
+  }
+
+  /**
+   * Pulls down whichever of our buildings is doing the least (docs 13.1).
+   *
+   * That's a defence with our own ground on every side of it: a trench stops
+   * whoever walks onto it and a fortress shuts a road, and neither of those
+   * can happen where nobody but us can reach. It was worth building when it
+   * was the border — the border moved.
+   *
+   * A trench goes before a fortress, being a sixth of the price to put back,
+   * and the wonder and the core are never touched.
+   */
+  private clearASlot(engine: GameEngine): void {
+    const behindTheLines = (id: string) =>
+      engine.map.region(id).neighbors.every(
+        (neighbor) => engine.state.regions[neighbor].owner === this.playerId,
+      );
+
+    for (const type of ['trench', 'fortress'] as BuildingType[]) {
+      for (const id of engine.ownedRegionIds(this.playerId)) {
+        if (engine.state.regions[id].building?.type !== type) continue;
+        if (!behindTheLines(id)) continue;
+        engine.demolish(id, this.playerId);
+        return;
       }
     }
   }
