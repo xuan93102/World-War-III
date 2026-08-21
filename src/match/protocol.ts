@@ -30,12 +30,34 @@ export type RelayMessage =
  * core at zero rides in the snapshot (docs 15.3), so the guest works out the
  * result from the same state everything else is read from.
  */
+/**
+ * The lobby, while the two of them are still agreeing what to play.
+ *
+ * The host holds it and posts it after every change, for the same reason it
+ * holds the match: somebody has to be right when the two disagree, and it may
+ * as well be the one who will be running the game anyway. The guest asks;
+ * the host decides and says what the answer was.
+ */
+export interface SetupState {
+  mapId: string;
+  hostCore: string;
+  /** null until they have chosen somewhere far enough away. */
+  guestCore: string | null;
+  hostReady: boolean;
+  guestReady: boolean;
+}
+
 export type HostMessage =
+  | { t: 'setup'; state: SetupState }
   | { t: 'start'; setups: PlayerSetup[]; seats: Seat[]; you: PlayerId }
   | { t: 'snapshot'; state: GameState };
 
 /** Guest to host: this is what I want done. Never who I am. */
-export type GuestMessage = { t: 'order'; order: unknown };
+export type GuestMessage =
+  | { t: 'order'; order: unknown }
+  /** Where they would like to start. The host decides whether they may. */
+  | { t: 'pick'; core: string }
+  | { t: 'ready'; ready: boolean };
 
 /** Narrowing for messages off the wire, which are `unknown` until checked. */
 export function asRelayMessage(value: unknown): RelayMessage | null {

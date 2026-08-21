@@ -3,8 +3,10 @@ import { useSettings } from '../../settings/useSettings';
 import { Connection, type ConnectionState } from '../../match/connection';
 import type { PlayerSetup } from '../../engine/GameEngine';
 import type { Seat } from '../../match/seats';
+import type { SetupState } from '../../match/protocol';
 import { getMap, DEFAULT_MAP_ID } from '../../engine/maps';
 import { validOpponentCores } from '../../engine/startingPositions';
+import { PvpSetup } from './PvpSetup';
 
 export interface PvpMatch {
   setups: PlayerSetup[];
@@ -30,13 +32,18 @@ function pick<T>(items: T[]): T {
   return items[Math.floor(Math.random() * items.length)];
 }
 
+/** Somewhere on this map that can host a match at all. */
+function anyStart(mapId: string): string {
+  const map = getMap(mapId);
+  return pick(map.regions.filter((r) => validOpponentCores(map, r.id).length > 0).map((r) => r.id));
+}
+
 /**
- * Finding each other (docs/game-design.md 15.4).
+ * Finding each other, and agreeing what to play (docs/game-design.md 15.6).
  *
- * One side opens a room and reads the code out; the other types it in. The
- * host draws the starting positions and tells the guest what the match is —
- * there's no shared setup screen yet, so the side that opened the room is the
- * side that decides.
+ * One side opens a room and reads the code out; the other types it in. After
+ * that both are looking at the same setup, and the match starts when both say
+ * they're ready.
  */
 export function PvpLobby({
   playerColor,
@@ -48,9 +55,12 @@ export function PvpLobby({
 }: PvpLobbyProps) {
   const { t } = useSettings();
   const [state, setState] = useState<ConnectionState | null>(null);
+  const [setup, setSetup] = useState<SetupState | null>(null);
+  const [role, setRole] = useState<'host' | 'guest' | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [copied, setCopied] = useState(false);
   const connectionRef = useRef<Connection | null>(null);
+  const setupRef = useRef<SetupState | null>(null);
   const startedRef = useRef(false);
 
   // Whoever is still sitting in the lobby when the screen goes away should
@@ -61,51 +71,98 @@ export function PvpLobby({
     };
   }, []);
 
+  /** The host's copy is the real one; every change is posted over. */
+  const publish = (next: SetupState) => {
+    setupRef.current = next;
+    setSetup(next);
+    connectionRef.current?.send({ t: 'setup', state: next });
+    if (next.hostReady && next.guestReady && next.guestCore && !startedRef.current) {
+      startedRef.current = true;
+      const setups: PlayerSetup[] = [
+        { id: HOST_ID, name: hostName, color: playerColor, coreRegionId: next.hostCore },
+        { id: GUEST_ID, name: guestName, color: opponentColor, coreRegionId: next.guestCore },
+      ];
+      const seats: Seat[] = [
+        { by: 'human', playerId: HOST_ID },
+        { by: 'remote', playerId: GUEST_ID },
+      ];
+      connectionRef.current?.send({ t: 'start', setups, seats, you: GUEST_ID });
+      onBegin({ setups, seats, role: 'host', connection: connectionRef.current!, opponentId: GUEST_ID });
+    }
+  };
+
+  /**
+   * What the guest asked for, checked before it is believed. Everything here
+   * arrived from somebody else's browser: a region that doesn't exist, one too
+   * close to the host, or a map nobody is playing on are all things to say no
+   * to rather than crash on.
+   */
+  const hostHandles = (data: unknown) => {
+    const current = setupRef.current;
+    if (!current || typeof data !== 'object' || data === null) return;
+    const message = data as { t?: unknown; core?: unknown; ready?: unknown };
+
+    if (message.t === 'pick' && typeof message.core === 'string') {
+      const map = getMap(current.mapId);
+      const legal = validOpponentCores(map, current.hostCore).includes(message.core);
+      // Once they've said they're ready, moving is a change of terms.
+      if (legal && !current.guestReady) publish({ ...current, guestCore: message.core });
+      return;
+    }
+    if (message.t === 'ready' && typeof message.ready === 'boolean') {
+      if (message.ready && !current.guestCore) return;
+      publish({ ...current, guestReady: message.ready });
+    }
+  };
+
   const open = (opening: 'host' | { code: string }) => {
     connectionRef.current?.close();
     const connection = new Connection(opening);
     connectionRef.current = connection;
+
     connection.onState = (next) => {
       setState(next);
-      if (next.at !== 'together' || startedRef.current) return;
-      startedRef.current = true;
-
+      if (next.at !== 'together' || setupRef.current) return;
       if (opening === 'host') {
-        // The host draws the board and posts it over.
-        const map = getMap(DEFAULT_MAP_ID);
-        const pickable = map.regions
-          .filter((r) => validOpponentCores(map, r.id).length > 0)
-          .map((r) => r.id);
-        const hostCore = pick(pickable);
-        const guestCore = pick(validOpponentCores(map, hostCore));
-        const setups: PlayerSetup[] = [
-          { id: HOST_ID, name: hostName, color: playerColor, coreRegionId: hostCore },
-          { id: GUEST_ID, name: guestName, color: opponentColor, coreRegionId: guestCore },
-        ];
-        const seats: Seat[] = [
-          { by: 'human', playerId: HOST_ID },
-          { by: 'remote', playerId: GUEST_ID },
-        ];
-        connection.send({ t: 'start', setups, seats, you: GUEST_ID });
-        onBegin({ setups, seats, role: 'host', connection, opponentId: GUEST_ID });
+        setRole('host');
+        publish({
+          mapId: DEFAULT_MAP_ID,
+          hostCore: anyStart(DEFAULT_MAP_ID),
+          guestCore: null,
+          hostReady: false,
+          guestReady: false,
+        });
       }
     };
 
-    // The guest plays nothing until the host says what the match is.
     connection.onMessage = (data) => {
-      const message = data as { t?: unknown; setups?: PlayerSetup[]; you?: string };
-      if (message.t !== 'start' || !Array.isArray(message.setups)) return;
-      const seats: Seat[] = [
-        { by: 'remote', playerId: HOST_ID },
-        { by: 'human', playerId: GUEST_ID },
-      ];
-      onBegin({
-        setups: message.setups,
-        seats,
-        role: 'guest',
-        connection,
-        opponentId: HOST_ID,
-      });
+      if (opening === 'host') return hostHandles(data);
+
+      // The guest is told what the setup is, and then what the match is.
+      const message = data as {
+        t?: unknown;
+        state?: SetupState;
+        setups?: PlayerSetup[];
+      };
+      if (message.t === 'setup' && message.state) {
+        setRole('guest');
+        setupRef.current = message.state;
+        setSetup(message.state);
+        return;
+      }
+      if (message.t === 'start' && Array.isArray(message.setups) && !startedRef.current) {
+        startedRef.current = true;
+        onBegin({
+          setups: message.setups,
+          seats: [
+            { by: 'remote', playerId: HOST_ID },
+            { by: 'human', playerId: GUEST_ID },
+          ],
+          role: 'guest',
+          connection,
+          opponentId: HOST_ID,
+        });
+      }
     };
   };
 
@@ -132,6 +189,57 @@ export function PvpLobby({
               : 'pvp.noRelay',
         )
       : null;
+
+  // Once both are in the room, the lobby becomes the setup they share.
+  if (setup && role) {
+    const leave = () => {
+      connectionRef.current?.close();
+      onBack();
+    };
+    return (
+      <PvpSetup
+        role={role}
+        state={setup}
+        playerColor={role === 'host' ? playerColor : opponentColor}
+        opponentColor={role === 'host' ? opponentColor : playerColor}
+        onPick={(regionId) => {
+          const current = setupRef.current!;
+          if (role === 'host') {
+            // Moving the host may strand the guest's choice, so it goes with it.
+            const stillFar =
+              current.guestCore !== null &&
+              validOpponentCores(getMap(current.mapId), regionId).includes(current.guestCore);
+            publish({
+              ...current,
+              hostCore: regionId,
+              guestCore: stillFar ? current.guestCore : null,
+              guestReady: stillFar && current.guestReady,
+            });
+          } else {
+            connectionRef.current?.send({ t: 'pick', core: regionId });
+          }
+        }}
+        onPickMap={(mapId) => {
+          const current = setupRef.current!;
+          if (role !== 'host' || mapId === current.mapId) return;
+          // Another map is another board: nobody's flag is planted on it yet.
+          publish({
+            mapId,
+            hostCore: anyStart(mapId),
+            guestCore: null,
+            hostReady: false,
+            guestReady: false,
+          });
+        }}
+        onReady={(ready) => {
+          const current = setupRef.current!;
+          if (role === 'host') publish({ ...current, hostReady: ready });
+          else connectionRef.current?.send({ t: 'ready', ready });
+        }}
+        onLeave={leave}
+      />
+    );
+  }
 
   return (
     <div className="screen screen-centered">
