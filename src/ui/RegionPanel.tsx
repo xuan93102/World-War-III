@@ -256,9 +256,17 @@ export function RegionPanel({
         onDispatch={onDispatchCart}
       />
 
-      {/* Your own ground gets the whole menu; ground you merely have troops on
-          gets the one thing an army can put up there — a camp (docs 6.3). */}
-      {(isMine || canCamp) && (
+      {/* What is standing here, and what may be done about it.
+
+          Anything you can see, you can read (docs 9): the map draws a badge for
+          a building on any visible region, but a badge says only "something is
+          there", and which building it is and how hurt it is decide whether you
+          walk on, occupy, or settle in for a siege. The *actions* below are
+          another matter — your own ground gets the whole menu, ground you merely
+          have troops on gets the one thing an army can put up, a camp (docs
+          6.3), and somebody else's building is theirs to knock down, not
+          yours to demolish. */}
+      {(isMine || canCamp || (seen && (regionState.building || regionState.construction))) && (
         <section className="build-section">
           <div className="field-label">{t('building.section')}</div>
 
@@ -282,9 +290,11 @@ export function RegionPanel({
               <div className="build-status-meta">
                 {Math.ceil(regionState.construction.remainingSeconds)}s
               </div>
-              <button className="btn btn-sm" onClick={() => onCancelBuild(selectedRegionId)}>
-                {t('building.cancel')}
-              </button>
+              {isMine && (
+                <button className="btn btn-sm" onClick={() => onCancelBuild(selectedRegionId)}>
+                  {t('building.cancel')}
+                </button>
+              )}
             </div>
           ) : regionState.building ? (
             <div className="build-status">
@@ -296,15 +306,15 @@ export function RegionPanel({
                 {t(BUILDINGS[regionState.building.type].descKey)}
               </div>
               <div className="build-status-meta">
-                {t('building.hp')} {regionState.building.hp}
+                {t('building.hp')} {Math.ceil(regionState.building.hp)}
               </div>
-              {!regionState.isCore && (
+              {isMine && !regionState.isCore && (
                 <button className="btn btn-sm" onClick={() => onDemolish(selectedRegionId)}>
                   {t('building.demolish')}
                 </button>
               )}
             </div>
-          ) : (
+          ) : isMine || canCamp ? (
             <div className="build-menu">
               {(isMine ? BUILDING_ORDER : (['camp'] as BuildingType[])).map((type) => {
                 const def = BUILDINGS[type];
@@ -339,7 +349,7 @@ export function RegionPanel({
               })}
               {!isMine && <p className="hint-text">{t('camp.note')}</p>}
             </div>
-          )}
+          ) : null}
         </section>
       )}
     </div>
