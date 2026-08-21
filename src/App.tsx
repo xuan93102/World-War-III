@@ -12,9 +12,11 @@ import { MainMenu } from './ui/screens/MainMenu';
 import { ModeSelect } from './ui/screens/ModeSelect';
 import { PveSetup } from './ui/screens/PveSetup';
 import { PvpLobby, type PvpMatch } from './ui/screens/PvpLobby';
+import { ReplayList } from './ui/screens/ReplayList';
+import { Replay, type Recording } from './match/recording';
 import { SettingsScreen } from './ui/screens/SettingsScreen';
 
-type Screen = 'menu' | 'mode' | 'pvp' | 'pve' | 'spectate' | 'settings' | 'help' | 'game';
+type Screen = 'menu' | 'mode' | 'pvp' | 'pve' | 'spectate' | 'settings' | 'help' | 'replays' | 'game';
 
 const PLAYER_COLOR = '#4f8ef7';
 const OPPONENT_COLOR = '#e0524a';
@@ -27,6 +29,8 @@ interface MatchConfig {
   seats: Seat[];
   /** Present when somebody in this match is on another machine. */
   net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string };
+  /** Present when watching a match back rather than playing one (docs 16). */
+  replay?: Replay;
 }
 
 function AppShell() {
@@ -122,6 +126,7 @@ function AppShell() {
           onStart={() => setScreen('mode')}
           onSettings={() => setScreen('settings')}
           onHelp={() => setScreen('help')}
+          onReplays={() => setScreen('replays')}
         />
       );
     case 'mode':
@@ -165,6 +170,27 @@ function AppShell() {
       );
     case 'settings':
       return <SettingsScreen onBack={() => setScreen('menu')} />;
+    case 'replays':
+      return (
+        <ReplayList
+          onWatch={(recording: Recording) => {
+            const replay = new Replay(recording);
+            setMatch({
+              canPause: true,
+              // Nobody here is playing: a replay is watched, and the spectate
+              // view is exactly the view for that (docs 13.2).
+              seats: recording.seats.map((seat) =>
+                seat.by === 'human' ? { by: 'remote', playerId: seat.playerId } : seat,
+              ),
+              setups: recording.setups,
+              replay,
+            });
+            setMatchKey((k) => k + 1);
+            setScreen('game');
+          }}
+          onBack={() => setScreen('menu')}
+        />
+      );
     case 'help':
       return <HelpScreen onBack={() => setScreen('menu')} />;
     case 'game':
@@ -175,6 +201,7 @@ function AppShell() {
           seats={match.seats}
           canPause={match.canPause}
           net={match.net}
+          replay={match.replay}
           onQuit={() => {
             match.net?.connection.close();
             setScreen('menu');

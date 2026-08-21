@@ -3,6 +3,7 @@ import { GameEngine, type PlayerSetup } from '../../engine/GameEngine';
 import { TICK_SECONDS, fixedSteps } from '../../engine/clock';
 import { applyOrder, type Order } from '../../engine/orders';
 import { aiSeats, localPlayerId, type Seat } from '../../match/seats';
+import { Recorder, Replay, downloadReplay, keepReplay } from '../../match/recording';
 import { snapshotFor } from '../../engine/snapshot';
 import { parseOrder } from '../../engine/orders';
 import type { Connection } from '../../match/connection';
@@ -43,6 +44,8 @@ interface GameScreenProps {
   canPause: boolean;
   /** Present in a networked match: which end we are, and the wire (docs 15.4). */
   net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string };
+  /** Present when watching a match back instead of playing one (docs 16). */
+  replay?: Replay;
   onQuit: () => void;
   onPlayAgain: () => void;
 }
@@ -52,13 +55,15 @@ export function GameScreen({
   seats,
   canPause,
   net,
+  replay,
   onQuit,
   onPlayAgain,
 }: GameScreenProps) {
   const { t } = useSettings();
   // One engine per mounted match. Keyed remounting from the parent is what
   // starts a fresh game, so this deliberately ignores later `setups` changes.
-  const engine = useMemo(() => new GameEngine(setups), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // A replay brings its own, already wound back to the beginning.
+  const engine = useMemo(() => replay?.engine ?? new GameEngine(setups), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Whose eyes we're looking through, and whether anyone here is playing at
   // all — watching two machines is simply a match with no human seat.
@@ -81,6 +86,12 @@ export function GameScreen({
   // Real time that has passed but not yet been spent on whole steps.
   const bankedRef = useRef(0);
   const lastSentRef = useRef(0);
+  // Steps run so far, which is what an order is stamped with (docs 16).
+  const stepsRef = useRef(0);
+  // Every match is written down as it happens. Nothing is recorded twice: a
+  // replay is already a recording.
+  const recorderRef = useRef<Recorder | null>(null);
+  if (!recorderRef.current && !replay) recorderRef.current = new Recorder(setups, seats);
   // One controller per AI seat, built once per match (docs 13). They take the
   // same orders a human does — the engine has no idea which is which.
   const seatsRef = useRef<AiController[]>([]);
@@ -100,6 +111,7 @@ export function GameScreen({
     // the next snapshot is the truth if the two disagree (docs 15.4).
     if (net?.role === 'guest') net.connection.send({ t: 'order', order });
     applyOrder(engine, humanPlayerId, order);
+    recorderRef.current?.wrote(stepsRef.current, humanPlayerId, order);
     forceRender((n) => n + 1);
   };
 
@@ -116,7 +128,10 @@ export function GameScreen({
         // Parsed before it goes anywhere near the engine, and carried out as
         // the player whose socket it arrived on — never as whoever it claims.
         const order = parseOrder(message.order);
-        if (order) applyOrder(engine, net.opponentId, order);
+        if (order) {
+          applyOrder(engine, net.opponentId, order);
+          recorderRef.current?.wrote(stepsRef.current, net.opponentId, order);
+        }
         return;
       }
       if (net.role === 'guest' && message.t === 'snapshot') {
@@ -131,9 +146,18 @@ export function GameScreen({
 
   const winner = engine.getWinner();
   const isOver = winner !== null;
+
+  // A finished match is put away by itself, so nobody has to remember to save
+  // one before the interesting thing about it is gone.
+  const keptRef = useRef(false);
+  useEffect(() => {
+    if (!isOver || keptRef.current || !recorderRef.current) return;
+    keptRef.current = true;
+    keepReplay(recorderRef.current.result);
+  }, [isOver]);
   // Freeze the clock while paused, once the match is decided, or while the
   // quit confirmation is up — otherwise resources keep ticking behind a modal.
-  const clockStopped = paused || isOver || confirmQuit || peerGone;
+  const clockStopped = paused || isOver || confirmQuit || peerGone || (replay?.done ?? false);
 
   useEffect(() => {
     if (clockStopped) return;
@@ -157,13 +181,21 @@ export function GameScreen({
         incoming.current = null;
       }
       for (let step = 0; step < steps; step++) {
-        engine.tick(TICK_SECONDS);
-        // Only the machine that owns a controller runs it. A guest ticking
-        // its own copy is smoothing the gaps between snapshots, not playing.
-        if (net?.role !== 'guest') {
-          for (const seat of seatsRef.current) seat.update(engine, TICK_SECONDS);
+        if (replay) {
+          // A replay carries its own controllers and its own record of what
+          // people did, so the whole step is its business.
+          replay.advance();
+        } else {
+          engine.tick(TICK_SECONDS);
+          // Only the machine that owns a controller runs it. A guest ticking
+          // its own copy is smoothing the gaps between snapshots, not playing.
+          if (net?.role !== 'guest') {
+            for (const seat of seatsRef.current) seat.update(engine, TICK_SECONDS);
+          }
         }
+        stepsRef.current += 1;
       }
+      recorderRef.current?.reached(stepsRef.current);
       if (net?.role === 'host' && now - lastSentRef.current >= SNAPSHOT_INTERVAL_MS) {
         lastSentRef.current = now;
         net.connection.send({ t: 'snapshot', state: snapshotFor(engine, net.opponentId) });
@@ -171,7 +203,7 @@ export function GameScreen({
       if (steps > 0) forceRender((n) => n + 1);
     }, FRAME_INTERVAL_MS);
     return () => clearInterval(intervalId);
-  }, [engine, clockStopped, spectating, speed, net]);
+  }, [engine, clockStopped, spectating, speed, net, replay]);
 
   const players = Object.values(engine.state.players);
   const intel: Record<string, ReturnType<GameEngine['intelOn']>> = {};
@@ -371,7 +403,23 @@ export function GameScreen({
               {/* A rematch is something two people agree to. Restarting on
                   our own would leave the other end playing a match that no
                   longer exists. */}
-              {!net && (
+              {recorderRef.current && (
+                <button
+                  className="btn"
+                  onClick={() =>
+                    downloadReplay(
+                      recorderRef.current!.result,
+                      new Date(recorderRef.current!.result.playedAt)
+                        .toISOString()
+                        .slice(0, 16)
+                        .replace(/[:T]/g, '-'),
+                    )
+                  }
+                >
+                  {t('replay.download')}
+                </button>
+              )}
+              {!net && !replay && (
                 <button className="btn btn-primary" onClick={onPlayAgain}>
                   {t('result.playAgain')}
                 </button>

@@ -1690,3 +1690,15 @@
   align-items: center;
   gap: 6px;
 }
+
+/* ---------- replays (docs 16) ---------- */
+
+.replay-row {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+}
+
+.replay-row .card-option {
+  flex: 1;
+}
