@@ -1,7 +1,8 @@
 // The relay's room rules (docs/game-design.md 15.4, 15.8), against the real
-// server rather than a stand-in for it. A dropped socket is not a match that
-// ended, so a room is held open — and holding it open is exactly what creates
-// somewhere for a stranger to walk into, which is what the token is for.
+// server rather than a stand-in for it — the same Worker that gets deployed,
+// run locally by wrangler. A dropped socket is not a match that ended, so a
+// room is held open — and holding it open is exactly what creates somewhere
+// for a stranger to walk into, which is what the token is for.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { WebSocket } from 'ws';
@@ -12,9 +13,11 @@ const URL = `ws://127.0.0.1:${PORT}`;
 let relay: ChildProcess;
 
 /** A client that remembers everything it was told. */
-function connect(): Promise<WebSocket & { seen: Record<string, unknown>[] }> {
+function connect(path: string): Promise<WebSocket & { seen: Record<string, unknown>[] }> {
   return new Promise((resolve) => {
-    const socket = new WebSocket(URL) as WebSocket & { seen: Record<string, unknown>[] };
+    const socket = new WebSocket(`${URL}${path}`) as WebSocket & {
+      seen: Record<string, unknown>[];
+    };
     socket.seen = [];
     socket.on('error', () => {});
     socket.on('message', (raw) => socket.seen.push(JSON.parse(raw.toString())));
@@ -23,19 +26,29 @@ function connect(): Promise<WebSocket & { seen: Record<string, unknown>[] }> {
 }
 
 const say = (socket: WebSocket, message: unknown) => socket.send(JSON.stringify(message));
-const settle = () => new Promise((r) => setTimeout(r, 250));
+const settle = () => new Promise((r) => setTimeout(r, 400));
 const sawA = (socket: { seen: Record<string, unknown>[] }, t: string) =>
   socket.seen.filter((m) => m.t === t);
 
 beforeAll(async () => {
-  relay = spawn(process.execPath, ['server/relay.mjs'], {
-    env: { ...process.env, PORT: String(PORT) },
-    stdio: 'ignore',
-  });
+  relay = spawn(
+    process.execPath,
+    [
+      'node_modules/wrangler/bin/wrangler.js',
+      'dev',
+      '--config',
+      'server/wrangler.toml',
+      '--port',
+      String(PORT),
+    ],
+    // CI keeps wrangler from drawing its interactive menu at a terminal that
+    // isn't there.
+    { env: { ...process.env, CI: '1', WRANGLER_SEND_METRICS: 'false' }, stdio: 'ignore' },
+  );
   // Give it a moment to bind before anybody knocks. Asked over HTTP because
   // a WebSocket that can't connect reports it by an event, not a rejection —
   // waiting on one that never opens waits forever.
-  for (let attempt = 0; attempt < 40; attempt++) {
+  for (let attempt = 0; attempt < 60; attempt++) {
     try {
       const health = await fetch(`http://127.0.0.1:${PORT}/health`);
       if (health.ok) return;
@@ -45,20 +58,20 @@ beforeAll(async () => {
     await settle();
   }
   throw new Error('the relay never came up');
-}, 30000);
+}, 60000);
 
 afterAll(() => relay?.kill());
 
 describe('a room somebody dropped out of', () => {
   it('is held open, and its owner can walk back in with the token', async () => {
-    const host = await connect();
+    const host = await connect('/new');
     say(host, { t: 'host' });
     await settle();
     const opened = sawA(host, 'room')[0] as { code: string; token: string };
     expect(opened.code, 'a code to read out').toHaveLength(6);
     expect(opened.token, 'and a key to keep').toBeTruthy();
 
-    const guest = await connect();
+    const guest = await connect(`/r/${opened.code}`);
     say(guest, { t: 'join', code: opened.code });
     await settle();
     expect(sawA(guest, 'peer'), 'told somebody is already there').toHaveLength(1);
@@ -69,7 +82,7 @@ describe('a room somebody dropped out of', () => {
     expect(sawA(guest, 'gone'), 'the guest is told').toHaveLength(1);
 
     // And the host comes back to the same room, not a new one.
-    const back = await connect();
+    const back = await connect(`/r/${opened.code}`);
     say(back, { t: 'host', code: opened.code, token: opened.token });
     await settle();
     expect((sawA(back, 'room')[0] as { code: string })?.code, 'the same room').toBe(opened.code);
@@ -85,7 +98,7 @@ describe('a room somebody dropped out of', () => {
   });
 
   it('is not somewhere a stranger with the code can sit down', async () => {
-    const host = await connect();
+    const host = await connect('/new');
     say(host, { t: 'host' });
     await settle();
     const opened = sawA(host, 'room')[0] as { code: string; token: string };
@@ -94,36 +107,45 @@ describe('a room somebody dropped out of', () => {
 
     // A code is shouted down a phone and pasted into chat. On its own it must
     // not be enough to take over an empty host seat.
-    const stranger = await connect();
+    const stranger = await connect(`/r/${opened.code}`);
     say(stranger, { t: 'host', code: opened.code, token: 'DEFINITELY-NOT-IT' });
     await settle();
     expect(sawA(stranger, 'error')[0], 'turned away').toEqual({ t: 'error', why: 'noRoom' });
     expect(sawA(stranger, 'room'), 'and given no room').toHaveLength(0);
 
-    // Nor is asking without one at all.
+    // Nor is asking without one at all. Knocking on an existing room without
+    // its token reads as "open me a room here", and that room is taken.
     say(stranger, { t: 'host', code: opened.code });
     await settle();
-    // No token means this reads as "open me a room", which is fine — but it
-    // must be a *different* room, not the one that was already there.
-    const given = sawA(stranger, 'room')[0] as { code: string } | undefined;
-    expect(given?.code).not.toBe(opened.code);
+    expect(sawA(stranger, 'error').at(-1)).toEqual({ t: 'error', why: 'roomFull' });
+    expect(sawA(stranger, 'room'), 'still no room').toHaveLength(0);
 
     stranger.close();
   });
 
   it('will not let the seat be taken while its owner is still in it', async () => {
-    const host = await connect();
+    const host = await connect('/new');
     say(host, { t: 'host' });
     await settle();
     const opened = sawA(host, 'room')[0] as { code: string; token: string };
 
     // Even with the right token: there is somebody in that chair.
-    const twin = await connect();
+    const twin = await connect(`/r/${opened.code}`);
     say(twin, { t: 'host', code: opened.code, token: opened.token });
     await settle();
     expect(sawA(twin, 'error')[0]).toEqual({ t: 'error', why: 'noRoom' });
 
     host.close();
     twin.close();
+  });
+
+  it('turns away a guest when there is no room behind the code', async () => {
+    // A mistyped code is the common case, and it must not silently open
+    // something: an empty Durable Object is not a room until somebody hosts.
+    const guest = await connect('/r/ZZZZZZ');
+    say(guest, { t: 'join', code: 'ZZZZZZ' });
+    await settle();
+    expect(sawA(guest, 'error')[0]).toEqual({ t: 'error', why: 'noRoom' });
+    guest.close();
   });
 });

@@ -9,7 +9,8 @@
     "lint": "oxlint",
     "test": "vitest run",
     "preview": "vite preview",
-    "relay": "node server/relay.mjs"
+    "relay": "wrangler dev --config server/wrangler.toml",
+    "relay:deploy": "wrangler deploy --config server/wrangler.toml"
   },
   "dependencies": {
     "@types/ws": "^8.18.1",
@@ -34,6 +35,7 @@
     "oxlint": "^1.75.0",
     "typescript": "~6.0.2",
     "vite": "^8.2.0",
-    "vitest": "^4.1.10"
+    "vitest": "^4.1.10",
+    "wrangler": "^4.125.0"
   }
 }

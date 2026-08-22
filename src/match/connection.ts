@@ -56,8 +56,20 @@ export class Connection {
     this.dial();
   }
 
+  /**
+   * Which room to knock on. The code goes in the address rather than in the
+   * first message because the relay has to pick the room before the socket
+   * opens — one room is one Durable Object, chosen by its code. Asking for a
+   * room we have no code for yet is what `/new` means.
+   */
+  private address() {
+    const base = this.url.replace(/\/+$/, '');
+    const code = this.code ?? (this.opening === 'host' ? null : this.opening.code);
+    return code ? `${base}/r/${code}` : `${base}/new`;
+  }
+
   private dial() {
-    this.socket = new WebSocket(this.url);
+    this.socket = new WebSocket(this.address());
     this.socket.onopen = () => {
       this.attempt = 0;
       this.socket.send(JSON.stringify(this.greeting()));

@@ -27,8 +27,9 @@ npm run relay
 |---|---|
 | `npm run dev` | 開發伺服器 |
 | `npm run build` | 打包production版本 |
-| `npm test` | 執行全部測試（vitest，304項） |
-| `npm run relay` | 連線對戰的中繼伺服器（PVP 對局需要，預設 ws://localhost:8787）。部署方式見 [server/README.md](server/README.md) |
+| `npm test` | 執行全部測試（vitest，305項） |
+| `npm run relay` | 連線對戰的中繼伺服器（PVP 對局需要，預設 ws://localhost:8787） |
+| `npm run relay:deploy` | 把中繼部署到 Cloudflare Workers，見 [server/README.md](server/README.md) |
 | `npm run lint` | 靜態檢查（oxlint） |
 | `node scripts/build-map-data.mjs` | 重新產生地圖資料（改動 `scripts/subregions.mjs` 後需執行） |
 | `node scripts/analyze-disconnected.mjs` | 檢查是否有區塊由不相連的土地組成 |
@@ -65,8 +66,8 @@ npm run relay
 ```
 src/engine/     遊戲規則的唯一來源（純TypeScript，不依賴React，270個測試獨立覆蓋）
 src/ai/         本地AI席位。在引擎外面，只能下人類也能下的命令（20個測試）
-src/match/      對局的組成、連線與重播：席位、通訊協定、連線、指令錄影（14個測試）
-server/         連線對戰的中繼伺服器（可獨立部署，不含遊戲程式碼）
+src/match/      對局的組成、連線與重播：席位、通訊協定、連線、指令錄影（15個測試）
+server/         連線對戰的中繼伺服器（Cloudflare Worker，可獨立部署，不含遊戲程式碼）
 src/ui/         介面元件。介面不含任何規則
 src/settings/   設定與多語系
 scripts/        地圖資料建置與分析工具
