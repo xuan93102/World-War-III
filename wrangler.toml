@@ -1,0 +1,19 @@
+# Deploying the game itself: four static files, no server behind them.
+#
+#   npm run build      (with VITE_RELAY_URL set, see server/README.md)
+#   npm run deploy
+#
+# The relay is a separate Worker with its own config in server/, because the
+# two have nothing to say to each other at deploy time — changing the game
+# does not redeploy the relay, and vice versa.
+
+name = "salient"
+compatibility_date = "2026-08-22"
+
+# Every deployment would otherwise keep its own permanent address. An old one
+# is a build pointing at whatever relay was current when it was made, which is
+# a confusing thing to leave lying around for a game people share by link.
+preview_urls = false
+
+[assets]
+directory = "./dist"

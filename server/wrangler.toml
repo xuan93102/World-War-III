@@ -28,6 +28,6 @@ new_sqlite_classes = ["Room"]
 port = 8787
 
 [vars]
-# Which pages may use this relay. Set it once the game has an address — until
-# then anybody can, which is fine while nobody knows it exists.
-# ALLOWED_ORIGINS = "https://your-game.workers.dev"
+# Which pages may use this relay. Local development talks to a local relay, so
+# this list only needs the deployed game.
+ALLOWED_ORIGINS = "https://salient.yi39344.workers.dev"

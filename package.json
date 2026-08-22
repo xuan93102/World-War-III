@@ -9,6 +9,7 @@
     "lint": "oxlint",
     "test": "vitest run",
     "preview": "vite preview",
+    "deploy": "wrangler deploy",
     "relay": "wrangler dev --config server/wrangler.toml",
     "relay:deploy": "wrangler deploy --config server/wrangler.toml"
   },
