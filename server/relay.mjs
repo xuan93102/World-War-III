@@ -44,6 +44,34 @@ const LOBBY_GRACE_MS = 120_000;
 const HEARTBEAT_MS = 30_000;
 
 /**
+ * Which pages may use this relay, as a comma-separated ALLOWED_ORIGINS. Unset
+ * means anyone, which is right for running it on your own machine and wrong
+ * for leaving it on the internet.
+ *
+ * Worth being clear about what this is: a browser sends Origin and cannot lie
+ * about it, so this stops *other websites* pointing their players at your
+ * relay. Anything that isn't a browser can put whatever it likes in that
+ * header, so it is a door, not a wall.
+ */
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+/**
+ * Messages one socket may send per second, and how many it may bunch up.
+ *
+ * A host posts five snapshots a second and a guest clicks at human speed, so
+ * forty is generous by a wide margin — this is here to stop a flood, not to
+ * pace a game.
+ */
+const MESSAGES_PER_SECOND = 40;
+const BURST = 80;
+
+/** Dropped messages in a row before we stop believing it's a game at all. */
+const FLOOD_LIMIT = 200;
+
+/**
  * How long a room is held open for somebody who dropped out of it.
  *
  * A wifi blip, a lid closing, a phone changing networks: the match is still
@@ -81,7 +109,16 @@ function peerOf(room, socket) {
 const http = createServer((request, response) => {
   if (request.url === '/health' || request.url === '/') {
     response.writeHead(200, { 'content-type': 'application/json' });
-    response.end(JSON.stringify({ ok: true, rooms: rooms.size }));
+    // Enough to answer "is it up, and is anybody using it" without a login.
+    // Nothing about who, and nothing about any match: this endpoint is public.
+    response.end(
+      JSON.stringify({
+        ok: true,
+        rooms: rooms.size,
+        sockets: server?.clients.size ?? 0,
+        uptimeSeconds: Math.round(process.uptime()),
+      }),
+    );
     return;
   }
   response.writeHead(404).end();
@@ -110,9 +147,19 @@ const server = new WebSocketServer({
   },
 });
 
-server.on('connection', (socket) => {
+server.on('connection', (socket, request) => {
+  // Whose page this is. Checked before anything else, because a connection
+  // from somewhere we don't serve has nothing to say to us.
+  if (ALLOWED_ORIGINS.length > 0 && !ALLOWED_ORIGINS.includes(request.headers.origin ?? '')) {
+    socket.close(1008, 'origin');
+    return;
+  }
+
   socket.room = null;
   socket.alive = true;
+  socket.tokens = BURST;
+  socket.refilled = Date.now();
+  socket.dropped = 0;
 
   // Without this the process dies. A socket that breaks a protocol rule — an
   // oversized frame, most obviously — gets an 'error' event, and an 'error'
@@ -129,6 +176,23 @@ server.on('connection', (socket) => {
   }, LOBBY_GRACE_MS);
 
   socket.on('message', (raw) => {
+    // A bucket that fills back up over time: bursts are fine, a firehose is
+    // not. Over-limit messages are dropped rather than answered, and a socket
+    // that keeps it up long past any plausible game is shown the door.
+    const now = Date.now();
+    socket.tokens = Math.min(
+      BURST,
+      socket.tokens + ((now - socket.refilled) / 1000) * MESSAGES_PER_SECOND,
+    );
+    socket.refilled = now;
+    if (socket.tokens < 1) {
+      socket.dropped += 1;
+      if (socket.dropped > FLOOD_LIMIT) socket.terminate();
+      return;
+    }
+    socket.tokens -= 1;
+    socket.dropped = 0;
+
     let message;
     try {
       message = JSON.parse(raw.toString());
@@ -237,5 +301,24 @@ server.on('error', (error) => console.error('relay socket error:', error.message
 http.on('clientError', (_error, socket) => socket.destroy());
 
 http.listen(PORT, () => {
-  console.log(`relay listening on port ${PORT} (health at /health)`);
+  console.log(
+    `relay listening on port ${PORT} (health at /health)` +
+      (ALLOWED_ORIGINS.length > 0 ? `, origins: ${ALLOWED_ORIGINS.join(', ')}` : ', any origin'),
+  );
 });
+
+// A deploy replaces this process. Saying goodbye first means the two players
+// see "reconnecting" straight away and their clients start trying, instead of
+// both sides sitting on a socket that is quietly already dead.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => {
+    console.log('relay shutting down');
+    for (const socket of server.clients) socket.close(1001, 'going away');
+    // A close is a handshake, not a hang-up: tearing the server down in the
+    // same tick sends everyone an abnormal-closure instead of the goodbye,
+    // which reads to them as a network fault rather than a deploy.
+    setTimeout(() => http.close(() => process.exit(0)), 250);
+    // And don't hang forever on a socket that won't close.
+    setTimeout(() => process.exit(0), 2000).unref();
+  });
+}
