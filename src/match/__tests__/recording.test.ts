@@ -139,3 +139,47 @@ describe('a file that is not one of ours', () => {
     expect(read?.steps).toBe(10);
   });
 });
+
+describe('moving about inside a replay', () => {
+  it('arrives at the same world however it got there', () => {
+    const { recording } = playAndRecord(2000);
+
+    // Straight there.
+    const direct = new Replay(recording);
+    direct.seek(1200);
+
+    // There, past it, and back — the way a hand on a slider actually moves.
+    const wandering = new Replay(recording);
+    wandering.seek(1200);
+    wandering.seek(1900);
+    wandering.seek(400);
+    wandering.seek(1200);
+
+    expect(wandering.step).toBe(1200);
+    expect(
+      JSON.stringify(wandering.engine.state),
+      'rewinding rebuilds rather than approximates',
+    ).toBe(JSON.stringify(direct.engine.state));
+  });
+
+  it('keeps the engine everyone is holding', () => {
+    // The screen memoises the engine, so a rewind that swapped it for a new
+    // one would leave the whole interface drawing a world nobody is in.
+    const { recording } = playAndRecord(300);
+    const replay = new Replay(recording);
+    const held = replay.engine;
+    replay.seek(200);
+    replay.seek(10);
+    expect(replay.engine).toBe(held);
+  });
+
+  it('will not go outside the match', () => {
+    const { recording } = playAndRecord(300);
+    const replay = new Replay(recording);
+    replay.seek(-50);
+    expect(replay.step).toBe(0);
+    replay.seek(99999);
+    expect(replay.step, 'the end is the end').toBe(300);
+    expect(replay.done).toBe(true);
+  });
+});

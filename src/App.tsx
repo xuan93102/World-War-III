@@ -19,6 +19,14 @@ import { SettingsScreen } from './ui/screens/SettingsScreen';
 
 type Screen = 'menu' | 'mode' | 'pvp' | 'pve' | 'spectate' | 'settings' | 'help' | 'replays' | 'game';
 
+/**
+ * How hard a seat plays once a machine inherits it. A seat that was already a
+ * machine keeps its own setting; one that was a person has none to keep, and
+ * the middle is the least surprising thing to hand them.
+ */
+const seatDifficulty = (seat: Seat): AiDifficulty =>
+  seat.by === 'ai' ? seat.difficulty : 'normal';
+
 const PLAYER_COLOR = '#4f8ef7';
 const OPPONENT_COLOR = '#e0524a';
 const HUMAN_ID = 'p1';
@@ -32,8 +40,12 @@ interface MatchConfig {
   net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string };
   /** Present when watching a match back rather than playing one (docs 16). */
   replay?: Replay;
-  /** Present when the page reloaded in the middle of this match (docs 15.8). */
-  resumed?: { engine: GameEngine; steps: number; recording: Recording };
+  /**
+   * Present when this match was already under way: a page that reloaded in
+   * the middle of it (docs 15.8), or a replay somebody took over (docs 16).
+   * Only the first carries on being recorded.
+   */
+  resumed?: { engine: GameEngine; steps: number; recording?: Recording };
 }
 
 function AppShell() {
@@ -134,6 +146,33 @@ function AppShell() {
    * Neither asks first. The alternative is a dialogue about whether to
    * continue while the other player stands in a field waiting.
    */
+  /**
+   * Taking the controls of a match that already happened (docs 16).
+   *
+   * The world is already there — the replay has been stepped to wherever the
+   * player stopped it — so this is only a question of who is driving from
+   * here. Whoever they take over becomes theirs, and every other seat becomes
+   * a machine: the people who played the original are not here, and the point
+   * of stopping at this moment is usually to find out whether it could have
+   * gone differently.
+   */
+  const takeOver = (replay: Replay) => {
+    const mine =
+      replay.recording.seats.find((seat) => seat.by === 'human')?.playerId ??
+      replay.recording.setups[0].id;
+    setMatch({
+      canPause: true,
+      setups: replay.recording.setups,
+      seats: replay.recording.seats.map((seat) =>
+        seat.playerId === mine
+          ? { by: 'human', playerId: mine }
+          : { by: 'ai', playerId: seat.playerId, difficulty: seatDifficulty(seat) },
+      ),
+      resumed: { engine: replay.engine, steps: replay.step },
+    });
+    setMatchKey((k) => k + 1);
+  };
+
   const resumedRef = useRef(false);
   useEffect(() => {
     if (resumedRef.current) return;
@@ -247,6 +286,7 @@ function AppShell() {
           net={match.net}
           replay={match.replay}
           resumed={match.resumed}
+          onTakeOver={match.replay ? () => takeOver(match.replay!) : undefined}
           onQuit={() => {
             match.net?.connection.close();
             // Walking out is not something to be walked back into.

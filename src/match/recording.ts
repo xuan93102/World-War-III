@@ -101,7 +101,7 @@ export class Recorder {
 export class Replay {
   readonly engine: GameEngine;
   readonly recording: Recording;
-  private readonly controllers: AiController[];
+  private controllers: AiController[];
   private readonly byStep = new Map<number, RecordedOrder[]>();
   private stepsRun = 0;
 
@@ -141,6 +141,32 @@ export class Replay {
   runToEnd(): GameEngine {
     while (!this.done) this.advance();
     return this.engine;
+  }
+
+  /**
+   * Moves to any point in the match.
+   *
+   * There is no rewinding a simulation, so going back means going back to the
+   * beginning and coming forward again — which costs nothing but time, and
+   * gives a bit-for-bit identical world because that is what determinism is
+   * for. Forwards is just more of the stepping it was already doing.
+   *
+   * The engine object survives so that whoever is holding it keeps holding
+   * the same one; it is the world inside it that is rebuilt. The machines
+   * have to be new, though: a controller remembers where it was pushing, and
+   * a replayed match must not be steered by opinions from a future that has
+   * been wound back.
+   */
+  seek(step: number): void {
+    const target = Math.max(0, Math.min(Math.floor(step), this.recording.steps));
+    if (target < this.stepsRun) {
+      this.engine.adopt(new GameEngine(this.recording.setups).state);
+      this.controllers = aiSeats(this.recording.seats).map(
+        (seat) => new AiController(seat.playerId, seat.difficulty),
+      );
+      this.stepsRun = 0;
+    }
+    while (this.stepsRun < target) this.advance();
   }
 }
 

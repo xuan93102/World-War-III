@@ -17,6 +17,10 @@ const zhTW = {
   'replay.openFileHint': '別人給你的 .salient.json 檔可以在這裡打開。',
   'replay.badFile': '這個檔案讀不出來，可能不是重播檔，或是舊版本產生的。',
   'replay.watching': '重播中',
+  'replay.scrub': '在局中的位置',
+  'replay.takeOver': '從這裡接手',
+  'replay.rebuilding': '重建中…',
+  'replay.tookOver': '從這一刻起由你接手，其他席位交給電腦。這一局不會被錄下——一份檔案裝不下兩段不同的歷史。',
   'menu.back': '返回',
 
   'mode.title': '選擇對戰模式',
@@ -477,6 +481,10 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'replay.openFileHint': '别人给你的 .salient.json 档可以在这里打开。',
   'replay.badFile': '这个档案读不出来，可能不是重播档，或是旧版本产生的。',
   'replay.watching': '重播中',
+  'replay.scrub': '在局中的位置',
+  'replay.takeOver': '从这里接手',
+  'replay.rebuilding': '重建中…',
+  'replay.tookOver': '从这一刻起由你接手，其他席位交给电脑。这一局不会被录下——一份档案装不下两段不同的历史。',
   'menu.back': '返回',
 
   'mode.title': '选择对战模式',
@@ -937,6 +945,10 @@ const en: Record<keyof typeof zhTW, string> = {
   'replay.openFileHint': 'A .salient.json somebody sent you opens here.',
   'replay.badFile': 'That file could not be read — it may not be a replay, or it may be from an older version.',
   'replay.watching': 'Replay',
+  'replay.scrub': 'Position in the match',
+  'replay.takeOver': 'Play on from here',
+  'replay.rebuilding': 'rebuilding…',
+  'replay.tookOver': 'You have the controls from here. Everyone else is played by the machine, and this match is not recorded — one file cannot hold both histories.',
   'menu.back': 'Back',
 
   'mode.title': 'Select Game Mode',

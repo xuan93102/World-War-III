@@ -232,6 +232,19 @@ export interface PlayerEconomy {
   buildingCounts: Record<string, number>;
 }
 
+/**
+ * The next number after every id in a list, so nothing handed out later
+ * collides with something already there. Ids look like `l7`, `m12`, `c3`.
+ */
+function past(ids: string[]): number {
+  let highest = 0;
+  for (const id of ids) {
+    const n = Number(id.slice(1));
+    if (Number.isFinite(n) && n > highest) highest = n;
+  }
+  return highest + 1;
+}
+
 export class GameEngine {
   state: GameState;
 
@@ -309,8 +322,25 @@ export class GameEngine {
       })),
       mapId,
     );
-    engine.state = state;
+    engine.adopt(state);
     return engine;
+  }
+
+  /**
+   * Takes on a whole world in place of this one — a snapshot off the wire, a
+   * replay wound back, a match picked up again.
+   *
+   * The counters have to come with it. They are not in the state because
+   * nothing outside this class has any business with them, but they are still
+   * part of where the match has got to: dropping a world in and leaving the
+   * next legion id at 1 hands out an id that something already standing on
+   * the board is using.
+   */
+  adopt(state: GameState): void {
+    this.state = state;
+    this.nextLegionId = past(state.legions.map((l) => l.id));
+    this.nextMarchId = past(state.marches.map((m) => m.id));
+    this.nextCartId = past(state.carts.map((c) => c.id));
   }
 
   // ---- legions (docs/game-design.md 7) -----------------------------------

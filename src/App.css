@@ -1702,3 +1702,37 @@
 .replay-row .card-option {
   flex: 1;
 }
+
+/* Moving about inside a match that has already happened (docs 16). Sits
+   between the topbar and the map, because it belongs to the whole match
+   rather than to any region on it. */
+.replay-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.replay-scrub {
+  flex: 1 1 auto;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
+.replay-time {
+  font-variant-numeric: tabular-nums;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.replay-time-total::before {
+  content: '/ ';
+}
+
+.replay-seeking {
+  font-size: 13px;
+  color: var(--text-dim);
+}

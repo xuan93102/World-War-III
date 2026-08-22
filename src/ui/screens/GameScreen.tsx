@@ -23,6 +23,7 @@ import { TechPanel } from '../TechPanel';
 import { MatchClock } from '../MatchClock';
 import { Modal } from '../Modal';
 import { RegionPanel } from '../RegionPanel';
+import { ReplayBar } from '../ReplayBar';
 import { SpectatePanel } from '../SpectatePanel';
 import { VillagerBar } from '../VillagerBar';
 
@@ -61,11 +62,19 @@ interface GameScreenProps {
   /** Present when watching a match back instead of playing one (docs 16). */
   replay?: Replay;
   /**
-   * Present when this match was already under way before the page reloaded
-   * (docs 15.8): the world rebuilt from its own recording, and the place in
-   * it to carry on from.
+   * Present when this match was already under way before we got here: a page
+   * that reloaded mid-match (docs 15.8), or a replay somebody took the
+   * controls of (docs 16).
+   *
+   * The recording comes with the first and not the second. A reload is the
+   * same match carrying on, so it carries on being written down; a taken-over
+   * replay is a new history that shares a past, and a recording cannot say
+   * "the seats changed at step 4000" — replaying it would run a machine for a
+   * player whose orders are also in the file, and the two would fight.
    */
-  resumed?: { engine: GameEngine; steps: number; recording: Recording };
+  resumed?: { engine: GameEngine; steps: number; recording?: Recording };
+  /** Offered while watching a replay: stop watching and play on from here. */
+  onTakeOver?: () => void;
   onQuit: () => void;
   onPlayAgain: () => void;
 }
@@ -77,6 +86,7 @@ export function GameScreen({
   net,
   replay,
   resumed,
+  onTakeOver,
   onQuit,
   onPlayAgain,
 }: GameScreenProps) {
@@ -101,6 +111,9 @@ export function GameScreen({
   const [showTech, setShowTech] = useState(false);
   const [paused, setPaused] = useState(false);
   const [confirmQuit, setConfirmQuit] = useState(false);
+  // Rebuilding a replay to reach a dragged-to position. It is a few seconds
+  // of work for a long match, so the clock stops and the bar says so.
+  const [seeking, setSeeking] = useState(false);
   // Nobody to play against just now (docs 15.8): either their socket died or
   // ours did. The clock stops rather than running on against nobody, and the
   // room is held open — a lid closing is not a match ending.
@@ -116,9 +129,10 @@ export function GameScreen({
   // one that rebuilt it rather than starting a second.
   const recorderRef = useRef<Recorder | null>(null);
   if (!recorderRef.current && !replay) {
-    recorderRef.current = resumed
-      ? Recorder.resuming(resumed.recording)
-      : new Recorder(setups, seats);
+    // A match picked up from a replay is deliberately not written down; see
+    // `resumed` above for why one file cannot hold both halves.
+    if (resumed?.recording) recorderRef.current = Recorder.resuming(resumed.recording);
+    else if (!resumed) recorderRef.current = new Recorder(setups, seats);
   }
   // One controller per AI seat, built once per match (docs 13). They take the
   // same orders a human does — the engine has no idea which is which.
@@ -240,7 +254,26 @@ export function GameScreen({
   // Freeze the clock while paused, once the match is decided, or while the
   // quit confirmation is up — otherwise resources keep ticking behind a modal.
   const clockStopped =
-    paused || isOver || confirmQuit || away !== null || (replay?.done ?? false);
+    paused || isOver || confirmQuit || seeking || away !== null || (replay?.done ?? false);
+
+  /**
+   * Moving to a point in a replay.
+   *
+   * The work happens after a paint rather than in the click, because going
+   * backwards replays the match from its first step — around a second for a
+   * ten-minute game and three or four for a long one — and a frozen screen
+   * with no explanation reads as a crash.
+   */
+  const seekTo = (step: number) => {
+    if (!replay || seeking) return;
+    setSeeking(true);
+    setTimeout(() => {
+      replay.seek(step);
+      stepsRef.current = replay.step;
+      setSeeking(false);
+      forceRender((n) => n + 1);
+    }, 0);
+  };
 
   useEffect(() => {
     if (clockStopped) return;
@@ -260,7 +293,7 @@ export function GameScreen({
       // A snapshot that has arrived replaces everything: it is the truth,
       // and whatever the guest predicted since the last one was a guess.
       if (incoming.current) {
-        engine.state = incoming.current;
+        engine.adopt(incoming.current);
         incoming.current = null;
       }
       for (let step = 0; step < steps; step++) {
@@ -371,6 +404,16 @@ export function GameScreen({
           </button>
         </div>
       </div>
+
+      {replay && onTakeOver && (
+        <ReplayBar
+          step={replay.step}
+          steps={replay.recording.steps}
+          seeking={seeking}
+          onSeek={seekTo}
+          onTakeOver={onTakeOver}
+        />
+      )}
 
       <div className="app-body">
         <div className="map-container">
