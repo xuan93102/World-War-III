@@ -40,21 +40,18 @@ curl https://salient-relay.<你的子網域>.workers.dev/health
 
 ## 讓遊戲連到部署好的中繼
 
-建置遊戲時給一個環境變數：
+中繼的網址寫在專案根目錄的 `.env.production` 裡（`VITE_RELAY_URL`），換中繼就改那一行。
+
+它放在檔案裡而不是放在「誰記得那道指令」，是因為**忘記設定不會大聲失敗**：建置會退回「跟頁面同一台主機的 8787 埠」，這在 `npm run dev` 是對的，部署出去就默默是錯的。頁面看起來一切正常，只是房間永遠開不起來。
+
+**注意是 `wss://` 不是 `ws://`。** 遊戲透過 HTTPS 提供時，瀏覽器會把明文 `ws://` 當成混合內容直接擋掉，同樣沒有明顯的錯誤訊息。
+
+## 更新遊戲
 
 ```bash
-VITE_RELAY_URL=wss://salient-relay.<你的子網域>.workers.dev npm run build
+npm run build
+npm run deploy
 ```
-
-Windows 的 PowerShell 要這樣寫：
-
-```powershell
-$env:VITE_RELAY_URL='wss://salient-relay.<你的子網域>.workers.dev'; npm run build
-```
-
-**注意是 `wss://` 不是 `ws://`。** 遊戲若透過 HTTPS 提供，瀏覽器會把明文 `ws://` 當成混合內容直接擋掉，而且不會有明顯的錯誤訊息——連線只是默默失敗。沒設定這個變數時，程式會依照頁面本身的協定自動選 `ws` 或 `wss`，並假設中繼跟遊戲在同一台主機的 8787 埠。
-
-建置完把 `dist/` 整個資料夾拖到 Cloudflare 的 Workers & Pages（Create → Pages → Upload assets）。**拖資料夾本身，不是裡面的檔案**；它應該顯示 4 個檔案，看到幾百幾千就是拖錯了。
 
 ## 把門關上
 
