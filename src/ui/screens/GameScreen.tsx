@@ -3,7 +3,14 @@ import { GameEngine, type PlayerSetup } from '../../engine/GameEngine';
 import { TICK_SECONDS, fixedSteps } from '../../engine/clock';
 import { applyOrder, type Order } from '../../engine/orders';
 import { aiSeats, localPlayerId, type Seat } from '../../match/seats';
-import { Recorder, Replay, downloadReplay, keepReplay } from '../../match/recording';
+import {
+  Recorder,
+  Replay,
+  downloadReplay,
+  keepReplay,
+  type Recording,
+} from '../../match/recording';
+import { forgetMatch, rememberMatch } from '../../match/resume';
 import { snapshotFor } from '../../engine/snapshot';
 import { parseOrder } from '../../engine/orders';
 import type { Connection } from '../../match/connection';
@@ -36,6 +43,13 @@ const SNAPSHOT_INTERVAL_MS = FRAME_INTERVAL_MS;
 /** Fast-forward, for watching a match nobody is steering. */
 const SPEEDS = [1, 2, 4, 8];
 
+/**
+ * How often the match is written down in case this tab is about to be thrown
+ * away. Often enough that a reload loses a second or two of orders, rarely
+ * enough that a growing recording isn't being serialised every frame.
+ */
+const RESUME_SAVE_INTERVAL_MS = 2000;
+
 interface GameScreenProps {
   setups: PlayerSetup[];
   /** Who is playing each side (docs 15.4) — a human here, a machine, or someone else's machine. */
@@ -46,6 +60,12 @@ interface GameScreenProps {
   net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string };
   /** Present when watching a match back instead of playing one (docs 16). */
   replay?: Replay;
+  /**
+   * Present when this match was already under way before the page reloaded
+   * (docs 15.8): the world rebuilt from its own recording, and the place in
+   * it to carry on from.
+   */
+  resumed?: { engine: GameEngine; steps: number; recording: Recording };
   onQuit: () => void;
   onPlayAgain: () => void;
 }
@@ -56,14 +76,16 @@ export function GameScreen({
   canPause,
   net,
   replay,
+  resumed,
   onQuit,
   onPlayAgain,
 }: GameScreenProps) {
   const { t } = useSettings();
   // One engine per mounted match. Keyed remounting from the parent is what
   // starts a fresh game, so this deliberately ignores later `setups` changes.
-  // A replay brings its own, already wound back to the beginning.
-  const engine = useMemo(() => replay?.engine ?? new GameEngine(setups), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // A replay brings its own, already wound back to the beginning; a resumed
+  // match brings one wound forward to where it left off.
+  const engine = useMemo(() => resumed?.engine ?? replay?.engine ?? new GameEngine(setups), []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Whose eyes we're looking through, and whether anyone here is playing at
   // all — watching two machines is simply a match with no human seat.
@@ -88,11 +110,16 @@ export function GameScreen({
   const bankedRef = useRef(0);
   const lastSentRef = useRef(0);
   // Steps run so far, which is what an order is stamped with (docs 16).
-  const stepsRef = useRef(0);
+  const stepsRef = useRef(resumed?.steps ?? 0);
   // Every match is written down as it happens. Nothing is recorded twice: a
-  // replay is already a recording.
+  // replay is already a recording, and a resumed match carries on writing the
+  // one that rebuilt it rather than starting a second.
   const recorderRef = useRef<Recorder | null>(null);
-  if (!recorderRef.current && !replay) recorderRef.current = new Recorder(setups, seats);
+  if (!recorderRef.current && !replay) {
+    recorderRef.current = resumed
+      ? Recorder.resuming(resumed.recording)
+      : new Recorder(setups, seats);
+  }
   // One controller per AI seat, built once per match (docs 13). They take the
   // same orders a human does — the engine has no idea which is which.
   const seatsRef = useRef<AiController[]>([]);
@@ -172,6 +199,44 @@ export function GameScreen({
     keptRef.current = true;
     keepReplay(recorderRef.current.result);
   }, [isOver]);
+
+  /**
+   * Leaving a note for the tab we might become (docs 15.8).
+   *
+   * Reconnecting already covers a socket dying, but a reload is not a socket
+   * dying — it is this whole page ceasing to exist while the other player
+   * carries on. So the way back into the room is written down, and for the
+   * host so is the match itself, which is small because it is a list of
+   * decisions rather than a world.
+   *
+   * A finished match is not written down: there is nothing to come back to.
+   */
+  useEffect(() => {
+    if (!net || replay) return;
+    if (isOver) {
+      forgetMatch();
+      return;
+    }
+    const write = () => {
+      const room = net.connection.room;
+      if (!room) return;
+      rememberMatch({
+        role: net.role,
+        code: room.code,
+        token: room.token,
+        setups,
+        seats,
+        opponentId: net.opponentId,
+        steps: stepsRef.current,
+        // Only the host's copy rebuilds anything. The guest's engine was
+        // driven by snapshots, so its orders alone would not reproduce it.
+        recording: net.role === 'host' ? (recorderRef.current?.result ?? null) : null,
+      });
+    };
+    write();
+    const id = setInterval(write, RESUME_SAVE_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [net, replay, isOver, setups, seats]);
   // Freeze the clock while paused, once the match is decided, or while the
   // quit confirmation is up — otherwise resources keep ticking behind a modal.
   const clockStopped =

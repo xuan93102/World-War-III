@@ -63,6 +63,20 @@ export class Recorder {
     };
   }
 
+  /**
+   * Picks up a match that was already being written down.
+   *
+   * A reload does not start a new match, and it must not start a new
+   * recording either — the orders from before the refresh are what rebuilt
+   * the world we are carrying on with.
+   */
+  static resuming(recording: Recording): Recorder {
+    const recorder = new Recorder(recording.setups, recording.seats, recording.playedAt);
+    recorder.recording.steps = recording.steps;
+    recorder.recording.events = structuredClone(recording.events);
+    return recorder;
+  }
+
   /** Someone did something. */
   wrote(step: number, playerId: PlayerId, order: Order): void {
     this.recording.events.push({ step, playerId, order: structuredClone(order) });

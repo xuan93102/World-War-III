@@ -33,9 +33,19 @@ export const DEFAULT_RELAY_URL =
 /** Waits between attempts, backing off so a dead relay isn't hammered. */
 const RETRY_DELAYS_MS = [500, 1000, 2000, 4000, 8000, 15000];
 
+/**
+ * How to get into a room: open a new one, join somebody else's by code, or
+ * walk back into our own — which needs the token, because a code on its own
+ * is something anybody who heard it could use.
+ */
+export type Opening = 'host' | { code: string } | { code: string; token: string };
+
+const reclaiming = (opening: Opening): opening is { code: string; token: string } =>
+  typeof opening === 'object' && 'token' in opening;
+
 export class Connection {
   private socket!: WebSocket;
-  private readonly opening: 'host' | { code: string };
+  private readonly opening: Opening;
   private readonly url: string;
   /** Handed out when we opened the room; our key back into it. */
   private token: string | null = null;
@@ -50,10 +60,21 @@ export class Connection {
 
   state: ConnectionState = { at: 'connecting' };
 
-  constructor(opening: 'host' | { code: string }, url: string = DEFAULT_RELAY_URL) {
+  constructor(opening: Opening, url: string = DEFAULT_RELAY_URL) {
     this.opening = opening;
     this.url = url;
+    // A room we are returning to is one we already know the way into, so the
+    // first greeting can claim it rather than ask for a new one.
+    if (reclaiming(opening)) {
+      this.code = opening.code;
+      this.token = opening.token;
+    }
     this.dial();
+  }
+
+  /** What we would need to walk back into this room after a reload. */
+  get room(): { code: string; token: string | null } | null {
+    return this.code ? { code: this.code, token: this.token } : null;
   }
 
   /**
@@ -86,7 +107,7 @@ export class Connection {
 
   /** What we say on connecting: open a room, walk back into ours, or join. */
   private greeting() {
-    if (this.opening === 'host') {
+    if (this.opening === 'host' || reclaiming(this.opening)) {
       return this.code && this.token
         ? { t: 'host', code: this.code, token: this.token }
         : { t: 'host' };

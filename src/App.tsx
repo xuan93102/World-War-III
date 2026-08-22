@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import './App.css';
-import type { PlayerSetup } from './engine/GameEngine';
+import type { GameEngine, PlayerSetup } from './engine/GameEngine';
 import type { AiDifficulty } from './engine/types';
 import type { Seat } from './match/seats';
-import type { Connection } from './match/connection';
+import { Connection } from './match/connection';
+import { forgetMatch, resumableMatch } from './match/resume';
 import { SettingsProvider } from './settings/SettingsContext';
 import { useSettings } from './settings/useSettings';
 import { GameScreen } from './ui/screens/GameScreen';
@@ -31,6 +32,8 @@ interface MatchConfig {
   net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string };
   /** Present when watching a match back rather than playing one (docs 16). */
   replay?: Replay;
+  /** Present when the page reloaded in the middle of this match (docs 15.8). */
+  resumed?: { engine: GameEngine; steps: number; recording: Recording };
 }
 
 function AppShell() {
@@ -119,6 +122,47 @@ function AppShell() {
     setScreen('game');
   };
 
+  /**
+   * Walking back into a match this tab was in before it was reloaded
+   * (docs 15.8).
+   *
+   * The host rebuilds the world by replaying what everybody did — the same
+   * operation as watching a replay, stopped at the end and carried on from
+   * instead of watched. The guest rebuilds nothing: it never held the match,
+   * so it rejoins the room and the next snapshot tells it everything.
+   *
+   * Neither asks first. The alternative is a dialogue about whether to
+   * continue while the other player stands in a field waiting.
+   */
+  const resumedRef = useRef(false);
+  useEffect(() => {
+    if (resumedRef.current) return;
+    resumedRef.current = true;
+    const saved = resumableMatch();
+    if (!saved) return;
+
+    const connection =
+      saved.role === 'host' && saved.token
+        ? new Connection({ code: saved.code, token: saved.token })
+        : new Connection({ code: saved.code });
+
+    let resumed: MatchConfig['resumed'];
+    if (saved.role === 'host' && saved.recording) {
+      const replay = new Replay(saved.recording);
+      resumed = { engine: replay.runToEnd(), steps: replay.step, recording: saved.recording };
+    }
+
+    setMatch({
+      canPause: false,
+      seats: saved.seats,
+      setups: saved.setups,
+      net: { role: saved.role, connection, opponentId: saved.opponentId },
+      resumed,
+    });
+    setMatchKey((k) => k + 1);
+    setScreen('game');
+  }, []);
+
   switch (screen) {
     case 'menu':
       return (
@@ -202,8 +246,11 @@ function AppShell() {
           canPause={match.canPause}
           net={match.net}
           replay={match.replay}
+          resumed={match.resumed}
           onQuit={() => {
             match.net?.connection.close();
+            // Walking out is not something to be walked back into.
+            forgetMatch();
             setScreen('menu');
           }}
           onPlayAgain={() => setMatchKey((k) => k + 1)}
