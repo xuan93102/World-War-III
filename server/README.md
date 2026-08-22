@@ -38,6 +38,62 @@ VITE_RELAY_URL=wss://your-relay.example.com npm run build
 
 **注意是 `wss://` 不是 `ws://`。** 遊戲若透過 HTTPS 提供，瀏覽器會把明文 `ws://` 當成混合內容直接擋掉，而且不會有明顯的錯誤訊息——連線只是默默失敗。沒設定這個變數時，程式會依照頁面本身的協定自動選 `ws` 或 `wss`，並假設中繼跟遊戲在同一台主機的 8787 埠。
 
+## 部署清單（A 方案）
+
+順序不能反：中繼要先有網址，遊戲才知道要連去哪。
+
+### 1. 把中繼放上 Fly.io
+
+```bash
+fly auth login          # 開瀏覽器登入，這一步只有你能做
+fly launch --config server/fly.toml --no-deploy
+fly deploy --config server/fly.toml
+```
+
+`fly launch` 會問要不要改應用名稱（`salient-relay` 大概被用掉了，讓它給你一個）。機房選 **nrt（東京）** 或 **hkg（香港）**——香港離台灣近一點。
+
+部署完拿到的網址長這樣：`https://你的名字.fly.dev`。確認它活著：
+
+```bash
+curl https://你的名字.fly.dev/health
+```
+
+應該回 `{"ok":true,"rooms":0,...}`。
+
+### 2. 用那個網址建置遊戲
+
+**注意是 `wss://` 不是 `https://`**：
+
+```bash
+VITE_RELAY_URL=wss://你的名字.fly.dev npm run build
+```
+
+Windows 的 PowerShell 要這樣寫：
+
+```powershell
+$env:VITE_RELAY_URL='wss://你的名字.fly.dev'; npm run build
+```
+
+### 3. 把遊戲放上 Cloudflare Pages
+
+最省事的是直接拖：登入 Cloudflare → Workers & Pages → Create → Pages → Upload assets → 把 `dist/` 整個資料夾拖進去。
+
+拿到的網址長這樣：`https://你的專案.pages.dev`。
+
+### 4. 回頭把中繼的門關上
+
+現在遊戲有網址了，就別讓別的網站用你的中繼：
+
+```bash
+fly secrets set ALLOWED_ORIGINS=https://你的專案.pages.dev --config server/fly.toml
+```
+
+這會觸發一次重新部署。之後只有你的遊戲頁面連得上。
+
+### 5. 驗收
+
+把 `https://你的專案.pages.dev` 傳給朋友，一個開房、一個輸入房號。兩人各自選起始位置、按準備，就開打了。
+
 ## 設定
 
 | 環境變數 | 作用 |

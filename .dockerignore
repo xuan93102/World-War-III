@@ -1,0 +1,13 @@
+# The relay image carries the relay and nothing else: no game code, no map
+# data, no React. Keeping the build context small is why it builds in a
+# second and why changing the game does not mean redeploying the relay.
+node_modules
+dist
+src
+docs
+scripts
+public
+.git
+.claude
+*.md
+!server/README.md
