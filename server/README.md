@@ -45,12 +45,14 @@ VITE_RELAY_URL=wss://your-relay.example.com npm run build
 ### 1. 把中繼放上 Fly.io
 
 ```bash
-fly auth login          # 開瀏覽器登入，這一步只有你能做
-fly launch --config server/fly.toml --no-deploy
-fly deploy --config server/fly.toml
+flyctl auth login          # 開瀏覽器登入，這一步只有你能做
+flyctl launch --config server/fly.toml --no-deploy
+flyctl deploy --config server/fly.toml
 ```
 
-`fly launch` 會問要不要改應用名稱（`salient-relay` 大概被用掉了，讓它給你一個）。機房選 **nrt（東京）** 或 **hkg（香港）**——香港離台灣近一點。
+指令名稱看你怎麼裝的：官網的安裝腳本會同時給 `fly` 與 `flyctl`，`winget install Fly-io.flyctl` 只給 `flyctl`。這份文件一律用兩邊都有的那個。裝完要開新的終端機，PATH 才會生效。
+
+`flyctl launch` 會問要不要改應用名稱（`salient-relay` 大概被用掉了，讓它給你一個）。機房選 **nrt（東京）** 或 **hkg（香港）**——香港離台灣近一點。
 
 部署完拿到的網址長這樣：`https://你的名字.fly.dev`。確認它活著：
 
@@ -85,7 +87,7 @@ $env:VITE_RELAY_URL='wss://你的名字.fly.dev'; npm run build
 現在遊戲有網址了，就別讓別的網站用你的中繼：
 
 ```bash
-fly secrets set ALLOWED_ORIGINS=https://你的專案.pages.dev --config server/fly.toml
+flyctl secrets set ALLOWED_ORIGINS=https://你的專案.pages.dev --config server/fly.toml
 ```
 
 這會觸發一次重新部署。之後只有你的遊戲頁面連得上。

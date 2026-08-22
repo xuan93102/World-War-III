@@ -5,11 +5,11 @@
 # a relay on the wrong continent turns a 40ms round trip into 300ms, which
 # costs more than any choice of architecture.
 #
-#   fly launch --config server/fly.toml --no-deploy   (once, to claim a name)
-#   fly deploy --config server/fly.toml
+#   flyctl launch --config server/fly.toml --no-deploy   (once, to claim a name)
+#   flyctl deploy --config server/fly.toml
 #
-# The app name has to be unique across all of Fly, so `fly launch` will offer
-# you a free one if this is taken.
+# The app name has to be unique across all of Fly, so `flyctl launch` will
+# offer you a free one if this is taken.
 
 app = "salient-relay"
 
