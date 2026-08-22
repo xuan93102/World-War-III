@@ -18,10 +18,12 @@ app = "salient-relay"
 primary_region = "nrt"
 
 [build]
-  dockerfile = "server/Dockerfile"
-  # Paths in the Dockerfile are relative to the repository root, since the
-  # image copies server/ into itself.
-  ignorefile = ".dockerignore"
+  # These two are resolved relative to *this file*, while the build context is
+  # the directory you run `flyctl deploy` from — the repository root, since the
+  # Dockerfile copies server/ into the image. Hence the asymmetry: the
+  # Dockerfile sits beside this file, the ignore file is one level up.
+  dockerfile = "Dockerfile"
+  ignorefile = "../.dockerignore"
 
 [env]
   # Which pages may use this relay. Set it once the game has an address —

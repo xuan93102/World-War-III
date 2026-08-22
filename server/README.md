@@ -46,13 +46,21 @@ VITE_RELAY_URL=wss://your-relay.example.com npm run build
 
 ```bash
 flyctl auth login          # 開瀏覽器登入，這一步只有你能做
-flyctl launch --config server/fly.toml --no-deploy
-flyctl deploy --config server/fly.toml
+flyctl apps create 你要的名字 --org personal
+flyctl deploy --config server/fly.toml --ha=false
 ```
+
+**`--ha=false` 不能省。** Fly 第一次部署預設會開兩台機器做高可用，但這個中繼的房間存在記憶體裡——房主連到 A 機、客人連到 B 機，兩邊就永遠找不到對方，症狀是「房號不存在」。對它來說兩台不是備援，是分裂。已經開成兩台的話：
+
+```bash
+flyctl scale count 1 --config server/fly.toml
+```
+
+新帳號可能會被風控標記（`Your account has been marked as high risk`），要去 https://fly.io/high-risk-unlock 驗證，會實扣一筆小額。在 Billing 頁面加卡**不算**完成這個流程，是兩件事。
 
 指令名稱看你怎麼裝的：官網的安裝腳本會同時給 `fly` 與 `flyctl`，`winget install Fly-io.flyctl` 只給 `flyctl`。這份文件一律用兩邊都有的那個。裝完要開新的終端機，PATH 才會生效。
 
-`flyctl launch` 會問要不要改應用名稱（`salient-relay` 大概被用掉了，讓它給你一個）。機房選 **nrt（東京）** 或 **hkg（香港）**——香港離台灣近一點。
+應用名稱要在全 Fly 唯一。機房由 `fly.toml` 的 `primary_region` 決定，現在是 **nrt（東京）**，從台灣約 35-45ms；改成 `hkg`（香港）會再低一些，但香港常常沒有容量。
 
 部署完拿到的網址長這樣：`https://你的名字.fly.dev`。確認它活著：
 
