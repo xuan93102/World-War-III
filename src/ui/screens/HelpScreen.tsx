@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/buildings';
 import { UNITS, type UnitType } from '../../engine/units';
 import { useSettings } from '../../settings/useSettings';
@@ -58,11 +59,31 @@ function LegendRow({ icon, textKey }: { icon: React.ReactNode; textKey: Translat
 export function HelpScreen({ onBack }: HelpScreenProps) {
   const { t } = useSettings();
 
-  return (
-    <div className="screen screen-centered">
-      <h2 className="screen-title">{t('help.title')}</h2>
+  // The key everybody presses when they want out of something. Cheap to
+  // support and it costs a reader nothing to try.
+  useEffect(() => {
+    const leave = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onBack();
+    };
+    window.addEventListener('keydown', leave);
+    return () => window.removeEventListener('keydown', leave);
+  }, [onBack]);
 
-      <div className="panel panel-wide">
+  return (
+    <div className="screen help-screen">
+      {/* The way out comes first and stays put. Buried at the bottom of a
+          screen this long, it could not be found without scrolling to look
+          for it — which is the one thing somebody who wants to leave should
+          not have to do. */}
+      <div className="screen-header">
+        <button className="btn" onClick={onBack}>
+          ← {t('menu.back')}
+        </button>
+        <h2 className="screen-title">{t('help.title')}</h2>
+      </div>
+
+      <div className="help-grid">
+      <div className="panel">
         <div className="field-label">{t('help.map')}</div>
         <ul className="help-list">
           <li>{t('help.mapPan')}</li>
@@ -74,7 +95,7 @@ export function HelpScreen({ onBack }: HelpScreenProps) {
         <p className="hint-text">{t('help.mapMode')}</p>
       </div>
 
-      <div className="panel panel-wide">
+      <div className="panel">
         <div className="field-label">{t('help.legend')}</div>
         <div className="help-legend">
           <LegendRow icon={<BuildingIcon type="core" size={26} />} textKey="help.legendCore" />
@@ -123,7 +144,19 @@ export function HelpScreen({ onBack }: HelpScreenProps) {
         </div>
       </div>
 
-      <div className="panel panel-wide">
+      <div className="panel">
+        <div className="field-label">{t('help.rules')}</div>
+        <ul className="help-list">
+          <li>{t('help.rulesCore')}</li>
+          <li>{t('help.rulesResource')}</li>
+          <li>{t('help.rulesLand')}</li>
+          <li>{t('help.rulesCapture')}</li>
+          <li>{t('help.rulesMountain')}</li>
+          <li>{t('help.rulesWonder')}</li>
+        </ul>
+      </div>
+
+      <div className="panel help-buildings help-grid-full">
         <div className="field-label">{t('help.buildings')}</div>
         <p className="hint-text">{t('help.buildingsNote')}</p>
         <div className="help-entries">
@@ -154,7 +187,7 @@ export function HelpScreen({ onBack }: HelpScreenProps) {
         </div>
       </div>
 
-      <div className="panel panel-wide">
+      <div className="panel help-units help-grid-full">
         <div className="field-label">{t('help.units')}</div>
         <p className="hint-text">{t('help.unitsNote')}</p>
         <div className="help-entries">
@@ -187,23 +220,8 @@ export function HelpScreen({ onBack }: HelpScreenProps) {
         </div>
       </div>
 
-      <div className="panel panel-wide">
-        <div className="field-label">{t('help.rules')}</div>
-        <ul className="help-list">
-          <li>{t('help.rulesCore')}</li>
-          <li>{t('help.rulesResource')}</li>
-          <li>{t('help.rulesLand')}</li>
-          <li>{t('help.rulesCapture')}</li>
-          <li>{t('help.rulesMountain')}</li>
-          <li>{t('help.rulesWonder')}</li>
-        </ul>
+      <p className="notice help-grid-full">{t('help.notImplemented')}</p>
       </div>
-
-      <p className="notice notice-wide">{t('help.notImplemented')}</p>
-
-      <button className="btn btn-ghost" onClick={onBack}>
-        {t('menu.back')}
-      </button>
     </div>
   );
 }

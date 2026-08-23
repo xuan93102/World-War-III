@@ -2141,3 +2141,97 @@
   letter-spacing: 0.22em;
   text-transform: uppercase;
 }
+
+/* ---------- how to play ----------
+
+   Five sections of reference material that used to be one tall column, so
+   the way out was somewhere below the fold and the first thing anybody had
+   to learn was how to scroll back. It is a grid now, and the header stays
+   where it is whatever the grid does. */
+
+.help-screen {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 20px 24px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.screen-header {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 0 12px;
+  /* Sticky over scrolling content needs its own ground, or the content
+     reads through it. */
+  background: linear-gradient(var(--bg) 72%, transparent);
+}
+
+.screen-header .screen-title {
+  margin: 0;
+}
+
+.help-grid {
+  display: grid;
+  /* Three at most. A fourth column makes each one narrower, the text inside
+     wrap more, and the whole screen taller — measured, not assumed. */
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  /* Each panel is its own height; without this they all stretch to match the
+     tallest in the row and the page grows for no reason. */
+  align-items: start;
+  gap: 14px;
+}
+
+.help-grid > .panel {
+  max-width: none;
+  padding: 13px 15px;
+  gap: 7px;
+}
+
+.help-grid-full {
+  grid-column: 1 / -1;
+  max-width: none;
+}
+
+/* The building list is the longest section, and its entries are short. Two
+   columns of it inside one panel keeps the grid from being one tall spike. */
+.help-grid .panel:has(.help-entries) .help-entries {
+  gap: 10px;
+}
+
+/* The two long lists span the grid and tile inside themselves, so twelve
+   buildings are three short rows rather than one tall column. */
+.help-buildings .help-entries,
+.help-units .help-entries {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(238px, 1fr));
+  gap: 9px 18px;
+}
+
+/* This screen is reference material, and all of it should be in front of you
+   at once. Everything below buys back vertical space. */
+.help-screen .help-list {
+  gap: 5px;
+  line-height: 1.45;
+}
+
+.help-screen .help-legend {
+  gap: 7px;
+}
+
+.help-screen .help-entry-desc {
+  line-height: 1.4;
+  margin-top: 1px;
+}
+
+.help-screen .hint-text {
+  line-height: 1.45;
+}
+
+.help-screen .notice {
+  padding: 8px 14px;
+}
