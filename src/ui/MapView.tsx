@@ -9,7 +9,7 @@ import { BuildingBadge, BuildingSolid, GROUND_Y, type IconKey } from './building
 import { shade } from './colors';
 import { useSettings } from '../settings/useSettings';
 import { MAP_TILT, THEMES } from '../settings/types';
-import type { GameState, PlayerState } from '../engine/types';
+import type { GameState, PlayerState, RegionDef } from '../engine/types';
 
 interface MapViewProps {
   gameState: GameState;
@@ -79,6 +79,27 @@ const ROUTE_COLOR = '#ffd54a';
 const BATTLE_COLOR = '#d9342b';
 const BATTLE_MARKER_PX = 24;
 const PASS_COLOR = '#e08a3d';
+
+/**
+ * Whether a region has room on screen for its own name (docs 3.1).
+ *
+ * Drawing all sixty-three at once puts most of them on top of each other, and
+ * a pile of overlapping names is less readable than no names at all. So a
+ * label appears when the ground it belongs to is wide enough to hold it, which
+ * makes zooming in reveal the map rather than merely enlarge it.
+ *
+ * A core is always named. It is the one place on the board you need to be able
+ * to find without hunting, and there are only ever two of them.
+ */
+function labelFits(region: RegionDef, zoom: number, isCore: boolean): boolean {
+  if (isCore) return true;
+  // Land area is projected, so its square root is roughly how wide the region
+  // is in world units; the label is 11px on screen whatever the zoom, and CJK
+  // characters are about one em each.
+  const roomInWorldUnits = Math.sqrt(region.landArea);
+  const labelInWorldUnits = (region.name.length * 11 * 0.62) / zoom;
+  return roomInWorldUnits >= labelInWorldUnits;
+}
 
 const WORLD_PADDING = 20;
 // How thick the island slab looks in 3D, in world units. Left in world units
@@ -945,7 +966,7 @@ export function MapView({
                     );
                   });
                 })()}
-                {showLabels && (
+                {showLabels && labelFits(region, transform.k, regionState.isCore) && (
                   <text
                     x={p.x}
                     y={p.y + 3.5 / transform.k}
@@ -964,7 +985,11 @@ export function MapView({
                   totalUnits(garrisonAt(gameState, region.id)) > 0 && (
                   <text
                     x={p.x}
-                    y={p.y + (showLabels ? 13 : 4) / transform.k}
+                    y={
+                      p.y +
+                      (showLabels && labelFits(region, transform.k, regionState.isCore) ? 13 : 4) /
+                        transform.k
+                    }
                     textAnchor="middle"
                     fontSize={8 / transform.k}
                     fill={MILITIA_COLOR}

@@ -1,59 +1,121 @@
-/* ---------- shared controls ---------- */
+/* ---------- shared controls ----------
+
+   A control should look like something you could press: lit along its top
+   edge, sitting a little above what is behind it, and moving when you do
+   press it. The old ones were rectangles that changed border colour. */
 
 .btn {
+  position: relative;
   border: 1px solid var(--border);
-  background: var(--surface);
+  background: linear-gradient(
+    color-mix(in oklab, var(--surface) 92%, var(--text) 8%),
+    var(--surface)
+  );
   color: var(--text);
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: 9px 18px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.9rem;
-  transition: border-color 0.12s, background 0.12s;
+  font-size: var(--step-0);
+  font-weight: 500;
+  line-height: 1.2;
+  box-shadow: var(--lip), var(--shadow-1);
+  transition:
+    border-color var(--fast) var(--ease),
+    background var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
 }
 
 .btn:hover:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--border-strong);
+  background: linear-gradient(var(--surface-hover), var(--surface-raised));
+  box-shadow: var(--lip), var(--shadow-2);
+}
+
+/* Pressing is the one place a control should actually move. */
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+  box-shadow: none;
 }
 
 .btn:disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .btn-lg {
-  padding: 12px 40px;
-  font-size: 1.05rem;
+  padding: 13px 40px;
+  font-size: var(--step-1);
+  border-radius: var(--radius);
 }
 
 .btn-sm {
   padding: 5px 12px;
-  font-size: 0.8rem;
+  font-size: var(--step--1);
 }
 
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+  background: linear-gradient(var(--accent-bright), var(--accent));
+  border-color: color-mix(in oklab, var(--accent) 70%, #000 30%);
+  color: var(--on-accent);
+  font-weight: 600;
 }
 
 .btn-primary:hover:not(:disabled) {
-  filter: brightness(1.12);
+  background: linear-gradient(
+    color-mix(in oklab, var(--accent-bright) 88%, #fff 12%),
+    var(--accent-bright)
+  );
+  border-color: color-mix(in oklab, var(--accent) 70%, #000 30%);
+  box-shadow: var(--lip), var(--shadow-2), 0 0 0 3px var(--accent-soft);
 }
 
 .btn-ghost {
   background: transparent;
+  border-color: transparent;
+  color: var(--text-soft);
+  box-shadow: none;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--surface);
+  border-color: var(--border-faint);
+  color: var(--text);
+  box-shadow: none;
+}
+
+/* Selected, for the button groups that behave like a set of choices. */
+.btn.is-selected,
+.btn[aria-pressed='true'] {
+  border-color: var(--accent-line);
+  color: var(--accent);
+  background: linear-gradient(var(--accent-soft), transparent);
 }
 
 .text-input {
   flex: 1;
   min-width: 0;
   border: 1px solid var(--border);
-  background: var(--bg);
+  background: var(--surface-sunken);
   color: var(--text);
-  padding: 7px 10px;
-  border-radius: 6px;
-  font-size: 0.9rem;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  font-size: var(--step-0);
   font-family: inherit;
+  /* Sunken rather than raised: this is a slot things go into. */
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.25);
+  transition: border-color var(--fast) var(--ease), box-shadow var(--fast) var(--ease);
+}
+
+.text-input::placeholder {
+  color: var(--text-faint);
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: var(--accent-line);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.25), 0 0 0 3px var(--accent-soft);
 }
 
 /* ---------- menu screens ---------- */
@@ -62,7 +124,20 @@
   height: 100%;
   width: 100%;
   overflow-y: auto;
-  padding: 32px 20px;
+  padding: 40px 20px;
+  /* A surface with a light over it and a faint grid ruled across it. Three
+     layers, all nearly invisible on their own: the eye reads depth from the
+     pool of light, and the grid stops the dark from looking like nothing. */
+  background:
+    radial-gradient(
+      120% 80% at 50% -10%,
+      color-mix(in oklab, var(--accent) 7%, transparent),
+      transparent 60%
+    ),
+    radial-gradient(80% 60% at 50% 112%, rgb(0 0 0 / 0.2), transparent 70%),
+    repeating-linear-gradient(0deg, var(--border-faint) 0 1px, transparent 1px 64px),
+    repeating-linear-gradient(90deg, var(--border-faint) 0 1px, transparent 1px 64px),
+    var(--bg);
 }
 
 .screen-centered {
@@ -75,24 +150,52 @@
 
 .title-block {
   text-align: center;
+  margin-bottom: 8px;
 }
 
 .game-title {
   margin: 0;
-  font-size: 2.6rem;
-  letter-spacing: 0.06em;
+  font-size: var(--step-4);
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  /* Lit from above, like everything else on this table. */
+  background: linear-gradient(
+    color-mix(in oklab, var(--text) 96%, transparent),
+    color-mix(in oklab, var(--text) 60%, transparent)
+  );
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* A rule under the title, fading out at both ends. */
+.title-block::after {
+  content: "";
+  display: block;
+  height: 1px;
+  margin: 14px auto 0;
+  width: min(320px, 70vw);
+  background: linear-gradient(90deg, transparent, var(--accent-line), transparent);
 }
 
 .screen-title {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: var(--step-2);
+  font-weight: 600;
+  letter-spacing: 0.04em;
 }
 
 .menu-buttons {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-top: 12px;
+  gap: 10px;
+  margin-top: 20px;
+  min-width: 230px;
+}
+
+.menu-buttons .btn {
+  width: 100%;
 }
 
 .card-list {
@@ -103,49 +206,85 @@
 }
 
 .card-option {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
   text-align: left;
-  padding: 14px 18px;
+  padding: 15px 18px 15px 20px;
   border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+  border-radius: var(--radius);
+  background: linear-gradient(var(--surface-raised), var(--surface));
   color: var(--text);
   cursor: pointer;
   font-family: inherit;
-  transition: border-color 0.12s;
+  overflow: hidden;
+  box-shadow: var(--lip), var(--shadow-1);
+  transition:
+    border-color var(--fast) var(--ease),
+    transform var(--fast) var(--ease),
+    box-shadow var(--fast) var(--ease);
 }
 
-.card-option:hover {
-  border-color: var(--accent);
+/* A bar down the leading edge that lights up when chosen. Cheaper on the eye
+   than colouring the whole card, and it survives on a light theme. */
+.card-option::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
+  opacity: 0;
+  transition: opacity var(--fast) var(--ease);
+}
+
+.card-option:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  transform: translateY(-1px);
+  box-shadow: var(--lip), var(--shadow-2);
+}
+
+.card-option:hover:not(:disabled)::before {
+  opacity: 0.4;
 }
 
 .card-option.is-selected {
-  border-color: var(--accent);
-  box-shadow: inset 0 0 0 1px var(--accent);
+  border-color: var(--accent-line);
+  background: linear-gradient(var(--accent-soft), transparent), var(--surface);
+}
+
+.card-option.is-selected::before {
+  opacity: 1;
+}
+
+.card-option:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .card-option-title {
-  font-size: 1rem;
+  font-size: var(--step-1);
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .card-option-desc {
-  font-size: 0.8rem;
+  font-size: var(--step--1);
   color: var(--text-dim);
+  line-height: 1.5;
 }
 
 .panel {
   width: 100%;
   max-width: 460px;
-  background: var(--surface);
+  background: linear-gradient(var(--surface-raised), var(--surface));
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px;
+  border-radius: var(--radius);
+  padding: 18px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
+  box-shadow: var(--lip), var(--shadow-2);
 }
 
 .screen-centered > .card-list,
@@ -154,8 +293,12 @@
 }
 
 .field-label {
-  font-size: 0.85rem;
+  font-size: var(--step--1);
   color: var(--text-dim);
+  /* Spaced small caps: a label on an instrument, not a sentence. */
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-weight: 600;
 }
 
 .button-row {
@@ -167,37 +310,57 @@
 
 .segmented {
   display: flex;
-  gap: 6px;
+  gap: 4px;
   flex-wrap: wrap;
+  /* One sunken trough with the options sitting in it. */
+  padding: 4px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius);
 }
 
 .segmented button {
   flex: 1;
-  min-width: 90px;
+  min-width: 84px;
   padding: 8px 10px;
-  border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--text);
-  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-soft);
+  border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.85rem;
+  font-size: var(--step--1);
+  font-weight: 500;
+  transition:
+    background var(--fast) var(--ease),
+    color var(--fast) var(--ease),
+    border-color var(--fast) var(--ease);
+}
+
+.segmented button:hover:not(.is-selected) {
+  background: var(--surface);
+  color: var(--text);
 }
 
 .segmented button.is-selected {
-  border-color: var(--accent);
-  color: var(--accent);
+  border-color: var(--border);
+  background: linear-gradient(var(--surface-hover), var(--surface-raised));
+  color: var(--text);
+  box-shadow: var(--lip), var(--shadow-1);
 }
 
 .notice {
   max-width: 460px;
   margin: 0;
-  padding: 10px 14px;
-  border-radius: 6px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  color: var(--text-dim);
-  font-size: 0.82rem;
-  text-align: center;
+  padding: 11px 14px 11px 16px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--warn-soft);
+  /* A bar down the leading edge, so it reads as something being flagged
+     rather than one more box on the pile. */
+  border-left: 3px solid var(--warn);
+  background: linear-gradient(90deg, var(--warn-soft), transparent 60%), var(--surface);
+  color: var(--text-soft);
+  font-size: var(--step--1);
+  line-height: 1.55;
 }
 
 .room-code-row {
@@ -209,30 +372,36 @@
 .room-code {
   flex: 1;
   font-family: ui-monospace, Consolas, monospace;
-  font-size: 1.5rem;
-  letter-spacing: 0.22em;
-  padding: 8px 12px;
-  background: var(--bg);
+  font-size: var(--step-2);
+  font-weight: 600;
+  letter-spacing: 0.34em;
+  /* Tracking pushes the text off-centre; put the trailing gap back. */
+  text-indent: 0.34em;
+  padding: 12px;
+  background: var(--surface-sunken);
   border: 1px solid var(--border);
-  border-radius: 6px;
+  border-radius: var(--radius-sm);
   text-align: center;
+  color: var(--accent);
+  box-shadow: inset 0 1px 3px rgb(0 0 0 / 0.3);
 }
 
 .waiting-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.85rem;
+  gap: 9px;
+  font-size: var(--step--1);
   color: var(--text-dim);
 }
 
 .spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--border);
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+  border: 2px solid var(--border-faint);
   border-top-color: var(--accent);
   border-radius: 50%;
-  animation: spin 0.9s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
 @keyframes spin {
@@ -248,14 +417,15 @@
 }
 
 .btn-danger {
-  border-color: #b3453d;
-  color: #ff8a80;
+  border-color: color-mix(in oklab, var(--danger) 55%, transparent);
+  color: var(--danger);
+  background: linear-gradient(var(--danger-soft), transparent);
 }
 
 .btn-danger:hover:not(:disabled) {
-  background: #b3453d;
+  background: linear-gradient(color-mix(in oklab, var(--danger) 90%, #fff 10%), var(--danger));
   color: #fff;
-  border-color: #b3453d;
+  border-color: color-mix(in oklab, var(--danger) 70%, #000 30%);
 }
 
 .panel-wide {
@@ -264,9 +434,9 @@
 
 .hint-text {
   margin: 0;
-  font-size: 0.78rem;
+  font-size: var(--step--1);
   color: var(--text-dim);
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .help-list {
@@ -396,24 +566,42 @@
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgb(0 0 0 / 0.55);
+  /* Whatever is behind a modal is not the thing to read. */
+  backdrop-filter: blur(3px);
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 20px;
   z-index: 50;
+  animation: modal-fade var(--slow) var(--ease);
 }
 
 .modal {
-  background: var(--surface);
+  background: linear-gradient(var(--surface-raised), var(--surface));
   border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 22px;
+  border-radius: var(--radius-lg);
+  padding: 24px;
   width: 100%;
-  max-width: 380px;
+  max-width: 390px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
+  box-shadow: var(--lip), var(--shadow-3);
+  animation: modal-rise var(--slow) var(--ease);
+}
+
+@keyframes modal-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes modal-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
 }
 
 .modal:focus {
@@ -422,16 +610,18 @@
 
 .modal-title {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: var(--step-2);
+  font-weight: 600;
+  letter-spacing: 0.02em;
   text-align: center;
 }
 
 .modal-body {
   margin: 0;
-  font-size: 0.88rem;
-  color: var(--text-dim);
+  font-size: var(--step-0);
+  color: var(--text-soft);
   text-align: center;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 
 .modal-actions {
@@ -443,10 +633,11 @@
 .result-banner {
   margin: 0;
   text-align: center;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  padding: 12px;
-  border-radius: 8px;
+  font-size: var(--step-0);
+  line-height: 1.6;
+  padding: 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-faint);
 }
 
 .result-banner.is-victory {
@@ -484,11 +675,11 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 3px;
-  padding: 6px 14px;
-  border-left: 1px solid var(--border);
+  gap: 2px;
+  padding: 6px 16px;
+  border-left: 1px solid var(--border-faint);
   flex: 0 0 auto;
-  min-width: 130px;
+  min-width: 132px;
 }
 
 @media (max-width: 700px) {
@@ -506,10 +697,11 @@
 }
 
 .match-time {
-  font-size: 1.15rem;
+  font-size: var(--step-2);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
+  line-height: 1.1;
 }
 
 .payout-line {
@@ -546,9 +738,9 @@
   flex-direction: column;
   gap: 5px;
   justify-content: center;
-  padding: 6px 12px;
-  border-left: 1px solid var(--border);
-  border-right: 1px solid var(--border);
+  padding: 6px 14px;
+  border-left: 1px solid var(--border-faint);
+  border-right: 1px solid var(--border-faint);
   flex-shrink: 0;
 }
 
@@ -580,8 +772,9 @@
 .topbar-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   flex-shrink: 0;
+  padding-left: 12px;
 }
 
 /* ---------- in-game ---------- */
@@ -600,11 +793,15 @@
      the HUD, clock, recruiting controls and match actions, which together
      overflow a narrow window. */
   flex-wrap: wrap;
-  gap: 8px;
-  background: var(--surface);
+  gap: 0;
+  background: linear-gradient(var(--surface-raised), var(--surface));
   border-bottom: 1px solid var(--border);
   padding-right: 10px;
   flex-shrink: 0;
+  /* A shelf casts a shadow onto the map below it. */
+  box-shadow: var(--lip), 0 2px 10px rgb(0 0 0 / 0.35);
+  position: relative;
+  z-index: 5;
 }
 
 .game-topbar .hud {
@@ -620,31 +817,50 @@
 
 .hud {
   display: flex;
-  gap: 12px;
+  gap: 10px;
   padding: 8px 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: transparent;
   flex-wrap: wrap;
 }
 
+/* A player's colour belongs on one edge, not around the whole card. A full
+   coloured border competes with the map, where the same colour means
+   territory. */
 .hud-player {
-  border: 1px solid;
-  border-radius: 6px;
-  padding: 4px 10px;
-  min-width: 200px;
+  position: relative;
+  border: 1px solid var(--border-faint);
+  border-left: 3px solid;
+  border-radius: var(--radius-sm);
+  padding: 5px 12px;
+  min-width: 210px;
+  background: var(--surface-sunken);
 }
 
 .hud-player-name {
-  font-weight: bold;
-  font-size: 0.85rem;
+  font-weight: 700;
+  font-size: var(--step--1);
+  letter-spacing: 0.06em;
 }
 
 .hud-stats {
   display: flex;
-  gap: 10px;
-  font-size: 0.75rem;
+  gap: 12px;
+  font-size: var(--step--1);
   color: var(--text-dim);
   flex-wrap: wrap;
+  line-height: 1.6;
+}
+
+/* The number in a "label value" pair is the part being read. */
+.hud-stats > span {
+  color: var(--text-dim);
+}
+
+.hud-stats .rate {
+  color: var(--ok);
+  font-style: normal;
+  margin-left: 3px;
+  font-size: 0.92em;
 }
 
 .app-body {
@@ -660,6 +876,22 @@
   min-height: 0;
   display: flex;
   background: var(--map-bg);
+}
+
+/* A vignette, so the board falls away at the edges instead of stopping at
+   them. Drawn over the map but under anything you can click. */
+.map-container::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(120% 90% at 50% 45%, transparent 55%, rgb(0 0 0 / 0.34) 100%);
+}
+
+.map-legend,
+.map-zoom-controls {
+  z-index: 2;
 }
 
 .map-view {
@@ -680,12 +912,14 @@
   bottom: 10px;
   display: flex;
   gap: 14px;
-  font-size: 0.7rem;
+  font-size: var(--step--1);
   color: var(--text-dim);
-  background: color-mix(in srgb, var(--bg) 78%, transparent);
-  padding: 4px 10px;
-  border-radius: 4px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border: 1px solid var(--border-faint);
+  padding: 5px 11px;
+  border-radius: var(--radius-sm);
   pointer-events: none;
+  backdrop-filter: blur(3px);
 }
 
 .map-legend-item {
@@ -737,21 +971,29 @@
 }
 
 .region-panel {
-  width: 220px;
-  padding: 12px;
-  background: var(--surface);
+  width: 244px;
+  padding: 14px;
+  background: linear-gradient(var(--surface-raised), var(--surface));
   border-left: 1px solid var(--border);
   color: var(--text);
   overflow-y: auto;
+  flex-shrink: 0;
+  box-shadow: -6px 0 18px rgb(0 0 0 / 0.28);
 }
 
 .region-panel-empty {
-  color: var(--text-dim);
-  font-size: 0.8rem;
+  color: var(--text-faint);
+  font-size: var(--step--1);
+  line-height: 1.6;
+  /* Nothing is selected, so nothing should be shouting. */
+  text-align: center;
+  padding: 28px 8px;
 }
 
 .region-panel h3 {
-  margin: 0 0 8px;
+  margin: 0 0 4px;
+  font-size: var(--step-1);
+  letter-spacing: 0.02em;
 }
 
 .region-owner {
@@ -1798,4 +2040,43 @@
 .swap-actions {
   display: inline-flex;
   gap: 6px;
+}
+
+/* ---------- the island behind the menu ----------
+
+   A menu on a black field could belong to any game. This one is played on a
+   real place, so the place is drawn behind it — dim enough to read as
+   texture, bright enough to be recognised. */
+
+.screen-hero {
+  position: relative;
+  isolation: isolate;
+}
+
+.map-silhouette {
+  position: absolute;
+  z-index: -1;
+  right: 6%;
+  top: 50%;
+  transform: translateY(-50%);
+  height: min(88%, 760px);
+  width: auto;
+  pointer-events: none;
+  /* Fades out at the edges so it sits in the dark rather than on top of it. */
+  mask-image: radial-gradient(closest-side, #000 55%, transparent 100%);
+}
+
+.map-silhouette-regions path {
+  fill: color-mix(in oklab, var(--accent) 22%, transparent);
+  stroke: color-mix(in oklab, var(--accent) 34%, transparent);
+  stroke-width: 0.6;
+  opacity: 0.5;
+}
+
+.game-tagline {
+  margin: 10px 0 0;
+  font-size: var(--step--1);
+  color: var(--text-dim);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
 }

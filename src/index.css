@@ -10,6 +10,67 @@
   --font-scale: 1;
 
   --accent: #4f8ef7;
+
+  /* ---------- derived tokens ----------
+     Everything below is mixed from the six colours the theme sets, so all
+     three themes get depth, states and signals without any of them having to
+     describe more than a background and a foreground. Light and dark come out
+     right because the mixes are toward `--text`, which is dark on a light
+     theme and light on a dark one. */
+
+  /* Surfaces, as heights above the table rather than named greys. */
+  --surface-sunken: color-mix(in oklab, var(--bg) 82%, #000 18%);
+  --surface-raised: color-mix(in oklab, var(--surface) 92%, var(--text) 8%);
+  --surface-hover: color-mix(in oklab, var(--surface) 86%, var(--text) 14%);
+
+  /* Borders in three strengths: a hairline that only separates, the normal
+     one, and a line that is doing actual work. */
+  --border-faint: color-mix(in oklab, var(--border) 45%, transparent);
+  --border-strong: color-mix(in oklab, var(--border) 60%, var(--text) 40%);
+
+  /* Text in four weights of presence. */
+  --text-soft: color-mix(in oklab, var(--text-dim) 75%, var(--text) 25%);
+  --text-faint: color-mix(in oklab, var(--text-dim) 65%, transparent);
+
+  /* The accent, with room either side of it. */
+  --accent-soft: color-mix(in oklab, var(--accent) 18%, transparent);
+  --accent-line: color-mix(in oklab, var(--accent) 45%, transparent);
+  --accent-bright: color-mix(in oklab, var(--accent) 82%, #fff 18%);
+  --on-accent: #fff;
+
+  /* Signals. Amber warns, red is trouble, green is fine — and the enemy is
+     already red on the map, which is why warnings are amber and not orange-red. */
+  --danger: #e0524a;
+  --danger-soft: color-mix(in oklab, #e0524a 18%, transparent);
+  --warn: #e0a33d;
+  --warn-soft: color-mix(in oklab, #e0a33d 18%, transparent);
+  --ok: #4fb477;
+
+  /* One shadow ramp. Shadows read as height only if they are consistent. */
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.28);
+  --shadow-2: 0 2px 6px rgb(0 0 0 / 0.3), 0 1px 2px rgb(0 0 0 / 0.24);
+  --shadow-3: 0 10px 30px rgb(0 0 0 / 0.38), 0 2px 8px rgb(0 0 0 / 0.28);
+
+  /* A highlight along the top edge, which is what makes a surface look lit
+     from above rather than merely lighter. */
+  --lip: inset 0 1px 0 color-mix(in oklab, var(--text) 10%, transparent);
+
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  /* Type. Sizes are in rem so the font-scale setting still governs. */
+  --step--1: 0.78rem;
+  --step-0: 0.9rem;
+  --step-1: 1.05rem;
+  --step-2: 1.35rem;
+  --step-3: 1.9rem;
+  --step-4: 2.8rem;
+
+  /* Motion. Short, and the same everywhere. */
+  --ease: cubic-bezier(0.2, 0, 0.1, 1);
+  --fast: 0.12s;
+  --slow: 0.22s;
 }
 
 * {
@@ -25,6 +86,8 @@ body {
   font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
   font-size: calc(16px * var(--font-scale));
   overscroll-behavior: none;
+  /* Numbers that change every frame must not change width while they do it. */
+  font-variant-numeric: tabular-nums;
 }
 
 #root {
@@ -34,4 +97,21 @@ body {
 
 button {
   font-family: inherit;
+}
+
+/* Everything keyboard-reachable says so, in one place rather than per control. */
+:where(button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }
