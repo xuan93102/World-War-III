@@ -4,9 +4,10 @@ import 'd3-transition'; // side-effect: adds .transition() to d3-selection Selec
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomTransform } from 'd3-zoom';
 import { garrisonAt } from '../engine/regions';
 import type { GameMap, MapBounds } from '../engine/maps';
-import { totalUnits } from '../engine/units';
+import { isCivilian, isVehicle, totalUnits, type UnitType } from '../engine/units';
 import { BuildingBadge, BuildingSolid, GROUND_Y, type IconKey } from './buildingIcons';
 import { shade } from './colors';
+import { TroopModels } from './unitModels';
 import { useSettings } from '../settings/useSettings';
 import { MAP_TILT, THEMES } from '../settings/types';
 import type { GameState, PlayerState, RegionDef } from '../engine/types';
@@ -105,6 +106,39 @@ function labelFits(region: RegionDef, zoom: number, isCore: boolean): boolean {
   const roomInWorldUnits = Math.sqrt(region.landArea);
   const labelInWorldUnits = (region.name.length * 11 * 0.62) / zoom;
   return roomInWorldUnits >= labelInWorldUnits;
+}
+
+/**
+ * How tall one soldier or tank is drawn, on screen. Small: there can be a
+ * force on every region, and they have to sit alongside the buildings and the
+ * names without burying either.
+ */
+const TROOP_MODEL_PX = 19;
+/** How far below the region's centre the force stands, clear of the label. */
+const TROOP_OFFSET_PX = 9;
+
+/**
+ * The army standing on a region — not marching, not neutral militia, and not
+ * villagers, who are people rather than a force.
+ *
+ * Armour and infantry are counted apart because they are drawn apart: taking
+ * delivery of more tanks must not change how the infantry beside them looks.
+ */
+function forceAt(state: GameState, regionId: string) {
+  const marching = new Set(state.marches.map((m) => m.legionId));
+  let playerId: string | null = null;
+  let infantry = 0;
+  let vehicles = 0;
+  for (const legion of state.legions) {
+    if (legion.regionId !== regionId || marching.has(legion.id)) continue;
+    for (const [type, n] of Object.entries(legion.units) as [UnitType, number][]) {
+      if (!n || isCivilian(type)) continue;
+      if (isVehicle(type)) vehicles += n;
+      else infantry += n;
+      playerId = legion.playerId;
+    }
+  }
+  return playerId && infantry + vehicles > 0 ? { playerId, infantry, vehicles } : null;
 }
 
 const WORLD_PADDING = 20;
@@ -982,6 +1016,28 @@ export function MapView({
                       </g>
                     );
                   });
+                })()}
+                {/* Who is standing here, drawn as what they are (docs 6.1).
+                    Enemy forces show only where there are eyes on the ground;
+                    your own always do. */}
+                {(() => {
+                  const force = forceAt(gameState, region.id);
+                  if (!force) return null;
+                  if (force.playerId !== viewerId && !visible.has(region.id)) return null;
+                  const scale = TROOP_MODEL_PX / transform.k;
+                  return (
+                    <g
+                      transform={`translate(${p.x} ${p.y + TROOP_OFFSET_PX / transform.k})`}
+                      pointerEvents="none"
+                    >
+                      <TroopModels
+                        infantry={force.infantry}
+                        vehicles={force.vehicles}
+                        color={colorByPlayer[force.playerId] ?? MILITIA_COLOR}
+                        scale={scale}
+                      />
+                    </g>
+                  );
                 })()}
                 {showLabels && labelFits(region, transform.k, regionState.isCore) && (
                   <text
