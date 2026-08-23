@@ -145,6 +145,11 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  /* Centred until the content is taller than the window, then top-aligned.
+     Plain `center` puts the overflow above the scroll origin, where it cannot
+     be scrolled to — which hid the title of any screen that grew past the
+     viewport, and every screen does at the large font size. */
+  justify-content: safe center;
   gap: 20px;
 }
 

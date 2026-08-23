@@ -51,7 +51,9 @@
      toward whatever the theme's text colour is — lighter on dark, darker on
      light — which keeps the meaning and fixes the contrast. */
   --danger-text: color-mix(in oklab, var(--danger) 62%, var(--text) 38%);
-  --warn-text: color-mix(in oklab, var(--warn) 68%, var(--text) 32%);
+  /* Amber is a light colour to begin with, so it needs more of the theme's
+     text mixed into it than the other two to clear the background. */
+  --warn-text: color-mix(in oklab, var(--warn) 52%, var(--text) 48%);
   --ok-text: color-mix(in oklab, var(--ok) 62%, var(--text) 38%);
 
   /* Where an order is going. The map draws routes in this, so the panels
