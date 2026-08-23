@@ -221,24 +221,28 @@ function glyph(key: IconKey, p: Palette) {
         </>
       );
     case 'taipei101': {
-      // Eight sections that widen as they rise, on a broad podium, under a
-      // needle. At map size the silhouette is the whole identification — tall,
-      // thin, and stepped outward, which nothing else on the board is — so the
-      // tiers are drawn as five rather than eight and the spire is kept long.
-      const tiers = [];
-      let ground = 18.6;
-      let halfWidth = 2.5;
+      // What makes the building recognisable is not that it is tall — it is
+      // that every section flares out into a cornice at its top, so the
+      // silhouette is notched all the way up. The tower does *not* widen as it
+      // rises; a stack that did would read as an upside-down pyramid.
+      //
+      // So each section is a narrow shaft with a wider, shallow lip on top of
+      // it. Five of the real eight: past that the notches are finer than a
+      // pixel at map size and the profile just turns to fuzz.
+      const sections = [];
+      let ground = 19.4;
       for (let i = 0; i < 5; i++) {
-        tiers.push(<g key={i}>{isoBox(12, ground, halfWidth, 2.5, p)}</g>);
-        ground -= 2.5;
-        halfWidth += 0.32;
+        sections.push(<g key={`shaft${i}`}>{isoBox(12, ground, 2.35, 2.2, p)}</g>);
+        ground -= 2.2;
+        sections.push(<g key={`lip${i}`}>{isoBox(12, ground, 3.05, 0.55, p)}</g>);
+        ground -= 0.55;
       }
       return (
         <>
-          {isoBox(12, 21, 7, 2.4, p)}
-          {tiers}
-          <path d="M11.1 6.1 L12 6.55 L12 1 Z" fill={p.left} />
-          <path d="M12.9 6.1 L12 6.55 L12 1 Z" fill={p.right} />
+          {isoBox(12, 21, 4.9, 1.6, p)}
+          {sections}
+          <path d="M11.15 5.65 L12 6.1 L12 0.9 Z" fill={p.left} />
+          <path d="M12.85 5.65 L12 6.1 L12 0.9 Z" fill={p.right} />
         </>
       );
     }
