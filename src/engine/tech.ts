@@ -198,8 +198,8 @@ export const TECH_ORDER: TechId[] = Object.keys(TECHS) as TechId[];
 export const MAX_CORE_LEVEL = 3;
 
 export const CORE_UPGRADE: Record<2 | 3, { costMoney: number; costFood: number; seconds: number }> = {
-  2: { costMoney: 800, costFood: 500, seconds: 60 },
-  3: { costMoney: 2000, costFood: 1200, seconds: 150 },
+  2: { costMoney: 800, costFood: 0, seconds: 60 },
+  3: { costMoney: 2000, costFood: 0, seconds: 150 },
 };
 
 // ---- researchers (docs 10) ----
@@ -264,12 +264,24 @@ export function moneyTechMultiplier(owned: ReadonlySet<TechId>): number {
   return 1 + (owned.has('financialCentre') ? 0.25 : 0) + (owned.has('tradeLaw') ? 0.15 : 0);
 }
 
-/** Population ceiling from the homestead line; the highest one wins. */
+/** Each step of the homestead line is worth this many people. */
+export const POPULATION_PER_TECH = 100;
+
+/** The three steps of that line, cheapest first. */
+const POPULATION_TECHS: TechId[] = ['homesteadAct', 'townExpansion', 'urbanisation'];
+
+/**
+ * Population ceiling from the homestead line.
+ *
+ * Each step adds, rather than each step replacing the last with a bigger
+ * absolute number. The old ladder jumped the ceiling from 200 to 400 to 700 to
+ * 1000, which outran what the land could feed and turned the last step into a
+ * different game; three even steps of a hundred keep the ceiling somewhere the
+ * food supply can follow.
+ */
 export function populationCapFromTech(owned: ReadonlySet<TechId>, base: number): number {
-  if (owned.has('urbanisation')) return 1000;
-  if (owned.has('townExpansion')) return 700;
-  if (owned.has('homesteadAct')) return 400;
-  return base;
+  const steps = POPULATION_TECHS.filter((id) => owned.has(id)).length;
+  return base + steps * POPULATION_PER_TECH;
 }
 
 /** Academy training and upgrade time — lower is faster (docs 11, 徵兵效率). */

@@ -298,7 +298,7 @@ describe('villager economy', () => {
     expect(g.buyVillagers('p1', 5), 'buying at the cap is a no-op').toBe(0);
   });
 
-  it('housing raises the population cap by 20% each, up to 3', () => {
+  it('housing holds a fixed number of people, up to 3 of them', () => {
     const g = newGame();
     g.state.players.p1.money = 100000;
     const regions = ['taipei-2', 'taipei-3', 'taipei-4', 'taipei-5'];
@@ -308,13 +308,13 @@ describe('villager economy', () => {
 
     g.startConstruction(regions[0], 'housing', 'p1');
     g.tick(31);
-    expect(g.economy('p1').populationCap, 'one housing = +20%').toBe(240);
+    expect(g.economy('p1').populationCap, 'one house holds fifty').toBe(250);
 
     g.startConstruction(regions[1], 'housing', 'p1');
     g.tick(31);
     g.startConstruction(regions[2], 'housing', 'p1');
     g.tick(31);
-    expect(g.economy('p1').populationCap, 'three housing = +60%').toBe(320);
+    expect(g.economy('p1').populationCap, 'and three hold a hundred and fifty').toBe(350);
 
     expect(g.buildRejection(regions[3], 'housing', 'p1'), 'a fourth is refused').toBe('limitReached');
   });
@@ -477,29 +477,33 @@ describe('building prices vs the villager economy', () => {
     expect(minutes, 'wonder should take many minutes of income').toBeGreaterThanOrEqual(5);
   });
 
-  it('military and storage buildings are gated by food, not gold', () => {
-    // Food comes from territory, so these are the buildings that make taking
-    // ground pay off — their gold cost should be the lesser constraint.
-    for (const type of ['granary', 'academy', 'arsenal', 'fortress'] as const) {
-      const def = BUILDINGS[type];
-      expect(def.costFood, `${type} should lean on food`).toBeGreaterThan(def.costMoney);
-    }
-  });
-
-  it('the wonder cannot be afforded without a granary', () => {
-    // Base food storage is below the wonder's food cost, so you must raise
-    // the cap first — an intentional dependency rather than an oversight.
-    expect(BUILDINGS.wonder.costFood).toBeGreaterThan(BASE_FOOD_CAP);
-    expect(BUILDINGS.wonder.costFood).toBeLessThanOrEqual(BASE_FOOD_CAP + GRANARY_FOOD_CAP);
-  });
-
-  it('every other building fits inside base food storage', () => {
+  it('costs no food at all, whatever it is', () => {
+    // Buildings used to be paid for in both, which starved the armies: food
+    // is what resupplies troops in the field, and every granary spent on a
+    // fortress was a column left dry. Buildings are a gold decision now, and
+    // food is a logistics one.
     for (const def of Object.values(BUILDINGS)) {
-      if (def.type === 'wonder') continue;
-      expect(def.costFood, `${def.type} should not require a granary`).toBeLessThanOrEqual(
-        BASE_FOOD_CAP,
-      );
+      expect(def.costFood, `${def.type} should cost no food`).toBe(0);
     }
+  });
+
+  it('charges gold for everything except the three that set the opening', () => {
+    // The shop, the house and the field stay at thirty so the first build is
+    // still affordable in the third minute. Everything else is a sink for a
+    // treasury that otherwise runs away with itself.
+    for (const type of ['shop', 'housing', 'farm'] as const) {
+      expect(BUILDINGS[type].costMoney, `${type} keeps the opening tempo`).toBe(30);
+    }
+    for (const type of ['granary', 'academy', 'arsenal', 'fortress', 'wonder'] as const) {
+      expect(BUILDINGS[type].costMoney, `${type} should be a real decision`).toBeGreaterThan(100);
+    }
+  });
+
+  it('leaves food storage to do the one job it has left', () => {
+    // Nothing is built out of food any more, so the base cap and the granary
+    // exist to keep armies supplied rather than to gate construction.
+    expect(BASE_FOOD_CAP).toBeGreaterThan(0);
+    expect(GRANARY_FOOD_CAP).toBeGreaterThan(0);
   });
 });
 

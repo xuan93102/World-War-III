@@ -92,8 +92,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.granary',
     descKey: 'building.granary.desc',
     category: 'globalUnlock',
-    costMoney: 100,
-    costFood: 150,
+    costMoney: 200,
+    costFood: 0,
     buildSeconds: 45,
     hp: 300,
     implemented: true,
@@ -103,8 +103,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.academy',
     descKey: 'building.academy.desc',
     category: 'globalUnlock',
-    costMoney: 100,
-    costFood: 150,
+    costMoney: 200,
+    costFood: 0,
     buildSeconds: 45,
     hp: 300,
     // Unlocked now that soldiers exist: this is where every tier above
@@ -116,8 +116,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.arsenal',
     descKey: 'building.arsenal.desc',
     category: 'globalUnlock',
-    costMoney: 100,
-    costFood: 150,
+    costMoney: 200,
+    costFood: 0,
     buildSeconds: 45,
     hp: 300,
     // Unlocked now that vehicles exist: this is where they are built.
@@ -128,7 +128,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.school',
     descKey: 'building.school.desc',
     category: 'local',
-    costMoney: 80,
+    costMoney: 160,
     costFood: 0,
     buildSeconds: 45,
     hp: 250,
@@ -140,7 +140,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.research',
     descKey: 'building.research.desc',
     category: 'local',
-    costMoney: 80,
+    costMoney: 160,
     costFood: 0,
     buildSeconds: 45,
     hp: 250,
@@ -152,8 +152,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.fortress',
     descKey: 'building.fortress.desc',
     category: 'local',
-    costMoney: 160,
-    costFood: 300,
+    costMoney: 320,
+    costFood: 0,
     buildSeconds: 60,
     hp: 1000,
     // A real building gated on research rather than on missing systems.
@@ -166,8 +166,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.trench',
     descKey: 'building.trench.desc',
     category: 'local',
-    costMoney: 50,
-    costFood: 100,
+    costMoney: 100,
+    costFood: 0,
     buildSeconds: 30,
     // Tougher than a shed, nothing like a fortress: it is meant to cost an
     // attacker time, not to be impossible.
@@ -179,7 +179,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.camp',
     descKey: 'building.camp.desc',
     category: 'local',
-    costMoney: 30,
+    costMoney: 60,
     costFood: 0,
     buildSeconds: 20,
     hp: 200,
@@ -190,8 +190,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     nameKey: 'building.wonder',
     descKey: 'building.wonder.desc',
     category: 'local',
-    costMoney: 3000,
-    costFood: 2000,
+    costMoney: 6000,
+    costFood: 0,
     buildSeconds: 300,
     hp: 2000,
     implemented: true,
@@ -214,7 +214,15 @@ export const BUILDING_ORDER: BuildingType[] = [
 ];
 
 /** Per-building output bonus for the stacking economy trio (5.1). */
-export const STACK_BONUS = 0.2;
+/**
+ * How many people a house holds.
+ *
+ * Flat rather than a percentage. As a multiplier it compounded with the
+ * population techs, so the same three houses were worth 40 people early and
+ * 200 late — the building's value depended on research it had nothing to do
+ * with, and the ceiling ran away from the food supply.
+ */
+export const HOUSING_POPULATION = 50;
 
 /**
  * What one villager working inside a building is worth (docs 4.2). Ten of

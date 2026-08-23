@@ -168,15 +168,21 @@ describe('core upgrades', () => {
 });
 
 describe('tech effects', () => {
-  it('raises the population ceiling', () => {
+  it('raises the population ceiling a step at a time', () => {
     const g = newGame();
     const before = g.economy('p1').populationCap;
-    g.state.players.p1.techs.push('homesteadAct');
-    expect(g.economy('p1').populationCap, '200 -> 400').toBe(400);
     expect(before).toBe(200);
 
+    g.state.players.p1.techs.push('homesteadAct');
+    expect(g.economy('p1').populationCap, 'one step is a hundred people').toBe(300);
+
+    g.state.players.p1.techs.push('townExpansion');
+    expect(g.economy('p1').populationCap).toBe(400);
+
+    // Each step adds rather than replacing the last with a bigger number, so
+    // the ceiling ends somewhere the food supply can still follow.
     g.state.players.p1.techs.push('urbanisation');
-    expect(g.economy('p1').populationCap, 'the highest wins').toBe(1000);
+    expect(g.economy('p1').populationCap, 'the whole line is five hundred').toBe(500);
   });
 
   it('multiplies gold and food output', () => {

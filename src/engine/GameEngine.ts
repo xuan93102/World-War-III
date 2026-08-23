@@ -11,7 +11,7 @@ import {
   STAFFABLE,
   STAFF_BONUS,
   STAFF_REPAIR_PER_SECOND,
-  STACK_BONUS,
+  HOUSING_POPULATION,
   VILLAGER_COST,
   WONDER_HOLD_SECONDS,
   type BuildingType,
@@ -1913,10 +1913,9 @@ export class GameEngine {
     // Housing is limit-capped at build time, but clamp here too so the number
     // shown can never disagree with the rule.
     const housingCount = Math.min(counts.housing ?? 0, BUILDING_LIMITS.housing ?? Infinity);
-    const housingMult = 1 + STACK_BONUS * housingCount;
 
-    // Tech multiplies on top of buildings rather than replacing them, and the
-    // homestead line raises the base ceiling that housing then multiplies.
+    // Two independent additions: the homestead line raises the ceiling, and
+    // each house adds the people it holds on top of that.
     const techs = this.ownedTechs(playerId);
     const baseCap = populationCapFromTech(techs, DEFAULT_POPULATION_CAP);
 
@@ -1932,7 +1931,7 @@ export class GameEngine {
         aiMult,
       foodPerMin: this.baseFoodPerMin(playerId) * farmMult * foodTechMultiplier(techs) * aiMult,
       foodCap: BASE_FOOD_CAP + GRANARY_FOOD_CAP * (counts.granary ?? 0),
-      populationCap: Math.floor(baseCap * housingMult),
+      populationCap: baseCap + HOUSING_POPULATION * housingCount,
       buildingCounts: counts,
     };
   }
