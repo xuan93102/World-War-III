@@ -46,6 +46,18 @@
   --warn-soft: color-mix(in oklab, #e0a33d 18%, transparent);
   --ok: #4fb477;
 
+  /* The same three signals as *text*. A signal colour picked to be legible on
+     a dark background is barely legible on a light one, so these are pulled
+     toward whatever the theme's text colour is — lighter on dark, darker on
+     light — which keeps the meaning and fixes the contrast. */
+  --danger-text: color-mix(in oklab, var(--danger) 62%, var(--text) 38%);
+  --warn-text: color-mix(in oklab, var(--warn) 68%, var(--text) 32%);
+  --ok-text: color-mix(in oklab, var(--ok) 62%, var(--text) 38%);
+
+  /* Where an order is going. The map draws routes in this, so the panels
+     that talk about them have to agree. */
+  --route: #ffd54a;
+
   /* One shadow ramp. Shadows read as height only if they are consistent. */
   --shadow-1: 0 1px 2px rgb(0 0 0 / 0.28);
   --shadow-2: 0 2px 6px rgb(0 0 0 / 0.3), 0 1px 2px rgb(0 0 0 / 0.24);

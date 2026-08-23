@@ -444,9 +444,14 @@
   padding-left: 1.2em;
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 0.85rem;
-  line-height: 1.45;
+  gap: 9px;
+  font-size: var(--step-0);
+  line-height: 1.6;
+  color: var(--text-soft);
+}
+
+.help-list::marker {
+  color: var(--text-faint);
 }
 
 /* Map key: an icon exactly as the map draws it, next to what it means. */
@@ -473,15 +478,15 @@
 }
 
 .help-legend-text {
-  font-size: 0.78rem;
+  font-size: var(--step--1);
   color: var(--text-dim);
-  line-height: 1.45;
+  line-height: 1.55;
 }
 
 .help-garrison {
   font-size: 0.78rem;
   font-weight: 600;
-  color: #ff8a80;
+  color: var(--danger-text);
 }
 
 .help-swatch {
@@ -641,12 +646,12 @@
 }
 
 .result-banner.is-victory {
-  color: #7ddc9a;
+  color: var(--ok-text);
   background: rgba(125, 220, 154, 0.12);
 }
 
 .result-banner.is-defeat {
-  color: #ff8a80;
+  color: var(--danger-text);
   background: rgba(255, 138, 128, 0.12);
 }
 
@@ -715,7 +720,7 @@
 }
 
 .payout-amount {
-  color: #7ddc9a;
+  color: var(--ok-text);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -730,7 +735,7 @@
 .payout-fill {
   display: block;
   height: 100%;
-  background: #7ddc9a;
+  background: var(--ok);
 }
 
 .villager-bar {
@@ -966,8 +971,8 @@
 }
 
 .map-zoom-controls button.is-active {
-  border-color: #ffd54a;
-  color: #ffd54a;
+  border-color: var(--route);
+  color: var(--route);
 }
 
 .region-panel {
@@ -998,21 +1003,30 @@
 
 .region-owner {
   margin: 0 0 12px;
-  font-size: 0.85rem;
+  font-size: var(--step--1);
+  color: var(--text-dim);
 }
 
+/* Label on the left, value on the right, on a faint rule. A reading like
+   this is scanned down the right-hand column, so the numbers line up and the
+   labels stay quiet. */
 .region-stats {
   margin: 0 0 4px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 0.78rem;
+  font-size: var(--step--1);
 }
 
 .region-stats > div {
   display: flex;
   justify-content: space-between;
   gap: 10px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border-faint);
+}
+
+.region-stats > div:last-child {
+  border-bottom: none;
 }
 
 .region-stats dt {
@@ -1022,24 +1036,25 @@
 .region-stats dd {
   margin: 0;
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .region-stats .is-defended {
-  color: #ff8a80;
+  color: var(--danger);
 }
 
 .region-stats .is-undefended {
-  color: #7ddc9a;
+  color: var(--ok);
 }
 
 .unit-section,
 .march-section {
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
-  margin-top: 10px;
+  border-top: 1px solid var(--border-faint);
+  padding-top: 12px;
+  margin-top: 12px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 9px;
 }
 
 /* Troops on the road, shown on both the region they left and the one they're
@@ -1049,11 +1064,12 @@
   flex-wrap: wrap;
   align-items: baseline;
   gap: 6px;
-  padding: 5px 8px;
-  border-radius: 6px;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  /* Dashed, because these troops are not here yet. */
   border: 1px dashed var(--border);
-  background: var(--bg);
-  font-size: 0.72rem;
+  background: var(--surface-sunken);
+  font-size: var(--step--1);
 }
 
 .unit-transit-label {
@@ -1083,13 +1099,26 @@
   display: flex;
   align-items: baseline;
   gap: 5px;
-  padding: 4px 8px;
-  font-size: 0.72rem;
+  padding: 5px 10px;
+  font-size: var(--step--1);
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: var(--bg);
+  background: var(--surface-sunken);
   color: var(--text);
   cursor: pointer;
+  transition:
+    border-color var(--fast) var(--ease),
+    background var(--fast) var(--ease),
+    transform var(--fast) var(--ease);
+}
+
+.march-target:hover:not(:disabled) {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.march-target:active:not(:disabled) {
+  transform: translateY(1px);
 }
 
 .march-target:disabled {
@@ -1098,8 +1127,9 @@
 }
 
 .march-target.is-selected {
-  border-color: var(--accent, #4f8ef7);
-  background: color-mix(in srgb, var(--accent, #4f8ef7) 22%, transparent);
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
 .march-target-time {
@@ -1405,12 +1435,12 @@
 
 /* An attack order, distinguished from a peaceful move. */
 .march-target.is-attack {
-  border-color: #b3453d;
+  border-color: color-mix(in oklab, var(--danger) 72%, #000 28%);
 }
 
 .march-target-attack {
   font-size: 0.62rem;
-  color: #ff8a80;
+  color: var(--danger-text);
 }
 
 /* ---------- tech tree ---------- */
@@ -1427,38 +1457,59 @@
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 5px;
-  padding: 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--bg);
+  gap: 6px;
+  padding: 12px 14px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius);
+  background: var(--surface-sunken);
 }
 
 .tech-stat strong {
-  font-size: 1.3rem;
+  font-size: var(--step-2);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .tech-tier {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 14px;
+  gap: 7px;
+  margin-top: 18px;
 }
 
 .tech-row {
+  position: relative;
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  background: var(--bg);
+  padding: 10px 12px 10px 13px;
+  border: 1px solid var(--border-faint);
+  border-radius: var(--radius-sm);
+  background: linear-gradient(var(--surface-raised), var(--surface));
+  transition: border-color var(--fast) var(--ease), background var(--fast) var(--ease);
+}
+
+.tech-row:hover {
+  border-color: var(--border);
+  background: linear-gradient(var(--surface-hover), var(--surface-raised));
 }
 
 /* Finished techs stay listed but recede — the tree should read as a record of
-   what you've taken, not just a menu. */
+   what you have taken, not just a menu — and are marked along the edge so the
+   record is scannable without reading a word of it. */
 .tech-row.is-done {
-  opacity: 0.55;
+  opacity: 0.6;
+  background: none;
+  border-color: transparent;
+}
+
+.tech-row.is-done::before {
+  content: "";
+  position: absolute;
+  inset: 6px auto 6px 0;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--ok);
 }
 
 .tech-row-main {
@@ -1477,20 +1528,21 @@
 }
 
 .tech-row-name {
-  font-size: 0.85rem;
+  font-size: var(--step-0);
   font-weight: 600;
 }
 
 .tech-row-cost {
-  font-size: 0.7rem;
+  font-size: var(--step--1);
   color: var(--text-dim);
   white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .tech-row-desc {
-  font-size: 0.72rem;
+  font-size: var(--step--1);
   color: var(--text-dim);
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
 .tech-row-req {
@@ -1542,8 +1594,8 @@
 /* Banded rather than a gradient: the penalties are steps, so the colour
    should change where the penalty does. */
 .supply-state.is-ok { color: var(--text-dim); }
-.supply-state.is-strained { color: #e8a33d; }
-.supply-state.is-broken { color: #ff8a80; }
+.supply-state.is-strained { color: var(--warn-text); }
+.supply-state.is-broken { color: var(--danger-text); }
 
 .supply-track {
   height: 5px;
@@ -1558,9 +1610,9 @@
   transition: width 0.3s linear;
 }
 
-.supply-fill.is-ok { background: #63b83d; }
-.supply-fill.is-strained { background: #e8a33d; }
-.supply-fill.is-broken { background: #d9534f; }
+.supply-fill.is-ok { background: var(--ok); }
+.supply-fill.is-strained { background: var(--warn-text); }
+.supply-fill.is-broken { background: var(--danger); }
 
 /* ---------- supply carts ---------- */
 
@@ -1628,8 +1680,8 @@
 }
 
 .cart-target.is-selected {
-  border-color: var(--accent, #4f8ef7);
-  background: color-mix(in srgb, var(--accent, #4f8ef7) 22%, transparent);
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .cart-target-time {
@@ -1657,9 +1709,9 @@
   flex-direction: column;
   gap: 6px;
   padding: 8px 10px;
-  border: 1px dashed var(--accent, #4f8ef7);
+  border: 1px dashed var(--accent);
   border-radius: 6px;
-  background: color-mix(in srgb, var(--accent, #4f8ef7) 10%, transparent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
 }
 
 .occupy-section .btn {
@@ -1673,15 +1725,15 @@
   flex-direction: column;
   gap: 4px;
   padding: 8px 10px;
-  border: 1px dashed #e8a33d;
+  border: 1px dashed var(--warn-text);
   border-radius: 6px;
-  background: color-mix(in srgb, #e8a33d 12%, transparent);
+  background: color-mix(in srgb, var(--warn-text) 12%, transparent);
 }
 
 .unrest-label {
   font-size: 0.8rem;
   font-weight: 600;
-  color: #e8a33d;
+  color: var(--warn-text);
   font-variant-numeric: tabular-nums;
 }
 
@@ -1707,7 +1759,7 @@
 .core-hp-value {
   font-size: 0.8rem;
   font-variant-numeric: tabular-nums;
-  color: #ffd54a;
+  color: var(--route);
 }
 
 .core-track {
@@ -1720,13 +1772,13 @@
 
 .core-fill {
   height: 100%;
-  background: #ffd54a;
+  background: var(--route);
   transition: width 0.3s linear;
 }
 
 /* A core that has taken damage: the number in the top bar goes red. */
 .hud-stats .is-hurt {
-  color: #ff8a80;
+  color: var(--danger-text);
 }
 
 /* ---------- assault (docs 6.6) ---------- */
@@ -1737,9 +1789,9 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border: 1px dashed #d9534f;
+  border: 1px dashed var(--danger);
   border-radius: 6px;
-  background: color-mix(in srgb, #d9534f 10%, transparent);
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
 }
 
 .assault-section .hint-text {
@@ -1801,7 +1853,7 @@
   gap: 5px;
   padding: 4px 8px;
   font-size: 0.72rem;
-  border: 1px solid #b3453d;
+  border: 1px solid color-mix(in oklab, var(--danger) 72%, #000 28%);
   border-radius: 999px;
   background: var(--bg);
   color: var(--text);
@@ -1951,11 +2003,14 @@
 .replay-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 6px 12px;
-  background: var(--surface);
+  gap: 12px;
+  padding: 8px 14px;
+  background: linear-gradient(var(--surface-raised), var(--surface));
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
+  position: relative;
+  z-index: 4;
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.25);
 }
 
 .replay-scrub {
@@ -1966,8 +2021,9 @@
 
 .replay-time {
   font-variant-numeric: tabular-nums;
-  font-size: 13px;
+  font-size: var(--step--1);
   color: var(--text-dim);
+  letter-spacing: 0.04em;
 }
 
 .replay-time-total::before {
@@ -1975,8 +2031,8 @@
 }
 
 .replay-seeking {
-  font-size: 13px;
-  color: var(--text-dim);
+  font-size: var(--step--1);
+  color: var(--warn);
 }
 
 /* Two people talking (docs 15.9). The same box in the lobby and in the
