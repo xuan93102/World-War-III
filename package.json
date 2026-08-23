@@ -10,6 +10,8 @@
     "test": "vitest run",
     "preview": "vite preview",
     "deploy": "wrangler deploy",
+    "desktop": "tauri dev",
+    "desktop:build": "tauri build",
     "relay": "wrangler dev --config server/wrangler.toml",
     "relay:deploy": "wrangler deploy --config server/wrangler.toml"
   },
@@ -26,6 +28,7 @@
     "ws": "^8.21.3"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "@types/d3-selection": "^3.0.11",
     "@types/d3-transition": "^3.0.9",
     "@types/d3-zoom": "^3.0.8",

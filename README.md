@@ -27,9 +27,11 @@ npm run relay
 |---|---|
 | `npm run dev` | 開發伺服器 |
 | `npm run build` | 打包production版本 |
-| `npm test` | 執行全部測試（vitest，325項） |
+| `npm test` | 執行全部測試（vitest，333項） |
 | `npm run relay` | 連線對戰的中繼伺服器（PVP 對局需要，預設 ws://localhost:8787） |
 | `npm run relay:deploy` | 把中繼部署到 Cloudflare Workers，見 [server/README.md](server/README.md) |
+| `npm run desktop` | 用桌面外殼開發（Tauri，會同時起 vite） |
+| `npm run desktop:build` | 打包 Windows 桌面版，見下方 |
 | `npm run lint` | 靜態檢查（oxlint） |
 | `node scripts/build-map-data.mjs` | 重新產生地圖資料（改動 `scripts/subregions.mjs` 後需執行） |
 | `node scripts/analyze-disconnected.mjs` | 檢查是否有區塊由不相連的土地組成 |
@@ -61,6 +63,25 @@ npm run relay
 **尚未實作**：單人對局重新整理後會結束、建築修復（只有駐守村民的自動搶修）、接手續玩的那一局不會被錄下
 
 完整設計與進度見 **[docs/game-design.md](docs/game-design.md)** — 該文件是設計的單一真實來源。
+
+## 桌面版
+
+```bash
+npm run desktop:build
+```
+
+產出兩個檔案在 `src-tauri/target/release/`：
+
+| | |
+|---|---|
+| `salient.exe` | 8.5 MB，免安裝，可直接雙擊或複製給別人 |
+| `bundle/nsis/Salient_x64-setup.exe` | 2.1 MB，正式安裝檔（只裝給目前使用者，不需管理員權限） |
+
+用的是 **Tauri**，所以介面跑在 Windows 內建的 WebView2 上，不像 Electron 那樣把整個瀏覽器打包進去（會是 150 MB 上下）。需要 Rust 工具鏈與 VS build tools。
+
+**桌面版有自己的來源。** Tauri 從 `https://tauri.localhost` 提供頁面，所以中繼的 `ALLOWED_ORIGINS` 必須同時列出網頁版與這個位址，否則桌面版會被自己的中繼擋在門外——症狀是連線對戰永遠開不了房。
+
+圖示是**從地圖資料算出來的**（`node scripts/build-icon.mjs` 產生 SVG，再 `npx tauri icon icon-source.svg`），所以島的形狀跟遊戲裡玩的是同一份幾何。
 
 ## 專案結構
 

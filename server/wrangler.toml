@@ -30,4 +30,7 @@ port = 8787
 [vars]
 # Which pages may use this relay. Local development talks to a local relay, so
 # this list only needs the deployed game.
-ALLOWED_ORIGINS = "https://salient.yi39344.workers.dev"
+# The web build, and the desktop build. Tauri serves the packaged game from
+# tauri.localhost, so the desktop app arrives with an origin of its own — and
+# without this line the game would be locked out of its own relay.
+ALLOWED_ORIGINS = "https://salient.yi39344.workers.dev,https://tauri.localhost"
