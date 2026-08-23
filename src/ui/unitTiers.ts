@@ -16,6 +16,13 @@ export type Tier = 1 | 2 | 3;
 export const INFANTRY_STEPS: [number, number] = [10, 30];
 export const VEHICLE_STEPS: [number, number] = [3, 8];
 
+/**
+ * Villagers step later than soldiers because there are simply more of them:
+ * they are bought in tens and a healthy economy runs on a hundred. Twenty is
+ * a working crowd, sixty is a labour force.
+ */
+export const VILLAGER_STEPS: [number, number] = [20, 60];
+
 export function tierFor(count: number, [middle, large]: [number, number]): Tier {
   if (count >= large) return 3;
   if (count >= middle) return 2;

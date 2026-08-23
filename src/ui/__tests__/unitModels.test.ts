@@ -5,7 +5,7 @@
 // can read a board at a glance. Pinned here so a later tweak to the artwork
 // cannot quietly move them.
 import { describe, expect, it } from 'vitest';
-import { INFANTRY_STEPS, VEHICLE_STEPS, tierFor } from '../unitTiers';
+import { INFANTRY_STEPS, VEHICLE_STEPS, VILLAGER_STEPS, tierFor } from '../unitTiers';
 
 describe('how many models stand for how many troops', () => {
   it('gives infantry three sizes: a section, a platoon, a battalion', () => {
@@ -23,6 +23,16 @@ describe('how many models stand for how many troops', () => {
     expect(tierFor(3, VEHICLE_STEPS)).toBe(2);
     expect(tierFor(7, VEHICLE_STEPS)).toBe(2);
     expect(tierFor(8, VEHICLE_STEPS)).toBe(3);
+  });
+
+  it('steps villagers later, because there are simply more of them', () => {
+    // Bought in tens, and a healthy economy runs on a hundred, so soldiers'
+    // thresholds would put every settled player at the top size for ever.
+    expect(tierFor(19, VILLAGER_STEPS)).toBe(1);
+    expect(tierFor(20, VILLAGER_STEPS)).toBe(2);
+    expect(tierFor(59, VILLAGER_STEPS)).toBe(2);
+    expect(tierFor(60, VILLAGER_STEPS)).toBe(3);
+    expect(tierFor(30, VILLAGER_STEPS), 'thirty is a battalion but not a workforce').toBe(2);
   });
 
   it('never leaves a force that exists looking like nothing', () => {

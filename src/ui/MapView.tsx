@@ -132,15 +132,21 @@ const MARCH_COUNT_OFFSET_PX = 13;
  * Armour and infantry are counted apart because they are drawn apart: taking
  * delivery of more tanks must not change how the infantry beside them looks.
  */
-function splitForce(units: UnitCounts): { infantry: number; vehicles: number } {
+function splitForce(units: UnitCounts): {
+  infantry: number;
+  vehicles: number;
+  civilians: number;
+} {
   let infantry = 0;
   let vehicles = 0;
+  let civilians = 0;
   for (const [type, n] of Object.entries(units) as [UnitType, number][]) {
-    if (!n || isCivilian(type)) continue;
-    if (isVehicle(type)) vehicles += n;
+    if (!n) continue;
+    if (isCivilian(type)) civilians += n;
+    else if (isVehicle(type)) vehicles += n;
     else infantry += n;
   }
-  return { infantry, vehicles };
+  return { infantry, vehicles, civilians };
 }
 
 function forceAt(state: GameState, regionId: string) {
@@ -148,15 +154,17 @@ function forceAt(state: GameState, regionId: string) {
   let playerId: string | null = null;
   let infantry = 0;
   let vehicles = 0;
+  let civilians = 0;
   for (const legion of state.legions) {
     if (legion.regionId !== regionId || marching.has(legion.id)) continue;
     const split = splitForce(legion.units);
-    if (split.infantry + split.vehicles === 0) continue;
+    if (split.infantry + split.vehicles + split.civilians === 0) continue;
     infantry += split.infantry;
     vehicles += split.vehicles;
+    civilians += split.civilians;
     playerId = legion.playerId;
   }
-  return playerId ? { playerId, infantry, vehicles } : null;
+  return playerId ? { playerId, infantry, vehicles, civilians } : null;
 }
 
 const WORLD_PADDING = 20;
@@ -919,14 +927,15 @@ export function MapView({
                   <TroopModels
                     infantry={split.infantry}
                     vehicles={split.vehicles}
+                    civilians={split.civilians}
                     color={color}
                     scale={TROOP_MODEL_PX / transform.k}
                   />
                 </g>
-                {/* And the count stays. Standing forces can be read off the
-                    panel, but a column is a question you ask in a hurry — and
-                    villagers march too, who have no model of their own and
-                    would otherwise walk across the map invisibly. */}
+                {/* And the count stays: a standing force can be read off the
+                    panel at leisure, but a column is a question asked in a
+                    hurry, and three ranks of models say what is coming without
+                    saying how much of it. */}
                 <text
                   x={p.x}
                   y={p.y + MARCH_COUNT_OFFSET_PX / transform.k}
@@ -1072,6 +1081,7 @@ export function MapView({
                       <TroopModels
                         infantry={force.infantry}
                         vehicles={force.vehicles}
+                        civilians={force.civilians}
                         color={colorByPlayer[force.playerId] ?? MILITIA_COLOR}
                         scale={scale}
                       />

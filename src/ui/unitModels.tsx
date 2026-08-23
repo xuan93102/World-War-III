@@ -1,15 +1,21 @@
 import { shade } from './colors';
-import { INFANTRY_STEPS, VEHICLE_STEPS, tierFor, type Tier } from './unitTiers';
+import {
+  INFANTRY_STEPS,
+  VEHICLE_STEPS,
+  VILLAGER_STEPS,
+  tierFor,
+  type Tier,
+} from './unitTiers';
 
 /**
  * What a force looks like standing on the ground (docs/game-design.md 6.1).
  *
  * A number in a circle says how many; it does not say *what*. These say what:
- * armour in front, infantry behind it, each counted on its own so a column
- * that takes delivery of more tanks grows more tanks without its infantry
- * changing. Three sizes each — a section, a platoon, a battalion — because a
- * model per soldier would be unreadable long before it was accurate, and one
- * model for any number says nothing at all.
+ * armour at the front, infantry behind it, and villagers behind them, each
+ * counted on its own so a column that takes delivery of more tanks grows more
+ * tanks without its infantry changing. Three sizes each — a section, a
+ * platoon, a battalion — because a model per soldier would be unreadable long
+ * before it was accurate, and one model for any number says nothing at all.
  *
  * Drawn with the same three lit faces as the buildings, so an army and a
  * barracks look like they belong on the same board.
@@ -78,6 +84,20 @@ function Soldier({ x, ground, f }: { x: number; ground: number; f: Faces }) {
   );
 }
 
+/**
+ * One villager: shorter than a soldier, carrying a load, and — the part that
+ * actually does the telling apart at this size — no rifle.
+ */
+function Villager({ x, ground, f }: { x: number; ground: number; f: Faces }) {
+  return (
+    <g>
+      {box(x, ground, 1.25, 2.5, f)}
+      <circle cx={x} cy={ground - 3.45} r={1} fill={f.top} stroke={OUTLINE} strokeWidth={0.28} />
+      {box(x + 1.9, ground, 0.85, 1.1, f, 0.45)}
+    </g>
+  );
+}
+
 /** One tank: a low hull, a turret set back, and a gun over the front. */
 function Tank({ x, ground, f }: { x: number; ground: number; f: Faces }) {
   return (
@@ -118,38 +138,43 @@ function spread(tier: Tier): { x: number; ground: number }[] {
 interface TroopModelsProps {
   infantry: number;
   vehicles: number;
+  civilians: number;
   color: string;
   /** Height of one model, in world units. */
   scale: number;
 }
 
+/** How far apart the ranks stand. */
+const RANK_GAP = 3.5;
+
 /**
- * A force, planted at the origin. Armour stands in front of the infantry —
- * in front meaning nearer the viewer, which on a tilted map is further down
- * the screen — and the two groups are sized from their own counts, so
- * neither moves when the other changes.
+ * A force, planted at the origin. Armour stands at the front, infantry behind
+ * it, villagers behind them — front meaning nearer the viewer, which on a
+ * tilted map is further down the screen. Each rank is sized from its own count
+ * and nothing else, so none of them moves when another changes.
  */
-export function TroopModels({ infantry, vehicles, color, scale }: TroopModelsProps) {
+export function TroopModels({ infantry, vehicles, civilians, color, scale }: TroopModelsProps) {
   const f = faces(color);
-  const armour = vehicles > 0 ? tierFor(vehicles, VEHICLE_STEPS) : null;
-  const foot = infantry > 0 ? tierFor(infantry, INFANTRY_STEPS) : null;
+  // Back to front, which is also the order they are drawn in, so the ones in
+  // front overlap the ones behind rather than the other way round.
+  const ranks = [
+    { n: civilians, steps: VILLAGER_STEPS, Model: Villager },
+    { n: infantry, steps: INFANTRY_STEPS, Model: Soldier },
+    { n: vehicles, steps: VEHICLE_STEPS, Model: Tank },
+  ].filter((rank) => rank.n > 0);
 
   return (
     <g transform={`scale(${scale / 6})`} stroke={OUTLINE} strokeWidth={0.28} strokeLinejoin="round">
-      {foot !== null && (
-        <g transform={vehicles > 0 ? 'translate(0 -3.6)' : ''}>
-          {spread(foot).map((at, i) => (
-            <Soldier key={i} x={at.x} ground={at.ground} f={f} />
+      {ranks.map(({ n, steps, Model }, rank) => (
+        <g
+          key={rank}
+          transform={`translate(0 ${(rank - (ranks.length - 1) / 2) * RANK_GAP})`}
+        >
+          {spread(tierFor(n, steps)).map((at, i) => (
+            <Model key={i} x={at.x} ground={at.ground} f={f} />
           ))}
         </g>
-      )}
-      {armour !== null && (
-        <g transform={infantry > 0 ? 'translate(0 3.2)' : ''}>
-          {spread(armour).map((at, i) => (
-            <Tank key={i} x={at.x} ground={at.ground} f={f} />
-          ))}
-        </g>
-      )}
+      ))}
     </g>
   );
 }
