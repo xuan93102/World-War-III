@@ -67,7 +67,7 @@ npm run relay
 ```
 src/engine/     遊戲規則的唯一來源（純TypeScript，不依賴React，270個測試獨立覆蓋）
 src/ai/         本地AI席位。在引擎外面，只能下人類也能下的命令（20個測試）
-src/match/      對局的組成、連線與重播：席位、通訊協定、連線、指令錄影（15個測試）
+src/match/      對局的組成、連線與重播：席位、通訊協定、連線、指令錄影、聊天、重整續局（35個測試）
 server/         連線對戰的中繼伺服器（Cloudflare Worker，可獨立部署，不含遊戲程式碼）
 src/ui/         介面元件。介面不含任何規則
 src/settings/   設定與多語系
