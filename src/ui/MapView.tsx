@@ -4,7 +4,13 @@ import 'd3-transition'; // side-effect: adds .transition() to d3-selection Selec
 import { zoom, zoomIdentity, type D3ZoomEvent, type ZoomTransform } from 'd3-zoom';
 import { garrisonAt } from '../engine/regions';
 import type { GameMap, MapBounds } from '../engine/maps';
-import { isCivilian, isVehicle, totalUnits, type UnitType } from '../engine/units';
+import {
+  isCivilian,
+  isVehicle,
+  totalUnits,
+  type UnitCounts,
+  type UnitType,
+} from '../engine/units';
 import { BuildingBadge, BuildingSolid, GROUND_Y, type IconKey } from './buildingIcons';
 import { shade } from './colors';
 import { TroopModels } from './unitModels';
@@ -116,6 +122,8 @@ function labelFits(region: RegionDef, zoom: number, isCore: boolean): boolean {
 const TROOP_MODEL_PX = 19;
 /** How far below the region's centre the force stands, clear of the label. */
 const TROOP_OFFSET_PX = 9;
+/** How far below a column its strength is written. */
+const MARCH_COUNT_OFFSET_PX = 13;
 
 /**
  * The army standing on a region — not marching, not neutral militia, and not
@@ -124,6 +132,17 @@ const TROOP_OFFSET_PX = 9;
  * Armour and infantry are counted apart because they are drawn apart: taking
  * delivery of more tanks must not change how the infantry beside them looks.
  */
+function splitForce(units: UnitCounts): { infantry: number; vehicles: number } {
+  let infantry = 0;
+  let vehicles = 0;
+  for (const [type, n] of Object.entries(units) as [UnitType, number][]) {
+    if (!n || isCivilian(type)) continue;
+    if (isVehicle(type)) vehicles += n;
+    else infantry += n;
+  }
+  return { infantry, vehicles };
+}
+
 function forceAt(state: GameState, regionId: string) {
   const marching = new Set(state.marches.map((m) => m.legionId));
   let playerId: string | null = null;
@@ -131,14 +150,13 @@ function forceAt(state: GameState, regionId: string) {
   let vehicles = 0;
   for (const legion of state.legions) {
     if (legion.regionId !== regionId || marching.has(legion.id)) continue;
-    for (const [type, n] of Object.entries(legion.units) as [UnitType, number][]) {
-      if (!n || isCivilian(type)) continue;
-      if (isVehicle(type)) vehicles += n;
-      else infantry += n;
-      playerId = legion.playerId;
-    }
+    const split = splitForce(legion.units);
+    if (split.infantry + split.vehicles === 0) continue;
+    infantry += split.infantry;
+    vehicles += split.vehicles;
+    playerId = legion.playerId;
   }
-  return playerId && infantry + vehicles > 0 ? { playerId, infantry, vehicles } : null;
+  return playerId ? { playerId, infantry, vehicles } : null;
 }
 
 const WORLD_PADDING = 20;
@@ -889,20 +907,41 @@ export function MapView({
               from.cx + (to.cx - from.cx) * progress,
               from.cy + (to.cy - from.cy) * progress,
             );
-            const r = MARCH_MARKER_PX / transform.k / 2;
             const color = colorByPlayer[march.playerId] ?? MILITIA_COLOR;
+            const split = splitForce(march.units);
+            const strength = totalUnits(march.units);
             return (
               <g key={march.id}>
-                <circle cx={p.x} cy={p.y} r={r} fill={color} stroke={MODEL_OUTLINE} strokeWidth={1.2 / transform.k} />
+                {/* The same models as a garrison, so a column on the road and
+                    the force it becomes when it arrives are recognisably the
+                    same thing. */}
+                <g transform={`translate(${p.x} ${p.y})`} pointerEvents="none">
+                  <TroopModels
+                    infantry={split.infantry}
+                    vehicles={split.vehicles}
+                    color={color}
+                    scale={TROOP_MODEL_PX / transform.k}
+                  />
+                </g>
+                {/* And the count stays. Standing forces can be read off the
+                    panel, but a column is a question you ask in a hurry — and
+                    villagers march too, who have no model of their own and
+                    would otherwise walk across the map invisibly. */}
                 <text
                   x={p.x}
-                  y={p.y + r * 0.62}
+                  y={p.y + MARCH_COUNT_OFFSET_PX / transform.k}
                   textAnchor="middle"
-                  fontSize={(MARCH_MARKER_PX * 0.62) / transform.k}
-                  fill="#fff"
+                  fontSize={(MARCH_MARKER_PX * 0.58) / transform.k}
+                  fill={labelFill}
                   fontWeight={700}
+                  style={{
+                    paintOrder: 'stroke',
+                    stroke: labelHalo,
+                    strokeWidth: 2.6 / transform.k,
+                    strokeOpacity: 0.75,
+                  }}
                 >
-                  {totalUnits(march.units)}
+                  {strength}
                 </text>
               </g>
             );
