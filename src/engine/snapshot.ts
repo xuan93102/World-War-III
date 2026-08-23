@@ -104,6 +104,11 @@ function trimFractions(_key: string, value: unknown): unknown {
 /** A region nobody of ours has eyes on: a name on the map and nothing else. */
 function hideRegion(region: RegionState): RegionState {
   const wonder = region.building?.type === 'wonder' ? region.building : undefined;
+  // A wonder going up is shown as well as a finished one. It takes five
+  // minutes to build and then has to be held, and that whole span is the
+  // window an opponent has to do something about it — a warning that arrives
+  // only once it is finished is not a warning.
+  const rising = region.construction?.type === 'wonder' ? region.construction : undefined;
   return {
     // Whose it is stays hidden — unless it's a core, which everyone knows.
     owner: region.isCore ? region.owner : null,
@@ -111,7 +116,7 @@ function hideRegion(region: RegionState): RegionState {
     units: {},
     building: wonder,
     wonderHeldSeconds: wonder ? region.wonderHeldSeconds : undefined,
-    construction: undefined,
+    construction: rising,
     unrestSeconds: undefined,
   };
 }

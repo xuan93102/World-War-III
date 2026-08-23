@@ -1,4 +1,5 @@
 import type { BuildingType } from '../engine/buildings';
+import type { WonderId } from '../engine/maps';
 import { shade } from './colors';
 
 /**
@@ -19,7 +20,7 @@ import { shade } from './colors';
  * y = GROUND_Y, so callers can plant a model on the map by that line.
  */
 
-export type IconKey = BuildingType | 'core';
+export type IconKey = BuildingType | 'core' | WonderId;
 
 /** Badge colours — picked to stay apart from each other and from the region
  *  fills, and to read on both the dark and light themes. */
@@ -36,6 +37,11 @@ const BUILDING_COLOR: Record<BuildingType, string> = {
   trench: '#6b7a52', // dug earth and sandbags
   camp: '#7b8b5a', // canvas olive — a tent, not a building
   wonder: '#ffd54a', // bright gold — the win condition
+};
+
+/** Every map's landmark is its wonder, so they share the wonder's gold. */
+const WONDER_COLOR: Record<WonderId, string> = {
+  taipei101: '#ffd54a',
 };
 
 /** Fallback for a core with no owner; owned cores take the player's colour. */
@@ -204,7 +210,7 @@ function glyph(key: IconKey, p: Palette) {
           {isoBox(20, 20.4, 3.4, 2.4, p)}
         </>
       );
-    case 'wonder': // stepped monument under a spire
+    case 'wonder': // stepped monument under a spire — a map with no landmark
       return (
         <>
           {isoBox(12, 19, 8, 1.5, p)}
@@ -214,6 +220,28 @@ function glyph(key: IconKey, p: Palette) {
           <path d="M15.5 12 L12 13.75 L12 3 Z" fill={p.right} />
         </>
       );
+    case 'taipei101': {
+      // Eight sections that widen as they rise, on a broad podium, under a
+      // needle. At map size the silhouette is the whole identification — tall,
+      // thin, and stepped outward, which nothing else on the board is — so the
+      // tiers are drawn as five rather than eight and the spire is kept long.
+      const tiers = [];
+      let ground = 18.6;
+      let halfWidth = 2.5;
+      for (let i = 0; i < 5; i++) {
+        tiers.push(<g key={i}>{isoBox(12, ground, halfWidth, 2.5, p)}</g>);
+        ground -= 2.5;
+        halfWidth += 0.32;
+      }
+      return (
+        <>
+          {isoBox(12, 21, 7, 2.4, p)}
+          {tiers}
+          <path d="M11.1 6.1 L12 6.55 L12 1 Z" fill={p.left} />
+          <path d="M12.9 6.1 L12 6.55 L12 1 Z" fill={p.right} />
+        </>
+      );
+    }
     case 'core': // citadel keep, crowned
       return (
         <>
@@ -229,7 +257,11 @@ function glyph(key: IconKey, p: Palette) {
 }
 
 function colorFor(type: IconKey, override?: string): string {
-  return override ?? (type === 'core' ? CORE_COLOR : BUILDING_COLOR[type]);
+  if (override) return override;
+  if (type === 'core') return CORE_COLOR;
+  return type in WONDER_COLOR
+    ? WONDER_COLOR[type as WonderId]
+    : BUILDING_COLOR[type as BuildingType];
 }
 
 interface BadgeProps {

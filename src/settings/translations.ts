@@ -162,7 +162,6 @@ const zhTW = {
   'help.rulesMountain': '中央山脈把東西部隔開，只有5個穿山點可以通行。',
   'help.rulesWonder': '蓋出奇觀並守住3分鐘即可獲勝。',
 
-  'help.notImplemented': '尚未實作：PVP連線。電腦對手會自己發展、擴張與進攻，三種難度行為不同。面板下方的 debug 按鈕可直接指定地塊歸屬，以便測試。',
 
   'game.regions': '區塊',
   'game.population': '人口',
@@ -239,6 +238,7 @@ const zhTW = {
   'building.camp': '臨時營地',
   'building.camp.desc': '軍隊在野外搭建的前進補給站，可囤放資重',
   'building.wonder': '奇觀',
+  'wonder.taipei101': '台北101',
   'building.wonder.desc': '建成後防守指定時間即獲勝',
   'game.wonderCountdown': '奇觀倒數',
   'game.economy': '產出',
@@ -639,7 +639,6 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'help.rulesMountain': '中央山脉把东西部隔开，只有5个穿山点可以通行。',
   'help.rulesWonder': '盖出奇观并守住3分钟即可获胜。',
 
-  'help.notImplemented': '尚未实作：PVP连线。电脑对手会自己发展、扩张与进攻，三种难度行为不同。面板下方的 debug 按钮可直接指定地块归属，以便测试。',
 
   'game.regions': '区块',
   'game.population': '人口',
@@ -716,6 +715,7 @@ const zhCN: Record<keyof typeof zhTW, string> = {
   'building.camp': '临时营地',
   'building.camp.desc': '军队在野外搭建的前进补给站，可囤放资重',
   'building.wonder': '奇观',
+  'wonder.taipei101': '台北101',
   'building.wonder.desc': '建成后防守指定时间即获胜',
   'game.wonderCountdown': '奇观倒数',
   'game.economy': '产出',
@@ -1116,7 +1116,6 @@ const en: Record<keyof typeof zhTW, string> = {
   'help.rulesMountain': 'The Central Mountain Range splits east from west — only 5 passes cross it.',
   'help.rulesWonder': 'Build a wonder and hold it for 3 minutes to win.',
 
-  'help.notImplemented': 'Not built yet: vehicles, scouting and fog of war, forward camps, damaging buildings, AI behaviour and PvP networking. The debug buttons at the bottom of the panel set a region\'s owner directly, for testing.',
 
   'game.regions': 'Regions',
   'game.population': 'Pop',
@@ -1193,6 +1192,7 @@ const en: Record<keyof typeof zhTW, string> = {
   'building.camp': 'Camp',
   'building.camp.desc': 'A forward depot an army pitches in the field; banks supply',
   'building.wonder': 'Wonder',
+  'wonder.taipei101': 'Taipei 101',
   'building.wonder.desc': 'Hold it for the required time to win outright',
   'game.wonderCountdown': 'Wonder',
   'game.economy': 'Output',

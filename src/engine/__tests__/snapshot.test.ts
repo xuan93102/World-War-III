@@ -143,6 +143,36 @@ describe('what stays public on purpose', () => {
     expect(snapshot.regions[theirs].wonderHeldSeconds).toBe(100);
   });
 
+  it('shows a wonder going up, not just a finished one', () => {
+    const { g, theirs } = newMatch();
+    g.state.regions[theirs].construction = {
+      type: 'wonder',
+      remainingSeconds: 200,
+      totalSeconds: BUILDINGS.wonder.buildSeconds,
+    };
+
+    // Five minutes to build and then a hold to survive: that whole span is
+    // the window an opponent has to do something about it, and a warning
+    // that only arrives once the thing is finished is not a warning.
+    expect(snapshotFor(g, 'blue').regions[theirs].construction?.type).toBe('wonder');
+  });
+
+  it('does not let anything else be seen alongside it', () => {
+    const { g, theirs } = newMatch();
+    g.state.regions[theirs].construction = {
+      type: 'wonder',
+      remainingSeconds: 200,
+      totalSeconds: BUILDINGS.wonder.buildSeconds,
+    };
+    g.state.regions[theirs].unrestSeconds = 42;
+    placeVillagers(g, 'red', 7, theirs);
+
+    const hidden = snapshotFor(g, 'blue').regions[theirs];
+    expect(hidden.owner, 'whose it is stays hidden').toBe(null);
+    expect(totalUnits(hidden.units), 'and who is standing on it').toBe(0);
+    expect(hidden.unrestSeconds).toBe(undefined);
+  });
+
   it('still hides a scout standing in the open, until counter-recon', () => {
     const { g } = newMatch();
     const border = g.map.region(BLUE_CORE).neighbors[0];
@@ -211,8 +241,12 @@ describe('a real match, swept for leaks', () => {
       for (const [id, region] of Object.entries(snapshot.regions)) {
         if (seen.has(id)) continue;
         expect(totalUnits(region.units), `garrison leaked at ${id}`).toBe(0);
-        expect(region.construction, `building work leaked at ${id}`).toBe(undefined);
         expect(region.unrestSeconds, `unrest leaked at ${id}`).toBe(undefined);
+        // A wonder is the one thing that shows through the fog, standing or
+        // going up. Everything else about that ground stays dark.
+        if (region.construction) {
+          expect(region.construction.type, `building work leaked at ${id}`).toBe('wonder');
+        }
         if (region.building) {
           expect(region.building.type, `building leaked at ${id}`).toBe('wonder');
         }

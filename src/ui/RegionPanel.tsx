@@ -1,4 +1,6 @@
 import { BUILDINGS, BUILDING_ORDER, CORE_HP, type BuildingType } from '../engine/buildings';
+import { buildingNameKey } from '../engine/maps';
+import type { IconKey } from './buildingIcons';
 import { BuildingIcon } from './buildingIcons';
 import { FOOD_PER_MIN_BY_SIZE, landSizeOf, type LandSize } from '../engine/land';
 import { totalUnits, type UnitCounts, type UnitType } from '../engine/units';
@@ -76,6 +78,10 @@ export function RegionPanel({
   onDemolish,
 }: RegionPanelProps) {
   const { t } = useSettings();
+
+  /** A wonder is drawn as whatever landmark this map's wonder is. */
+  const iconFor = (type: BuildingType): IconKey =>
+    type === 'wonder' ? engine.map.wonder.id : type;
 
   if (!selectedRegionId) {
     return <div className="region-panel region-panel-empty">{t('game.selectHint')}</div>;
@@ -273,8 +279,9 @@ export function RegionPanel({
           {regionState.construction ? (
             <div className="build-status">
               <div className="build-status-name">
-                <BuildingIcon type={regionState.construction.type} />
-                {t(BUILDINGS[regionState.construction.type].nameKey)}・{t('building.building')}
+                <BuildingIcon type={iconFor(regionState.construction.type)} />
+                {t(buildingNameKey(engine.map, regionState.construction.type))}・
+                {t('building.building')}
               </div>
               <div className="progress-track">
                 <div
@@ -299,8 +306,8 @@ export function RegionPanel({
           ) : regionState.building ? (
             <div className="build-status">
               <div className="build-status-name">
-                <BuildingIcon type={regionState.building.type} />
-                {t(BUILDINGS[regionState.building.type].nameKey)}
+                <BuildingIcon type={iconFor(regionState.building.type)} />
+                {t(buildingNameKey(engine.map, regionState.building.type))}
               </div>
               <div className="build-status-meta">
                 {t(BUILDINGS[regionState.building.type].descKey)}
@@ -334,8 +341,10 @@ export function RegionPanel({
                     title={def.implemented ? t(def.descKey) : lockedReason ? t(lockedReason) : undefined}
                   >
                     <span className="build-option-head">
-                      <BuildingIcon type={type} size={20} />
-                      <span className="build-option-name">{t(def.nameKey)}</span>
+                      <BuildingIcon type={iconFor(type)} size={20} />
+                      <span className="build-option-name">
+                        {t(buildingNameKey(engine.map, type))}
+                      </span>
                       <span className="build-option-cost">
                         {def.costMoney > 0 && `${t('game.money')} ${def.costMoney}`}
                         {def.costFood > 0 && `　${t('game.food')} ${def.costFood}`}

@@ -58,6 +58,12 @@ const PEAK_MAX_H = 15;
 // On-screen size of a building *model* on the 3D map. Much bigger than the flat
 // 2D badge: it's the building itself now, not a marker standing in for one.
 const BUILDING_MODEL_PX = 44;
+/**
+ * How much bigger a wonder is than anything else on the board. It is the one
+ * building that wins the game on its own, it can be seen through the fog, and
+ * at the same size as a shop none of that would read.
+ */
+const WONDER_SCALE = 2.1;
 // A pass is drawn as a road that actually crosses the range, not a marker
 // sitting on it: the peaks are cleared away for PASS_GAP either side of the
 // crossing (a pass *is* a gap in the mountains) and the road runs through the
@@ -924,13 +930,24 @@ export function MapView({
                       color: regionState.owner ? colorByPlayer[regionState.owner] : undefined,
                     });
                   }
-                  const built = seen
-                    ? (regionState.building?.type ?? regionState.construction?.type)
-                    : undefined;
-                  if (built) badges.push({ key: built, dashed: !regionState.building });
+                  // A wonder is not a secret either, and for a stronger
+                  // reason than a core: it is how a stalemate ends (docs 5.3),
+                  // and a race nobody can see is not a race. It shows from the
+                  // moment the ground is broken, fog or no fog.
+                  const standing = regionState.building?.type ?? regionState.construction?.type;
+                  const built = seen || standing === 'wonder' ? standing : undefined;
+                  if (built) {
+                    badges.push({
+                      key: built === 'wonder' ? map.wonder.id : built,
+                      dashed: !regionState.building,
+                    });
+                  }
                   if (badges.length === 0) return null;
 
-                  const size = (is3D ? BUILDING_MODEL_PX : BUILDING_BADGE_PX) / transform.k;
+                  // And it is drawn to be seen from across the board.
+                  const isWonder = built === 'wonder';
+                  const base = is3D ? BUILDING_MODEL_PX : BUILDING_BADGE_PX;
+                  const size = (base * (isWonder ? WONDER_SCALE : 1)) / transform.k;
                   const scale = size / 24;
                   const gap = size * (is3D ? 0.02 : 0.15);
                   const total = badges.length * size + (badges.length - 1) * gap;

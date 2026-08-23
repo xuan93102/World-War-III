@@ -4,6 +4,7 @@ import {
   MOUNTAIN_RANGE_PATH,
   REGION_GEOMETRY,
 } from './mapData.generated';
+import { BUILDINGS, type BuildingType } from './buildings';
 import type { TranslationKey } from '../settings/translations';
 import type { MountainPass, RegionDef } from './types';
 
@@ -17,6 +18,21 @@ import type { MountainPass, RegionDef } from './types';
  * keeps call sites reading as `map.region(id)` instead of threading a map
  * argument through every helper in the engine.
  */
+/**
+ * The landmark a map's wonder is (docs 5.3).
+ *
+ * A wonder is the one building that ends a stalemate, and it should look like
+ * somewhere rather than like a generic monument — so each map names its own.
+ * Taiwan's is Taipei 101; other maps get whatever their own skyline is known
+ * for.
+ */
+export type WonderId = 'taipei101';
+
+export interface MapWonder {
+  id: WonderId;
+  nameKey: TranslationKey;
+}
+
 export interface MapBounds {
   minX: number;
   minY: number;
@@ -33,6 +49,8 @@ export interface GameMap {
   bounds: MapBounds;
   /** The dividing ridge, as an SVG path. Empty when a map has no such divide. */
   ridgePath: string;
+  /** What this map's wonder is a picture of, and what to call it. */
+  wonder: MapWonder;
 
   region(id: string): RegionDef;
   isPass(a: string, b: string): boolean;
@@ -49,6 +67,7 @@ interface MapSource {
   passes: MountainPass[];
   bounds: MapBounds;
   ridgePath: string;
+  wonder: MapWonder;
 }
 
 function createMap(source: MapSource): GameMap {
@@ -110,10 +129,19 @@ export const TAIWAN: GameMap = createMap({
   passes: MOUNTAIN_PASSES,
   bounds: MAP_BOUNDS,
   ridgePath: MOUNTAIN_RANGE_PATH,
+  wonder: { id: 'taipei101', nameKey: 'wonder.taipei101' },
 });
 
 export const MAPS: GameMap[] = [TAIWAN];
 export const DEFAULT_MAP_ID = TAIWAN.id;
+
+/**
+ * What to call a building on this map. Everything is the same everywhere
+ * except the wonder, which is a particular building in a particular city.
+ */
+export function buildingNameKey(map: GameMap, type: BuildingType): TranslationKey {
+  return type === 'wonder' ? map.wonder.nameKey : BUILDINGS[type].nameKey;
+}
 
 export function getMap(id: string): GameMap {
   const map = MAPS.find((m) => m.id === id);
