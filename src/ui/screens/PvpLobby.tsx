@@ -6,6 +6,7 @@ import type { Seat } from '../../match/seats';
 import type { SetupState } from '../../match/protocol';
 import { getMap, DEFAULT_MAP_ID } from '../../engine/maps';
 import { validOpponentCores } from '../../engine/startingPositions';
+import { asChatText, ChatLog } from '../../match/chat';
 import { PvpSetup } from './PvpSetup';
 
 export interface PvpMatch {
@@ -14,6 +15,8 @@ export interface PvpMatch {
   role: 'host' | 'guest';
   connection: Connection;
   opponentId: string;
+  /** What the two of them have been saying, carried into the match (docs 15.9). */
+  chat: ChatLog;
 }
 
 interface PvpLobbyProps {
@@ -59,9 +62,36 @@ export function PvpLobby({
   const [role, setRole] = useState<'host' | 'guest' | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [copied, setCopied] = useState(false);
+  // Why the board just changed under them. The host owns the map and may move
+  // its own core, and either can strand a choice the guest had already made —
+  // which is a rude thing to have happen with no word about it.
+  const [notice, setNotice] = useState<string | null>(null);
+  const [, forceRender] = useState(0);
   const connectionRef = useRef<Connection | null>(null);
   const setupRef = useRef<SetupState | null>(null);
   const startedRef = useRef(false);
+  const chatRef = useRef<ChatLog | null>(null);
+  if (!chatRef.current) {
+    chatRef.current = new ChatLog();
+    chatRef.current.onChange = () => forceRender((n) => n + 1);
+  }
+  const chat = chatRef.current;
+
+  const say = (text: string) => {
+    const clean = asChatText(text);
+    if (!clean) return;
+    connectionRef.current?.send({ t: 'chat', text: clean });
+    chat.add('me', clean);
+  };
+
+  /** A line from the other end, whichever end that is. */
+  const heard = (data: unknown): boolean => {
+    const message = data as { t?: unknown; text?: unknown };
+    if (message?.t !== 'chat') return false;
+    const clean = asChatText(message.text);
+    if (clean) chat.add('them', clean);
+    return true;
+  };
 
   // Whoever is still sitting in the lobby when the screen goes away should
   // not be left holding an open socket.
@@ -79,17 +109,33 @@ export function PvpLobby({
     if (next.hostReady && next.guestReady && next.guestCore && !startedRef.current) {
       startedRef.current = true;
       const setups: PlayerSetup[] = [
-        { id: HOST_ID, name: hostName, color: playerColor, coreRegionId: next.hostCore },
-        { id: GUEST_ID, name: guestName, color: opponentColor, coreRegionId: next.guestCore },
+        { id: HOST_ID, name: hostName, color: colorOf('host', next), coreRegionId: next.hostCore },
+        {
+          id: GUEST_ID,
+          name: guestName,
+          color: colorOf('guest', next),
+          coreRegionId: next.guestCore,
+        },
       ];
       const seats: Seat[] = [
         { by: 'human', playerId: HOST_ID },
         { by: 'remote', playerId: GUEST_ID },
       ];
       connectionRef.current?.send({ t: 'start', setups, seats, you: GUEST_ID });
-      onBegin({ setups, seats, role: 'host', connection: connectionRef.current!, opponentId: GUEST_ID });
+      onBegin({
+        setups,
+        seats,
+        role: 'host',
+        connection: connectionRef.current!,
+        opponentId: GUEST_ID,
+        chat,
+      });
     }
   };
+
+  /** Whose colour is whose, once they have had the chance to trade. */
+  const colorOf = (side: 'host' | 'guest', of: SetupState) =>
+    (side === 'host') === !of.swapped ? playerColor : opponentColor;
 
   /**
    * What the guest asked for, checked before it is believed. Everything here
@@ -98,6 +144,7 @@ export function PvpLobby({
    * to rather than crash on.
    */
   const hostHandles = (data: unknown) => {
+    if (heard(data)) return;
     const current = setupRef.current;
     if (!current || typeof data !== 'object' || data === null) return;
     const message = data as { t?: unknown; core?: unknown; ready?: unknown };
@@ -131,12 +178,14 @@ export function PvpLobby({
           guestCore: null,
           hostReady: false,
           guestReady: false,
+          swapped: false,
         });
       }
     };
 
     connection.onMessage = (data) => {
       if (opening === 'host') return hostHandles(data);
+      if (heard(data)) return;
 
       // The guest is told what the setup is, and then what the match is.
       const message = data as {
@@ -146,6 +195,18 @@ export function PvpLobby({
       };
       if (message.t === 'setup' && message.state) {
         setRole('guest');
+        // Say what the host just did to the board, rather than letting the
+        // screen change under them and leaving them to work it out.
+        const before = setupRef.current;
+        if (before) {
+          if (before.mapId !== message.state.mapId) setNotice(t('pvp.hostChangedMap'));
+          else if (before.guestCore && !message.state.guestCore) {
+            setNotice(t('pvp.hostMovedOnYou'));
+          } else if (before.swapped !== message.state.swapped) setNotice(t('pvp.colorsSwapped'));
+          else if (before.guestCore !== message.state.guestCore && message.state.guestCore) {
+            setNotice(t('pvp.positionsSwapped'));
+          } else setNotice(null);
+        }
         setupRef.current = message.state;
         setSetup(message.state);
         return;
@@ -161,6 +222,7 @@ export function PvpLobby({
           role: 'guest',
           connection,
           opponentId: HOST_ID,
+          chat,
         });
       }
     };
@@ -200,8 +262,28 @@ export function PvpLobby({
       <PvpSetup
         role={role}
         state={setup}
-        playerColor={role === 'host' ? playerColor : opponentColor}
-        opponentColor={role === 'host' ? opponentColor : playerColor}
+        playerColor={colorOf(role, setup)}
+        opponentColor={colorOf(role === 'host' ? 'guest' : 'host', setup)}
+        notice={notice}
+        chat={chat}
+        onSay={say}
+        onSwapColors={() => {
+          const current = setupRef.current!;
+          // Nothing in the match turns on it, so nobody has to agree again.
+          publish({ ...current, swapped: !current.swapped });
+        }}
+        onSwapPositions={() => {
+          const current = setupRef.current!;
+          if (!current.guestCore) return;
+          // Trading starts is a change of terms, so both say yes again.
+          publish({
+            ...current,
+            hostCore: current.guestCore,
+            guestCore: current.hostCore,
+            hostReady: false,
+            guestReady: false,
+          });
+        }}
         onPick={(regionId) => {
           const current = setupRef.current!;
           if (role === 'host') {
@@ -229,6 +311,7 @@ export function PvpLobby({
             guestCore: null,
             hostReady: false,
             guestReady: false,
+            swapped: current.swapped,
           });
         }}
         onReady={(ready) => {

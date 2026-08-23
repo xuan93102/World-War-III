@@ -5,6 +5,7 @@ import type { AiDifficulty } from './engine/types';
 import type { Seat } from './match/seats';
 import { Connection } from './match/connection';
 import { forgetMatch, resumableMatch } from './match/resume';
+import { ChatLog } from './match/chat';
 import { SettingsProvider } from './settings/SettingsContext';
 import { useSettings } from './settings/useSettings';
 import { GameScreen } from './ui/screens/GameScreen';
@@ -37,7 +38,7 @@ interface MatchConfig {
   /** Who drives each side (docs 15.4). No human seat means we're watching. */
   seats: Seat[];
   /** Present when somebody in this match is on another machine. */
-  net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string };
+  net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string; chat: ChatLog };
   /** Present when watching a match back rather than playing one (docs 16). */
   replay?: Replay;
   /**
@@ -122,13 +123,13 @@ function AppShell() {
 
   // A networked match: the lobby has already agreed the board and who is
   // who, so there is nothing left to decide here.
-  const beginPvp = ({ setups, seats, role, connection, opponentId }: PvpMatch) => {
+  const beginPvp = ({ setups, seats, role, connection, opponentId, chat }: PvpMatch) => {
     setMatch({
       // Nobody can stop a clock the other end is also watching.
       canPause: false,
       seats,
       setups,
-      net: { role, connection, opponentId },
+      net: { role, connection, opponentId, chat },
     });
     setMatchKey((k) => k + 1);
     setScreen('game');
@@ -195,7 +196,10 @@ function AppShell() {
       canPause: false,
       seats: saved.seats,
       setups: saved.setups,
-      net: { role: saved.role, connection, opponentId: saved.opponentId },
+      // The conversation does not survive a reload. It was never written
+      // down, and putting somebody else's words in storage to be recovered
+      // later is a different decision from remembering where you were.
+      net: { role: saved.role, connection, opponentId: saved.opponentId, chat: new ChatLog() },
       resumed,
     });
     setMatchKey((k) => k + 1);

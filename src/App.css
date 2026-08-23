@@ -1736,3 +1736,66 @@
   font-size: 13px;
   color: var(--text-dim);
 }
+
+/* Two people talking (docs 15.9). The same box in the lobby and in the
+   match, because it is the same conversation. */
+.chat {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.chat-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  padding-right: 4px;
+}
+
+.chat-line {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-word;
+}
+
+.chat-who {
+  color: var(--text-dim);
+  margin-right: 4px;
+}
+
+.chat-line-me .chat-who {
+  color: var(--accent);
+}
+
+.chat-entry {
+  display: flex;
+  gap: 6px;
+}
+
+.chat-entry .text-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+/* In a match it floats over the map rather than taking a column from it:
+   the board is what people are looking at. */
+.chat-floating {
+  position: fixed;
+  left: 12px;
+  bottom: 12px;
+  z-index: 20;
+  width: min(320px, calc(100vw - 24px));
+  padding: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.swap-actions {
+  display: inline-flex;
+  gap: 6px;
+}

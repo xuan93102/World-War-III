@@ -3,6 +3,8 @@ import { MAPS, getMap } from '../../engine/maps';
 import { MIN_CORE_DISTANCE, validOpponentCores } from '../../engine/startingPositions';
 import { useSettings } from '../../settings/useSettings';
 import { MapPicker } from '../MapPicker';
+import { ChatBox } from '../ChatBox';
+import type { ChatLog } from '../../match/chat';
 import type { SetupState } from '../../match/protocol';
 
 interface PvpSetupProps {
@@ -11,6 +13,12 @@ interface PvpSetupProps {
   state: SetupState;
   playerColor: string;
   opponentColor: string;
+  /** What the host just did to the board, for the end that did not do it. */
+  notice: string | null;
+  chat: ChatLog;
+  onSay: (text: string) => void;
+  onSwapColors: () => void;
+  onSwapPositions: () => void;
   /** Where we would like to start. */
   onPick: (regionId: string) => void;
   onPickMap: (mapId: string) => void;
@@ -32,6 +40,11 @@ export function PvpSetup({
   state,
   playerColor,
   opponentColor,
+  notice,
+  chat,
+  onSay,
+  onSwapColors,
+  onSwapPositions,
   onPick,
   onPickMap,
   onReady,
@@ -67,6 +80,8 @@ export function PvpSetup({
     <div className="screen screen-centered">
       <h2 className="screen-title">{t('pvp.setupTitle')}</h2>
 
+      {notice && <p className="notice">{notice}</p>}
+
       <div className="panel panel-wide">
         <div className="field-label">{t('pvp.pickYours')}</div>
         <p className="hint-text">
@@ -93,6 +108,22 @@ export function PvpSetup({
             <span className="swatch" style={{ background: opponentColor }} />
             {t('pvp.them')}：{theirs ? map.region(theirs).name : t('pvp.notChosen')}
           </span>
+          {/* The host owns the terms, the same way it owns the map. The guest
+              agrees to them by saying it is ready, or does not. */}
+          {role === 'host' && (
+            <span className="swap-actions">
+              <button className="btn btn-sm" onClick={onSwapColors} disabled={iAmReady}>
+                {t('pvp.swapColors')}
+              </button>
+              <button
+                className="btn btn-sm"
+                onClick={onSwapPositions}
+                disabled={iAmReady || !bothPicked}
+              >
+                {t('pvp.swapPositions')}
+              </button>
+            </span>
+          )}
         </div>
       </div>
 
@@ -135,6 +166,11 @@ export function PvpSetup({
           {iAmReady ? t('pvp.notReady') : t('pvp.ready')}
         </button>
         {!bothPicked && <p className="hint-text">{t('pvp.bothMustPick')}</p>}
+      </div>
+
+      <div className="panel">
+        <div className="field-label">{t('chat.title')}</div>
+        <ChatBox log={chat} onSend={onSay} />
       </div>
 
       <button className="btn btn-ghost" onClick={onLeave}>

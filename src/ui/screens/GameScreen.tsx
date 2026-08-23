@@ -11,6 +11,8 @@ import {
   type Recording,
 } from '../../match/recording';
 import { forgetMatch, rememberMatch } from '../../match/resume';
+import { asChatText, type ChatLog } from '../../match/chat';
+import { ChatBox } from '../ChatBox';
 import { snapshotFor } from '../../engine/snapshot';
 import { parseOrder } from '../../engine/orders';
 import type { Connection } from '../../match/connection';
@@ -58,7 +60,7 @@ interface GameScreenProps {
   /** Pause is single-player only; a networked match can't unilaterally stop. */
   canPause: boolean;
   /** Present in a networked match: which end we are, and the wire (docs 15.4). */
-  net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string };
+  net?: { role: 'host' | 'guest'; connection: Connection; opponentId: string; chat: ChatLog };
   /** Present when watching a match back instead of playing one (docs 16). */
   replay?: Replay;
   /**
@@ -114,6 +116,24 @@ export function GameScreen({
   // Rebuilding a replay to reach a dragged-to position. It is a few seconds
   // of work for a long match, so the clock stops and the bar says so.
   const [seeking, setSeeking] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
+
+  // The conversation carries on from the lobby, and redraws the screen when
+  // something is said — from either end.
+  useEffect(() => {
+    if (!net) return;
+    net.chat.onChange = () => forceRender((n) => n + 1);
+    return () => {
+      net.chat.onChange = () => {};
+    };
+  }, [net]);
+
+  const say = (text: string) => {
+    const clean = asChatText(text);
+    if (!clean || !net) return;
+    net.connection.send({ t: 'chat', text: clean });
+    net.chat.add('me', clean);
+  };
   // Nobody to play against just now (docs 15.8): either their socket died or
   // ours did. The clock stops rather than running on against nobody, and the
   // room is held open — a lid closing is not a match ending.
@@ -181,7 +201,13 @@ export function GameScreen({
     };
     net.connection.onMessage = (data) => {
       if (typeof data !== 'object' || data === null) return;
-      const message = data as { t?: unknown; order?: unknown; state?: unknown };
+      const message = data as { t?: unknown; order?: unknown; state?: unknown; text?: unknown };
+      // Talking goes both ways, so it is handled before either end's business.
+      if (message.t === 'chat') {
+        const said = asChatText(message.text);
+        if (said) net.chat.add('them', said);
+        return;
+      }
       if (net.role === 'host' && message.t === 'order') {
         // Parsed before it goes anywhere near the engine, and carried out as
         // the player whose socket it arrived on — never as whoever it claims.
@@ -399,11 +425,30 @@ export function GameScreen({
               {paused ? t('game.resume') : t('game.pause')}
             </button>
           )}
+          {net && (
+            <button
+              className="btn btn-sm"
+              onClick={() => {
+                setChatOpen((open) => !open);
+                net.chat.read();
+              }}
+              aria-pressed={chatOpen}
+            >
+              {t('chat.title')}
+              {net.chat.unread > 0 && `・${net.chat.unread}`}
+            </button>
+          )}
           <button className="btn btn-sm btn-ghost" onClick={() => setConfirmQuit(true)}>
             {t('game.quit')}
           </button>
         </div>
       </div>
+
+      {net && chatOpen && (
+        <div className="chat-floating">
+          <ChatBox log={net.chat} onSend={say} />
+        </div>
+      )}
 
       {replay && onTakeOver && (
         <ReplayBar

@@ -46,19 +46,27 @@ export interface SetupState {
   guestCore: string | null;
   hostReady: boolean;
   guestReady: boolean;
+  /**
+   * Whether the two of them have traded colours. Nothing in the match turns
+   * on it — it is whose blue it is, which is the sort of thing people mind
+   * about and no rule should.
+   */
+  swapped: boolean;
 }
 
 export type HostMessage =
   | { t: 'setup'; state: SetupState }
   | { t: 'start'; setups: PlayerSetup[]; seats: Seat[]; you: PlayerId }
-  | { t: 'snapshot'; state: GameState };
+  | { t: 'snapshot'; state: GameState }
+  | { t: 'chat'; text: string };
 
 /** Guest to host: this is what I want done. Never who I am. */
 export type GuestMessage =
   | { t: 'order'; order: unknown }
   /** Where they would like to start. The host decides whether they may. */
   | { t: 'pick'; core: string }
-  | { t: 'ready'; ready: boolean };
+  | { t: 'ready'; ready: boolean }
+  | { t: 'chat'; text: string };
 
 /** Narrowing for messages off the wire, which are `unknown` until checked. */
 export function asRelayMessage(value: unknown): RelayMessage | null {
