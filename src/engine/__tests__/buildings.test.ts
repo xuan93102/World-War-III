@@ -477,14 +477,23 @@ describe('building prices vs the villager economy', () => {
     expect(minutes, 'wonder should take many minutes of income').toBeGreaterThanOrEqual(5);
   });
 
-  it('costs no food at all, whatever it is', () => {
+  it('costs no food, with one deliberate exception', () => {
     // Buildings used to be paid for in both, which starved the armies: food
     // is what resupplies troops in the field, and every granary spent on a
     // fortress was a column left dry. Buildings are a gold decision now, and
     // food is a logistics one.
     for (const def of Object.values(BUILDINGS)) {
+      if (def.type === 'wonder') continue;
       expect(def.costFood, `${def.type} should cost no food`).toBe(0);
     }
+  });
+
+  it('makes the wonder cost a full larder', () => {
+    // The exception, and the reason for it: the wonder wins the game on its
+    // own, so it should cost something an army would otherwise have eaten.
+    // Exactly the base cap — affordable without a granary, but only with
+    // nothing put by at all.
+    expect(BUILDINGS.wonder.costFood).toBe(BASE_FOOD_CAP);
   });
 
   it('charges gold for everything except the three that set the opening', () => {

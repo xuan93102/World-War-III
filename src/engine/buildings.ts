@@ -191,7 +191,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     descKey: 'building.wonder.desc',
     category: 'local',
     costMoney: 6000,
-    costFood: 0,
+    costFood: 1000,
     buildSeconds: 300,
     hp: 2000,
     implemented: true,

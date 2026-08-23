@@ -67,127 +67,127 @@ export const TECHS: Record<TechId, TechDef> = {
   // ---- core level 1 ----
   rifles: {
     id: 'rifles', nameKey: 'tech.rifles', descKey: 'tech.rifles.desc',
-    coreLevel: 1, costMoney: 150, seconds: 90, requires: [], implemented: true,
+    coreLevel: 1, costMoney: 150, seconds: 45, requires: [], implemented: true,
   },
   bodyArmour: {
     id: 'bodyArmour', nameKey: 'tech.bodyArmour', descKey: 'tech.bodyArmour.desc',
-    coreLevel: 1, costMoney: 150, seconds: 90, requires: [], implemented: true,
+    coreLevel: 1, costMoney: 150, seconds: 45, requires: [], implemented: true,
   },
   intensiveFarming: {
     id: 'intensiveFarming', nameKey: 'tech.intensiveFarming', descKey: 'tech.intensiveFarming.desc',
-    coreLevel: 1, costMoney: 120, seconds: 70, requires: [], implemented: true,
+    coreLevel: 1, costMoney: 120, seconds: 35, requires: [], implemented: true,
   },
   tradeLaw: {
     id: 'tradeLaw', nameKey: 'tech.tradeLaw', descKey: 'tech.tradeLaw.desc',
-    coreLevel: 1, costMoney: 120, seconds: 70, requires: [], implemented: true,
+    coreLevel: 1, costMoney: 120, seconds: 35, requires: [], implemented: true,
   },
   fieldworks: {
     id: 'fieldworks', nameKey: 'tech.fieldworks', descKey: 'tech.fieldworks.desc',
-    coreLevel: 1, costMoney: 100, seconds: 60, requires: [], implemented: true,
+    coreLevel: 1, costMoney: 100, seconds: 30, requires: [], implemented: true,
   },
   homesteadAct: {
     id: 'homesteadAct', nameKey: 'tech.homesteadAct', descKey: 'tech.homesteadAct.desc',
-    coreLevel: 1, costMoney: 150, seconds: 90, requires: [], implemented: true,
+    coreLevel: 1, costMoney: 150, seconds: 45, requires: [], implemented: true,
   },
   transportCorps1: {
     id: 'transportCorps1', nameKey: 'tech.transportCorps1', descKey: 'tech.transportCorps1.desc',
-    coreLevel: 1, costMoney: 120, seconds: 70, requires: [], implemented: true,
+    coreLevel: 1, costMoney: 120, seconds: 35, requires: [], implemented: true,
   },
 
   // ---- core level 2 ----
   mortarCorps: {
     id: 'mortarCorps', nameKey: 'tech.mortarCorps', descKey: 'tech.mortarCorps.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: [], implemented: true,
+    coreLevel: 2, costMoney: 350, seconds: 75, requires: [], implemented: true,
   },
   autoRifles: {
     id: 'autoRifles', nameKey: 'tech.autoRifles', descKey: 'tech.autoRifles.desc',
-    coreLevel: 2, costMoney: 400, seconds: 180, requires: ['rifles'], implemented: true,
+    coreLevel: 2, costMoney: 400, seconds: 90, requires: ['rifles'], implemented: true,
   },
   compositeArmour: {
     id: 'compositeArmour', nameKey: 'tech.compositeArmour', descKey: 'tech.compositeArmour.desc',
-    coreLevel: 2, costMoney: 400, seconds: 180, requires: ['bodyArmour'], implemented: true,
+    coreLevel: 2, costMoney: 400, seconds: 90, requires: ['bodyArmour'], implemented: true,
   },
   consumerIndustry: {
     id: 'consumerIndustry', nameKey: 'tech.consumerIndustry', descKey: 'tech.consumerIndustry.desc',
-    coreLevel: 2, costMoney: 350, seconds: 160, requires: [], implemented: true,
+    coreLevel: 2, costMoney: 350, seconds: 80, requires: [], implemented: true,
   },
   financialCentre: {
     id: 'financialCentre', nameKey: 'tech.financialCentre', descKey: 'tech.financialCentre.desc',
-    coreLevel: 2, costMoney: 350, seconds: 160, requires: [], implemented: true,
+    coreLevel: 2, costMoney: 350, seconds: 80, requires: [], implemented: true,
   },
   conscriptionDrive: {
     id: 'conscriptionDrive', nameKey: 'tech.conscriptionDrive', descKey: 'tech.conscriptionDrive.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: [], implemented: true,
+    coreLevel: 2, costMoney: 350, seconds: 75, requires: [], implemented: true,
   },
   reinforcedFortress: {
     id: 'reinforcedFortress', nameKey: 'tech.reinforcedFortress', descKey: 'tech.reinforcedFortress.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: ['fieldworks'], implemented: true,
+    coreLevel: 2, costMoney: 350, seconds: 75, requires: ['fieldworks'], implemented: true,
   },
   mountainRoad: {
     id: 'mountainRoad', nameKey: 'tech.mountainRoad', descKey: 'tech.mountainRoad.desc',
-    coreLevel: 2, costMoney: 450, seconds: 200, requires: ['fieldworks'], implemented: true,
+    coreLevel: 2, costMoney: 450, seconds: 100, requires: ['fieldworks'], implemented: true,
   },
   roadNetwork: {
     id: 'roadNetwork', nameKey: 'tech.roadNetwork', descKey: 'tech.roadNetwork.desc',
-    coreLevel: 2, costMoney: 400, seconds: 180, requires: [], implemented: true,
+    coreLevel: 2, costMoney: 400, seconds: 90, requires: [], implemented: true,
   },
   rapidReaction: {
     id: 'rapidReaction', nameKey: 'tech.rapidReaction', descKey: 'tech.rapidReaction.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: [], implemented: true,
+    coreLevel: 2, costMoney: 350, seconds: 75, requires: [], implemented: true,
   },
   siegeMunitions: {
     id: 'siegeMunitions', nameKey: 'tech.siegeMunitions', descKey: 'tech.siegeMunitions.desc',
-    coreLevel: 2, costMoney: 400, seconds: 180, requires: ['mortarCorps'], implemented: true,
+    coreLevel: 2, costMoney: 400, seconds: 90, requires: ['mortarCorps'], implemented: true,
   },
   scouts: {
     id: 'scouts', nameKey: 'tech.scouts', descKey: 'tech.scouts.desc',
-    coreLevel: 2, costMoney: 400, seconds: 180, requires: [], implemented: true,
+    coreLevel: 2, costMoney: 400, seconds: 90, requires: [], implemented: true,
   },
   counterRecon: {
     id: 'counterRecon', nameKey: 'tech.counterRecon', descKey: 'tech.counterRecon.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: ['scouts'], implemented: true,
+    coreLevel: 2, costMoney: 350, seconds: 75, requires: ['scouts'], implemented: true,
   },
   townExpansion: {
     id: 'townExpansion', nameKey: 'tech.townExpansion', descKey: 'tech.townExpansion.desc',
-    coreLevel: 2, costMoney: 400, seconds: 180, requires: ['homesteadAct'], implemented: true,
+    coreLevel: 2, costMoney: 400, seconds: 90, requires: ['homesteadAct'], implemented: true,
   },
   transportCorps2: {
     id: 'transportCorps2', nameKey: 'tech.transportCorps2', descKey: 'tech.transportCorps2.desc',
-    coreLevel: 2, costMoney: 350, seconds: 150, requires: ['transportCorps1'], implemented: true,
+    coreLevel: 2, costMoney: 350, seconds: 75, requires: ['transportCorps1'], implemented: true,
   },
 
   // ---- core level 3 ----
   mainBattleTank: {
     id: 'mainBattleTank', nameKey: 'tech.mainBattleTank', descKey: 'tech.mainBattleTank.desc',
-    coreLevel: 3, costMoney: 900, seconds: 300, requires: ['mortarCorps'], implemented: true,
+    coreLevel: 3, costMoney: 900, seconds: 150, requires: ['mortarCorps'], implemented: true,
   },
   traverseWorks: {
     id: 'traverseWorks', nameKey: 'tech.traverseWorks', descKey: 'tech.traverseWorks.desc',
-    coreLevel: 3, costMoney: 1000, seconds: 320, requires: ['mountainRoad'], implemented: true,
+    coreLevel: 3, costMoney: 1000, seconds: 160, requires: ['mountainRoad'], implemented: true,
   },
   apMunitions: {
     id: 'apMunitions', nameKey: 'tech.apMunitions', descKey: 'tech.apMunitions.desc',
-    coreLevel: 3, costMoney: 900, seconds: 300, requires: ['autoRifles'], implemented: true,
+    coreLevel: 3, costMoney: 900, seconds: 150, requires: ['autoRifles'], implemented: true,
   },
   reactiveArmour: {
     id: 'reactiveArmour', nameKey: 'tech.reactiveArmour', descKey: 'tech.reactiveArmour.desc',
-    coreLevel: 3, costMoney: 900, seconds: 300, requires: ['compositeArmour'], implemented: true,
+    coreLevel: 3, costMoney: 900, seconds: 150, requires: ['compositeArmour'], implemented: true,
   },
   bastionWorks: {
     id: 'bastionWorks', nameKey: 'tech.bastionWorks', descKey: 'tech.bastionWorks.desc',
-    coreLevel: 3, costMoney: 900, seconds: 300, requires: ['reinforcedFortress'], implemented: true,
+    coreLevel: 3, costMoney: 900, seconds: 150, requires: ['reinforcedFortress'], implemented: true,
   },
   drones: {
     id: 'drones', nameKey: 'tech.drones', descKey: 'tech.drones.desc',
-    coreLevel: 3, costMoney: 850, seconds: 280, requires: ['scouts'], implemented: true,
+    coreLevel: 3, costMoney: 850, seconds: 140, requires: ['scouts'], implemented: true,
   },
   arsenalExpansion: {
     id: 'arsenalExpansion', nameKey: 'tech.arsenalExpansion', descKey: 'tech.arsenalExpansion.desc',
-    coreLevel: 3, costMoney: 850, seconds: 280, requires: [], implemented: true,
+    coreLevel: 3, costMoney: 850, seconds: 140, requires: [], implemented: true,
   },
   urbanisation: {
     id: 'urbanisation', nameKey: 'tech.urbanisation', descKey: 'tech.urbanisation.desc',
-    coreLevel: 3, costMoney: 900, seconds: 300, requires: ['townExpansion'], implemented: true,
+    coreLevel: 3, costMoney: 900, seconds: 150, requires: ['townExpansion'], implemented: true,
   },
 };
 
@@ -198,8 +198,8 @@ export const TECH_ORDER: TechId[] = Object.keys(TECHS) as TechId[];
 export const MAX_CORE_LEVEL = 3;
 
 export const CORE_UPGRADE: Record<2 | 3, { costMoney: number; costFood: number; seconds: number }> = {
-  2: { costMoney: 800, costFood: 0, seconds: 60 },
-  3: { costMoney: 2000, costFood: 0, seconds: 150 },
+  2: { costMoney: 800, costFood: 250, seconds: 60 },
+  3: { costMoney: 2000, costFood: 600, seconds: 150 },
 };
 
 // ---- researchers (docs 10) ----
