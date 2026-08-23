@@ -184,7 +184,7 @@ export const UNITS: Record<UnitType, UnitDef> = {
     upgradeCost: null,
     speed: 1.5,
     range: 0,
-    buildSeconds: 20,
+    buildSeconds: 5,
     upgradeSeconds: 0,
     requiresTech: 'scouts',
     hidden: true,
