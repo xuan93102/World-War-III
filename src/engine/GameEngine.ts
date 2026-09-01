@@ -418,11 +418,34 @@ export class GameEngine {
    * ground but don't police the roads, so columns walk past them (docs 8.1).
    * They still have to be beaten to take the region — that's `contestedAt`.
    */
+  /**
+   * Everyone whose feet are on this ground — marching through it as well as
+   * standing on it.
+   *
+   * `legionsAt` deliberately excludes columns on the road, because for most
+   * purposes a column passing through is not a garrison. For a fight it is:
+   * two armies on the same ground are two armies on the same ground, and a
+   * column that could be walked through would make a march a way of avoiding
+   * a war rather than a way of waging one.
+   */
+  private forcesAt(regionId: string): Legion[] {
+    return this.state.legions.filter((l) => l.regionId === regionId);
+  }
+
   private blockingForceAt(regionId: string, playerId: PlayerId): boolean {
     if (!this.state.regions[regionId]) return false;
-    return this.legionsAt(regionId).some(
+    return this.forcesAt(regionId).some(
       (l) => l.playerId !== playerId && totalUnits(l.units) > 0,
     );
+  }
+
+  /**
+   * Takes a column off the road. It stops where it stands, and whatever it was
+   * walking towards is forgotten — a fight is not something you carry on
+   * through, and the player can give the order again once it is over.
+   */
+  private haltMarch(legionId: string): void {
+    this.state.marches = this.state.marches.filter((m) => m.legionId !== legionId);
   }
 
   /** Anyone here who would have to be beaten before the ground could be taken. */
@@ -955,6 +978,15 @@ export class GameEngine {
     supply = FULL_SUPPLY,
     onArrival?: 'assault' | 'occupy',
   ): void {
+    // Anyone of theirs crossing this ground is in it now. A column caught
+    // mid-march stops here and fights; walking on would let an army stroll
+    // out of a battle it is standing in.
+    for (const caught of this.forcesAt(regionId)) {
+      if (caught.playerId !== attackerId && totalUnits(caught.units) > 0) {
+        this.haltMarch(caught.id);
+      }
+    }
+
     const existing = this.battleAt(regionId);
     if (existing && existing.attackerId === attackerId) {
       existing.attackerUnits = addUnits(existing.attackerUnits, units);
@@ -970,7 +1002,7 @@ export class GameEngine {
     // The defender is whoever is standing here, which since docs 6.6 need not
     // be the landowner — an army can hold ground it hasn't occupied. No legion
     // means it's a neutral militia garrison, which belongs to nobody.
-    const holder = this.legionsAt(regionId).find(
+    const holder = this.forcesAt(regionId).find(
       (l) => l.playerId !== attackerId && totalUnits(l.units) > 0,
     );
     this.state.battles.push({
@@ -2188,14 +2220,18 @@ export class GameEngine {
     // so arrival can't disturb the list being walked.
     if (this.state.marches.length > 0) {
       const stillMoving: March[] = [];
-      for (const march of this.state.marches) {
+      // Walked over a copy, and checked against the live list either side of
+      // the hop: one column arriving can pull another out of its march, and
+      // a column dragged into a fight must not be walked on or put back.
+      for (const march of [...this.state.marches]) {
+        if (!this.state.marches.includes(march)) continue;
         march.remainingSeconds -= deltaSeconds;
         // A loop, not an `if`: one tick can span several short hops.
         let done = false;
         while (!done && march.remainingSeconds <= 0) {
           done = this.completeHop(march);
         }
-        if (!done) stillMoving.push(march);
+        if (!done && this.state.marches.includes(march)) stillMoving.push(march);
       }
       this.state.marches = stillMoving;
     }

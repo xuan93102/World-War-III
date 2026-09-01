@@ -316,3 +316,72 @@ describe('what a route is made of', () => {
     expect(detour === null || !detour.includes(clear[0]), 'went round it or not at all').toBe(true);
   });
 });
+
+describe('two armies on the same ground', () => {
+  // The meeting place, and two regions either side of it that are not each
+  // other — a column walking in, and a column walking out somewhere else, so
+  // this is a meeting rather than a swap.
+  const MEET = 'taipei-2';
+  const COMES_FROM = 'taipei-4';
+  const HEADS_TO = 'taipei-5';
+
+  /**
+   * Two columns timed to be on the same ground at once.
+   *
+   * The one being caught has to leave *after* the other sets out: hops take
+   * the same time, so whoever departs first arrives first, and a defender
+   * that departed early would be long gone by the time anyone got there.
+   */
+  function twoColumns() {
+    const g = newGame();
+    g.setRegionOwner(COMES_FROM, 'p1');
+    g.setRegionOwner(MEET, 'p2');
+    g.setRegionOwner(HEADS_TO, 'p2');
+    station(g, COMES_FROM, 'p1', { militia: 20 });
+    station(g, MEET, 'p2', { militia: 20 });
+
+    expect(g.startMarch(COMES_FROM, MEET, 'p1', { militia: 20 }), 'p1 sets off').not.toBe(null);
+    g.tick(2);
+    expect(g.startMarch(MEET, HEADS_TO, 'p2', { militia: 20 }), 'p2 sets off later').not.toBe(null);
+    return g;
+  }
+
+  it('fight, rather than walking through each other', () => {
+    const g = twoColumns();
+    for (let second = 0; second < 200 && !g.battleAt(MEET); second++) g.tick(1);
+
+    // A march used to be a way of not being anywhere: neither column counted
+    // as standing on any ground, so each was invisible to the other and they
+    // walked straight through.
+    const fight = g.battleAt(MEET);
+    expect(fight, 'they met').toBeTruthy();
+    expect(fight?.attackerId, 'the one that walked in attacks').toBe('p1');
+    expect(fight?.defenderId, 'the one caught crossing defends').toBe('p2');
+  });
+
+  it('stop the column that was caught crossing', () => {
+    const g = twoColumns();
+    for (let second = 0; second < 200 && !g.battleAt(MEET); second++) g.tick(1);
+
+    // Walking on would let an army stroll out of a battle it is standing in.
+    expect(g.state.marches, 'nobody is still marching').toHaveLength(0);
+    expect(
+      g.state.legions.some((l) => l.playerId === 'p2' && l.regionId === MEET),
+      'the defender is still on the ground it was crossing',
+    ).toBe(true);
+  });
+
+  it('leaves a lone column free to march', () => {
+    // The test is "an enemy is here", not "a march is here" — one army on the
+    // road with nobody to meet must still get where it was going.
+    const g = newGame();
+    g.setRegionOwner(COMES_FROM, 'p1');
+    g.setRegionOwner(MEET, 'p1');
+    station(g, COMES_FROM, 'p1', { militia: 20 });
+    g.startMarch(COMES_FROM, MEET, 'p1', { militia: 20 });
+    for (let second = 0; second < 200 && g.state.marches.length > 0; second++) g.tick(1);
+
+    expect(g.battleAt(MEET), 'no fight with nobody there').toBeUndefined();
+    expect(totalUnits(garrisonAt(g.state, MEET)), 'it arrived').toBe(20);
+  });
+});
