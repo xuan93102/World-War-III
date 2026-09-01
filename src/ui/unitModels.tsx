@@ -142,6 +142,12 @@ interface TroopModelsProps {
   color: string;
   /** Height of one model, in world units. */
   scale: number;
+  /**
+   * Turns the force about, so its armour leads away from the viewer instead of
+   * towards them. Used by the side of a battle that is facing up the screen,
+   * so that both sides' armour meets in the middle where the shooting is.
+   */
+  reversed?: boolean;
 }
 
 /** How far apart the ranks stand. */
@@ -153,15 +159,25 @@ const RANK_GAP = 3.5;
  * tilted map is further down the screen. Each rank is sized from its own count
  * and nothing else, so none of them moves when another changes.
  */
-export function TroopModels({ infantry, vehicles, civilians, color, scale }: TroopModelsProps) {
+export function TroopModels({
+  infantry,
+  vehicles,
+  civilians,
+  color,
+  scale,
+  reversed = false,
+}: TroopModelsProps) {
   const f = faces(color);
   // Back to front, which is also the order they are drawn in, so the ones in
-  // front overlap the ones behind rather than the other way round.
-  const ranks = [
+  // front overlap the ones behind rather than the other way round. Reversing
+  // the array turns the whole force about and keeps that true, because the
+  // last one drawn is still the lowest on the screen.
+  const ordered = [
     { n: civilians, steps: VILLAGER_STEPS, Model: Villager },
     { n: infantry, steps: INFANTRY_STEPS, Model: Soldier },
     { n: vehicles, steps: VEHICLE_STEPS, Model: Tank },
-  ].filter((rank) => rank.n > 0);
+  ];
+  const ranks = (reversed ? [...ordered].reverse() : ordered).filter((rank) => rank.n > 0);
 
   return (
     <g transform={`scale(${scale / 6})`} stroke={OUTLINE} strokeWidth={0.28} strokeLinejoin="round">
@@ -175,6 +191,115 @@ export function TroopModels({ infantry, vehicles, civilians, color, scale }: Tro
           ))}
         </g>
       ))}
+    </g>
+  );
+}
+
+// ---- a fight, on the ground it is being fought over (docs 6.2) -------------
+
+/** How far each side stands from the middle, in model units. */
+const LINE_GAP = 7;
+
+interface Force {
+  infantry: number;
+  vehicles: number;
+  civilians: number;
+}
+
+interface BattleModelsProps {
+  attacker: Force;
+  defender: Force;
+  attackerColor: string;
+  defenderColor: string;
+  scale: number;
+  /**
+   * The number of rounds fought so far. Nothing is drawn from it — it is the
+   * React key for the volley, so a new one mounts each round and its animation
+   * plays from the start. The engine decides when a shot is fired; the
+   * interface only has to notice.
+   */
+  round: number;
+}
+
+/** Where the tracers cross, drawn once per round. */
+function Volley() {
+  const shots = [-3.4, -1.1, 1.4, 3.6];
+  return (
+    <g className="volley">
+      {shots.map((x, i) => (
+        <line
+          key={i}
+          className="volley-tracer"
+          x1={x}
+          y1={-LINE_GAP + 2.4}
+          x2={x * -0.6}
+          y2={LINE_GAP - 2.4}
+          stroke="#ffd54a"
+          strokeWidth={0.42}
+          strokeLinecap="round"
+          style={{ animationDelay: `${i * 55}ms` }}
+        />
+      ))}
+      {[-LINE_GAP + 2.2, LINE_GAP - 2.2].map((y, i) => (
+        <circle
+          key={`flash-${i}`}
+          className="volley-flash"
+          cx={i === 0 ? -1.6 : 1.6}
+          cy={y}
+          r={1.5}
+          fill="#fff2b8"
+          style={{ animationDelay: `${i * 40}ms` }}
+        />
+      ))}
+      {/* A ring going out from where the two lines meet. */}
+      <circle
+        className="volley-shock"
+        cx={0}
+        cy={0}
+        r={2.4}
+        fill="none"
+        stroke="#ffd54a"
+        strokeWidth={0.35}
+      />
+    </g>
+  );
+}
+
+/**
+ * Two forces fighting over a region.
+ *
+ * They face each other across the ground rather than being one marker with a
+ * sword on it, and they fire on the engine's clock — a volley when a round
+ * lands, nothing in between. So what you see is what is happening: which side
+ * has armour, who is being ground down, and whether the shooting has stopped.
+ */
+export function BattleModels({
+  attacker,
+  defender,
+  attackerColor,
+  defenderColor,
+  scale,
+  round,
+}: BattleModelsProps) {
+  return (
+    <g transform={`scale(${scale / 6})`} stroke={OUTLINE} strokeWidth={0.28} strokeLinejoin="round">
+      {/* Findable at any zoom, which a pair of ten-pixel models is not. */}
+      <circle className="battle-halo" cx={0} cy={0} r={LINE_GAP + 1.5} fill="#d9342b" />
+
+      {/* The defender holds the far side, the attacker came from below, and
+          each is turned so its armour is on the inside — which means the one
+          up the screen keeps its normal order and the one below is reversed,
+          because "front" for a lone force means nearest the viewer. */}
+      <g className="battle-line" transform={`translate(0 ${-LINE_GAP})`}>
+        <TroopModels {...defender} color={defenderColor} scale={6} />
+      </g>
+      <g className="battle-line battle-line-near" transform={`translate(0 ${LINE_GAP})`}>
+        <TroopModels {...attacker} color={attackerColor} scale={6} reversed />
+      </g>
+
+      <g key={round}>
+        <Volley />
+      </g>
     </g>
   );
 }

@@ -2235,3 +2235,118 @@
 .help-screen .notice {
   padding: 8px 14px;
 }
+
+/* ---------- a fight, on the map (docs 6.2) ----------
+
+   The engine fires a round every five seconds and the interface answers with
+   one volley. Nothing here runs on its own clock: the burst is keyed on the
+   round number, so it plays when a round actually lands and stops the moment
+   the fighting does. */
+
+.battle-halo {
+  opacity: 0.16;
+  animation: battle-breathe 2.4s var(--ease) infinite;
+  /* SVG defaults transform-box to the whole view-box, which would scale these
+     towards the middle of the map rather than about themselves. */
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes battle-breathe {
+  0%,
+  100% {
+    opacity: 0.1;
+    transform: scale(0.94);
+  }
+  50% {
+    opacity: 0.22;
+    transform: scale(1.04);
+  }
+}
+
+/* Both lines flinch outward as the volley lands, and settle back. */
+.battle-line {
+  animation: battle-recoil-far 5s var(--ease) infinite;
+}
+
+.battle-line-near {
+  animation-name: battle-recoil-near;
+}
+
+@keyframes battle-recoil-far {
+  0%,
+  8%,
+  100% {
+    translate: 0 0;
+  }
+  3% {
+    translate: 0 -0.7px;
+  }
+}
+
+@keyframes battle-recoil-near {
+  0%,
+  8%,
+  100% {
+    translate: 0 0;
+  }
+  3% {
+    translate: 0 0.7px;
+  }
+}
+
+.volley-tracer {
+  animation: volley-tracer 420ms var(--ease) 1 both;
+}
+
+@keyframes volley-tracer {
+  0% {
+    opacity: 0;
+    stroke-dasharray: 1 22;
+  }
+  20% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    stroke-dasharray: 22 1;
+  }
+}
+
+.volley-flash {
+  animation: volley-flash 320ms var(--ease) 1 both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes volley-flash {
+  0% {
+    opacity: 0;
+    scale: 0.4;
+  }
+  25% {
+    opacity: 1;
+    scale: 1;
+  }
+  100% {
+    opacity: 0;
+    scale: 1.5;
+  }
+}
+
+.volley-shock {
+  animation: volley-shock 560ms var(--ease) 1 both;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+@keyframes volley-shock {
+  0% {
+    opacity: 0.85;
+    scale: 0.2;
+  }
+  100% {
+    opacity: 0;
+    scale: 2.6;
+  }
+}

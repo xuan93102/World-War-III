@@ -13,7 +13,7 @@ import {
 } from '../engine/units';
 import { BuildingBadge, BuildingSolid, GROUND_Y, type IconKey } from './buildingIcons';
 import { shade } from './colors';
-import { TroopModels } from './unitModels';
+import { BattleModels, TroopModels } from './unitModels';
 import { useSettings } from '../settings/useSettings';
 import { MAP_TILT, THEMES } from '../settings/types';
 import type { GameState, PlayerState, RegionDef } from '../engine/types';
@@ -88,8 +88,8 @@ const MARCH_MARKER_PX = 20;
 const CART_MARKER_PX = 13;
 // The dashed line previewing where a march would go.
 const ROUTE_COLOR = '#ffd54a';
-// A fight in progress.
-const BATTLE_COLOR = '#d9342b';
+// How big a fight is drawn on the map. Bigger than a lone force, because a
+// battle is two of them facing each other with room to shoot across.
 const BATTLE_MARKER_PX = 24;
 const PASS_COLOR = '#e08a3d';
 
@@ -872,26 +872,24 @@ export function MapView({
             if (!mine && !visible.has(battle.regionId)) return null;
             const region = map.region(battle.regionId);
             const p = project(region.cx, region.cy);
-            const r = BATTLE_MARKER_PX / transform.k / 2;
+            // The attacker's troops live in the battle; the defender's are
+            // still a legion standing on the ground, plus any neutral militia
+            // that was holding it.
+            const defending = splitForce(garrisonAt(gameState, battle.regionId));
             return (
-              <g key={`battle-${battle.regionId}`}>
-                <circle
-                  cx={p.x}
-                  cy={p.y}
-                  r={r}
-                  fill={BATTLE_COLOR}
-                  stroke={MODEL_OUTLINE}
-                  strokeWidth={1.4 / transform.k}
+              <g key={`battle-${battle.regionId}`} transform={`translate(${p.x} ${p.y})`}>
+                <BattleModels
+                  attacker={splitForce(battle.attackerUnits)}
+                  defender={defending}
+                  attackerColor={colorByPlayer[battle.attackerId] ?? MILITIA_COLOR}
+                  defenderColor={
+                    battle.defenderId
+                      ? (colorByPlayer[battle.defenderId] ?? MILITIA_COLOR)
+                      : MILITIA_COLOR
+                  }
+                  scale={BATTLE_MARKER_PX / transform.k}
+                  round={battle.roundsFought}
                 />
-                <text
-                  x={p.x}
-                  y={p.y + r * 0.58}
-                  textAnchor="middle"
-                  fontSize={(BATTLE_MARKER_PX * 0.78) / transform.k}
-                  fill="#fff"
-                >
-                  ⚔
-                </text>
               </g>
             );
           })}
