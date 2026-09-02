@@ -2,7 +2,8 @@ import type { BuildingType } from '../engine/buildings';
 import type { GameEngine } from '../engine/GameEngine';
 import type { TechId } from '../engine/tech';
 import type { AiDifficulty, PlayerId } from '../engine/types';
-import { MAX_STAFF, STAFFABLE } from '../engine/buildings';
+import { BUILDINGS, MAX_STAFF, STAFFABLE } from '../engine/buildings';
+import { CORE_UPGRADE, MAX_CORE_LEVEL, TECHS } from '../engine/tech';
 import {
   UNITS,
   UNIT_ORDER,
@@ -59,6 +60,34 @@ const DECISION_INTERVAL: Record<AiDifficulty, number> = {
   normal: 3,
   hard: 2,
 };
+
+/**
+ * What the AI researches, in the order the constraints bite: the population
+ * ceiling caps income *and* army size at once, so it comes first; multipliers
+ * next; then the things that win fights.
+ */
+const TECH_PLAN: TechId[] = [
+  'homesteadAct',
+  'townExpansion',
+  'urbanisation',
+  'tradeLaw',
+  'intensiveFarming',
+  'financialCentre',
+  'consumerIndustry',
+  // Cheap, and the only way to a fortress. Ahead of the firepower line
+  // because a shut pass is worth more than a better rifle (docs 5.3).
+  'fieldworks',
+  'rifles',
+  'bodyArmour',
+  // Eyes before guns: the AI only attacks what it can see (nearestEnemy), so
+  // without scouts it spends the whole match shadow-boxing neutrals.
+  'scouts',
+  'mortarCorps',
+  'autoRifles',
+  'compositeArmour',
+  'mainBattleTank',
+  'roadNetwork',
+];
 
 interface Doctrine {
   /** Gold kept back from the villager loop for troops and buildings. */
@@ -147,6 +176,12 @@ export class AiController {
    * you make once and keep until the ground is lost.
    */
   private rallyPoint: string | null = null;
+  /**
+   * Gold set aside this cycle for something worth more than another villager
+   * — see savingsTarget(). Recomputed at the top of every decision, so it can
+   * never go stale and strand the purse.
+   */
+  private saving = 0;
   readonly playerId: PlayerId;
   readonly difficulty: AiDifficulty;
 
@@ -172,6 +207,8 @@ export class AiController {
     const me = engine.state.players[this.playerId];
     if (!me || me.coreHp <= 0) return;
     const doctrine = DOCTRINE[this.difficulty];
+    // Worked out once, and then left alone by everything that spends.
+    this.saving = this.savingsTarget(engine);
 
     this.finishBusiness(engine);
     this.spend(engine, doctrine);
@@ -215,7 +252,7 @@ export class AiController {
     // has to become ten villagers or there is no second minute.
     const reserve =
       engine.villagerCount(this.playerId) >= doctrine.economyFirst ? doctrine.reserve : 0;
-    const spare = me.money - reserve;
+    const spare = me.money - reserve - this.saving;
     if (spare <= 0) return;
 
     // Leave the army its share of the ceiling. Without this the villager loop
@@ -260,6 +297,24 @@ export class AiController {
         .ownedRegionIds(this.playerId)
         .filter((id) => engine.state.regions[id].construction?.type === type).length;
 
+    // The wonder comes before the wish list, because by the time the AI is
+    // saving for one there is nothing on that list it still wants. It goes on
+    // ground with our own on every side: five minutes to build and then a
+    // hold to survive is a long time to stand on a border.
+    if (this.wantsWonder(engine) && building('wonder') === 0) {
+      const inland = sites.filter((id) =>
+        engine.map.region(id).neighbors.every(
+          (n) => engine.state.regions[n].owner === this.playerId,
+        ),
+      );
+      for (const site of inland.length > 0 ? inland : sites) {
+        if (engine.buildRejection(site, 'wonder', this.playerId) === null) {
+          engine.startConstruction(site, 'wonder', this.playerId);
+          return;
+        }
+      }
+    }
+
     const stillWanted = wanted.some(({ type, upTo }) => building(type) < upTo);
     if (sites.length === 0) {
       // Nowhere left to build and still something worth building: clear a
@@ -270,8 +325,11 @@ export class AiController {
       return;
     }
 
+    const purse = engine.state.players[this.playerId].money - this.saving;
     for (const { type, upTo } of wanted) {
       if (building(type) >= upTo) continue;
+      // Held gold is held: a granary now is not worth the core upgrade later.
+      if (purse < BUILDINGS[type].costMoney) continue;
       for (const site of sites) {
         if (engine.buildRejection(site, type, this.playerId) === null) {
           engine.startConstruction(site, type, this.playerId);
@@ -279,6 +337,19 @@ export class AiController {
         }
       }
     }
+  }
+
+  /**
+   * Whether the AI is going for the win outright.
+   *
+   * Only once there is nothing left to learn and the core is as big as it
+   * goes — which is exactly when its gold has no other use, so this never
+   * competes with developing. It is also the AI's way out of the stalemates
+   * the wonder exists to end (docs 5.3).
+   */
+  private wantsWonder(engine: GameEngine): boolean {
+    const me = engine.state.players[this.playerId];
+    return !this.nextTech(engine) && me.coreLevel >= MAX_CORE_LEVEL;
   }
 
   /**
@@ -438,39 +509,15 @@ export class AiController {
    * 200 population and sits on a growing pile of gold with nothing to do.
    */
   private study(engine: GameEngine): void {
-    const wanted: TechId[] = [
-      'homesteadAct',
-      'townExpansion',
-      'urbanisation',
-      'tradeLaw',
-      'intensiveFarming',
-      'financialCentre',
-      'consumerIndustry',
-      // Cheap, and the only way to a fortress. Ahead of the firepower line
-      // because a shut pass is worth more than a better rifle (docs 5.3).
-      'fieldworks',
-      'rifles',
-      'bodyArmour',
-      // Eyes before guns: the AI only attacks what it can see (nearestEnemy),
-      // so without scouts it spends the whole match shadow-boxing neutrals.
-      'scouts',
-      'mortarCorps',
-      'autoRifles',
-      'compositeArmour',
-      'mainBattleTank',
-      'roadNetwork',
-    ];
-
-    for (const tech of wanted) {
-      if (engine.researchRejection(this.playerId, tech) === null) {
-        engine.startResearch(this.playerId, tech);
-        return;
-      }
+    const next = this.nextTech(engine);
+    if (next && engine.researchRejection(this.playerId, next) === null) {
+      engine.startResearch(this.playerId, next);
+      return;
     }
 
     // Nothing researchable at this core level: raise it, which opens the next
     // tier (and is itself a use for a surplus).
-    if (engine.coreUpgradeRejection(this.playerId) === null) {
+    if (!next && engine.coreUpgradeRejection(this.playerId) === null) {
       engine.startCoreUpgrade(this.playerId);
       return;
     }
@@ -479,6 +526,62 @@ export class AiController {
     if (engine.researcherRejection(this.playerId) === null) {
       engine.trainResearcher(this.playerId);
     }
+  }
+
+  /**
+   * The next thing on the plan that this core level allows at all.
+   *
+   * "Cannot afford" and "the lab is busy" both still count as wanting it —
+   * they pass with time. Needing a higher core does not, and that is the
+   * difference the savings turn on: it is the one blockage gold cannot clear
+   * by waiting.
+   */
+  private nextTech(engine: GameEngine): TechId | null {
+    const me = engine.state.players[this.playerId];
+    for (const tech of TECH_PLAN) {
+      const def = TECHS[tech];
+      if (!def.implemented) continue;
+      if (me.techs.includes(tech)) continue;
+      // Everything else in the way passes with time — no lab yet, no money
+      // yet, the lab busy, a prerequisite earlier in this same list. Only the
+      // core level does not, and it is the one thing gold can do something
+      // about. Asked of the tech's own definition rather than of the
+      // rejection, because a level-three tech behind a level-two prerequisite
+      // reports the prerequisite, not the level, and the plan then never
+      // looks finished.
+      if (def.coreLevel > me.coreLevel) continue;
+      return tech;
+    }
+    return null;
+  }
+
+  /**
+   * Gold this cycle is not allowed to touch (docs 13.1).
+   *
+   * The AI used to spend down to its reserve every few seconds — promotions
+   * alone will absorb an unlimited amount — so it never once accumulated the
+   * two thousand a core upgrade costs. It reached level two, ran out of
+   * researchable tech, and then sat at thirteen technologies and nine idle
+   * researchers for the rest of the match.
+   *
+   * Nothing here competes with development: each goal only becomes the target
+   * when the cheaper things above it have run out. Saving for the wonder is
+   * last of all, and by then gold has no other use at all.
+   */
+  private savingsTarget(engine: GameEngine): number {
+    const me = engine.state.players[this.playerId];
+    // Still something to learn at this level? Then gold belongs to the
+    // villager loop. Research is cheap and opportunistic; saving for it
+    // starves the economy that pays for it — the first attempt held back a
+    // hundred and fifty from an opening purse of ten and bought no villagers
+    // at all.
+    if (this.nextTech(engine)) return 0;
+    if (me.coreLevel < MAX_CORE_LEVEL) {
+      return CORE_UPGRADE[(me.coreLevel + 1) as 2 | 3].costMoney;
+    }
+    // Everything learned, the core as big as it goes: the only thing left for
+    // a pile of gold to buy is the game itself.
+    return BUILDINGS.wonder.costMoney;
   }
 
   /** How many population slots are still owed to the army. */
@@ -500,13 +603,16 @@ export class AiController {
     if (room <= 0) return;
     // Never spend the last of the purse on soldiers: the villager loop is what
     // pays for the next ones.
-    if (me.money < doctrine.reserve / 2) return;
+    if (me.money < this.saving + doctrine.reserve / 2) return;
 
     // In batches, not one at a time. A decision every two or three seconds
     // buying a single soldier can't keep up with an economy earning a thousand
     // a minute — the AI was ending matches sitting on unspendable gold.
     for (const type of ['conscript', 'militia'] as const) {
-      const batch = Math.min(room, Math.floor((me.money - doctrine.reserve / 2) / 4));
+      const batch = Math.min(
+        room,
+        Math.floor((me.money - this.saving - doctrine.reserve / 2) / 4),
+      );
       if (batch < 1) return;
       for (const site of engine.trainingSites(this.playerId, type)) {
         if (engine.trainRejection(site, this.playerId, type, batch) === null) {
@@ -526,12 +632,15 @@ export class AiController {
    */
   private promote(engine: GameEngine, doctrine: Doctrine): void {
     const me = engine.state.players[this.playerId];
-    if (me.money < doctrine.reserve) return;
+    if (me.money < this.saving + doctrine.reserve) return;
     for (const site of this.academies(engine)) {
       for (const type of ['marine', 'volunteer'] as const) {
         const have = engine.ownGarrisonAt(site, this.playerId)[UNITS[type].upgradeFrom!] ?? 0;
         if (have <= 0) continue;
-        const batch = Math.min(have, Math.floor((me.money - doctrine.reserve) / UNITS[type].upgradeCost!));
+        const batch = Math.min(
+          have,
+          Math.floor((me.money - this.saving - doctrine.reserve) / UNITS[type].upgradeCost!),
+        );
         if (batch < 1) continue;
         if (engine.upgradeRejection(site, this.playerId, type, batch) === null) {
           engine.upgradeUnits(site, this.playerId, type, batch);
@@ -546,7 +655,7 @@ export class AiController {
     const me = engine.state.players[this.playerId];
     // Vehicles are slow to build and paid for up front, so they come out of
     // genuine surplus — never out of the money that keeps troops coming.
-    if (me.money < doctrine.reserve * 4) return;
+    if (me.money < this.saving + doctrine.reserve * 4) return;
     // And they stay a minority of the army: past the population ceiling they
     // are the only thing gold can still buy, so nothing else stops them.
     const cap = engine.economy(this.playerId).populationCap * doctrine.armyShare * doctrine.vehicleShare;
@@ -569,7 +678,7 @@ export class AiController {
   private awaitingPromotion(engine: GameEngine, regionId: string, doctrine: Doctrine): boolean {
     if (engine.state.regions[regionId].building?.type !== 'academy') return false;
     const money = engine.state.players[this.playerId].money;
-    if (money < doctrine.reserve) return false;
+    if (money < this.saving + doctrine.reserve) return false;
     const here = engine.ownGarrisonAt(regionId, this.playerId);
     return (here.conscript ?? 0) > 0 || (here.volunteer ?? 0) > 0;
   }

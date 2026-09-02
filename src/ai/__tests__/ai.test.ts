@@ -7,6 +7,7 @@ import type { AiDifficulty } from '../../engine/types';
 import { totalUnits, troopsOnly } from '../../engine/units';
 import { placeVillagers } from '../../engine/__tests__/helpers';
 import { BUILDINGS } from '../../engine/buildings';
+import { CORE_UPGRADE, MAX_CORE_LEVEL, TECHS } from '../../engine/tech';
 
 const HUMAN_CORE = 'taipei-1';
 const AI_CORE = 'kaohsiung-1';
@@ -370,5 +371,89 @@ describe('clearing a slot', () => {
 
     for (let think = 0; think < 3; think++) ai.decide(engine);
     expect(engine.state.regions[middle].building?.type, 'still doing its job').toBe('trench');
+  });
+});
+
+describe('saving up for the things gold cannot buy in a hurry', () => {
+  /** Every region on the board, so there is somewhere to put anything. */
+  function withLand(engine: GameEngine) {
+    for (const region of engine.map.regions) engine.setRegionOwner(region.id, 'ai');
+  }
+
+  it('does not hold anything back while the economy is still starting', () => {
+    // The opening purse is ten gold. Saving out of that buys nothing and
+    // earns nothing, and the AI never gets off the ground — which is exactly
+    // what the first version of this did.
+    const { engine, ai } = newMatch();
+    play(engine, ai, 3);
+    expect(engine.villagerCount('ai'), 'spent it on the villager loop').toBeGreaterThan(10);
+  });
+
+  it('raises the core once there is nothing left to learn at this level', () => {
+    const { engine, ai } = newMatch('hard');
+    withLand(engine);
+    const me = engine.state.players.ai;
+    // Everything level one has to offer, already learnt.
+    for (const tech of Object.values(TECHS)) {
+      if (tech.coreLevel === 1 && tech.implemented) me.techs.push(tech.id);
+    }
+    me.money = CORE_UPGRADE[2].costMoney + 500;
+    me.food = CORE_UPGRADE[2].costFood + 500;
+    placeVillagers(engine, 'ai', 60, AI_CORE);
+
+    for (let i = 0; i < 12 && me.coreLevel === 1; i++) ai.decide(engine);
+
+    // Before this, promotions alone would absorb the surplus every cycle and
+    // the upgrade was never once affordable.
+    const started = engine.coreUpgradeRejection('ai') === 'inProgress' || me.coreLevel > 1;
+    expect(started, 'started the upgrade').toBe(true);
+  });
+
+  it('goes for the wonder once there is nothing else gold can buy', () => {
+    const { engine, ai } = newMatch('hard');
+    withLand(engine);
+    const me = engine.state.players.ai;
+    me.coreLevel = MAX_CORE_LEVEL;
+    for (const tech of Object.values(TECHS)) {
+      if (tech.implemented) me.techs.push(tech.id);
+    }
+    me.money = BUILDINGS.wonder.costMoney + 1000;
+    me.food = BUILDINGS.wonder.costFood + 500;
+    placeVillagers(engine, 'ai', 60, AI_CORE);
+
+    for (let i = 0; i < 20; i++) ai.decide(engine);
+
+    const raising = Object.values(engine.state.regions).some(
+      (r) => r.construction?.type === 'wonder' || r.building?.type === 'wonder',
+    );
+    expect(raising, 'the one thing left that wins the game outright').toBe(true);
+  });
+
+  it('puts it on ground with its own on every side', () => {
+    const { engine, ai } = newMatch('hard');
+    withLand(engine);
+    const me = engine.state.players.ai;
+    me.coreLevel = MAX_CORE_LEVEL;
+    for (const tech of Object.values(TECHS)) {
+      if (tech.implemented) me.techs.push(tech.id);
+    }
+    // One border region, everything else interior.
+    engine.setRegionOwner(HUMAN_CORE, 'p1');
+    me.money = BUILDINGS.wonder.costMoney + 1000;
+    me.food = BUILDINGS.wonder.costFood + 500;
+    placeVillagers(engine, 'ai', 60, AI_CORE);
+
+    for (let i = 0; i < 20; i++) ai.decide(engine);
+
+    const site = Object.entries(engine.state.regions).find(
+      ([, r]) => r.construction?.type === 'wonder' || r.building?.type === 'wonder',
+    );
+    expect(site, 'it built one').toBeTruthy();
+    // Five minutes to build and then a hold to survive is a long time to
+    // stand on a border.
+    const exposed = engine.map
+      .region(site![0])
+      .neighbors.some((n) => engine.state.regions[n].owner !== 'ai');
+    expect(exposed, 'not on the frontier').toBe(false);
   });
 });
