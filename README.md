@@ -27,7 +27,7 @@ npm run relay
 |---|---|
 | `npm run dev` | 開發伺服器 |
 | `npm run build` | 打包production版本 |
-| `npm test` | 執行全部測試（vitest，333項） |
+| `npm test` | 執行全部測試（vitest，336項） |
 | `npm run relay` | 連線對戰的中繼伺服器（PVP 對局需要，預設 ws://localhost:8787） |
 | `npm run relay:deploy` | 把中繼部署到 Cloudflare Workers，見 [server/README.md](server/README.md) |
 | `npm run desktop` | 用桌面外殼開發（Tauri，會同時起 vite） |
