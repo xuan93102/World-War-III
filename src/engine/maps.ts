@@ -4,7 +4,6 @@ import {
   MOUNTAIN_RANGE_PATH,
   REGION_GEOMETRY,
 } from './mapData.generated';
-import { BUILDINGS, type BuildingType } from './buildings';
 import type { TranslationKey } from '../settings/translations';
 import type { MountainPass, RegionDef } from './types';
 
@@ -19,19 +18,14 @@ import type { MountainPass, RegionDef } from './types';
  * argument through every helper in the engine.
  */
 /**
- * The landmark a map's wonder is (docs 5.3).
+ * The landmark a map's wonder is built as (docs 5.3).
  *
- * A wonder is the one building that ends a stalemate, and it should look like
- * somewhere rather than like a generic monument — so each map names its own.
- * Taiwan's is Taipei 101; other maps get whatever their own skyline is known
- * for.
+ * Only the model changes from map to map — Taiwan raises Taipei 101, France
+ * would raise the Eiffel Tower. The building is called the same thing
+ * everywhere, because it is the same building doing the same job: the one
+ * that ends a stalemate. A player learns "wonder" once.
  */
 export type WonderId = 'taipei101';
-
-export interface MapWonder {
-  id: WonderId;
-  nameKey: TranslationKey;
-}
 
 export interface MapBounds {
   minX: number;
@@ -50,7 +44,7 @@ export interface GameMap {
   /** The dividing ridge, as an SVG path. Empty when a map has no such divide. */
   ridgePath: string;
   /** What this map's wonder is a picture of, and what to call it. */
-  wonder: MapWonder;
+  wonder: WonderId;
 
   region(id: string): RegionDef;
   isPass(a: string, b: string): boolean;
@@ -67,7 +61,7 @@ interface MapSource {
   passes: MountainPass[];
   bounds: MapBounds;
   ridgePath: string;
-  wonder: MapWonder;
+  wonder: WonderId;
 }
 
 function createMap(source: MapSource): GameMap {
@@ -129,19 +123,11 @@ export const TAIWAN: GameMap = createMap({
   passes: MOUNTAIN_PASSES,
   bounds: MAP_BOUNDS,
   ridgePath: MOUNTAIN_RANGE_PATH,
-  wonder: { id: 'taipei101', nameKey: 'wonder.taipei101' },
+  wonder: 'taipei101',
 });
 
 export const MAPS: GameMap[] = [TAIWAN];
 export const DEFAULT_MAP_ID = TAIWAN.id;
-
-/**
- * What to call a building on this map. Everything is the same everywhere
- * except the wonder, which is a particular building in a particular city.
- */
-export function buildingNameKey(map: GameMap, type: BuildingType): TranslationKey {
-  return type === 'wonder' ? map.wonder.nameKey : BUILDINGS[type].nameKey;
-}
 
 export function getMap(id: string): GameMap {
   const map = MAPS.find((m) => m.id === id);

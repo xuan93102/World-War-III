@@ -1018,7 +1018,7 @@ export function MapView({
                   const built = seen || standing === 'wonder' ? standing : undefined;
                   if (built) {
                     badges.push({
-                      key: built === 'wonder' ? map.wonder.id : built,
+                      key: built === 'wonder' ? map.wonder : built,
                       dashed: !regionState.building,
                     });
                   }

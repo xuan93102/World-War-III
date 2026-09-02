@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { BUILDINGS, BUILDING_ORDER } from '../../engine/buildings';
-import { buildingNameKey, getMap, DEFAULT_MAP_ID } from '../../engine/maps';
+import { getMap, DEFAULT_MAP_ID } from '../../engine/maps';
 import { UNITS, type UnitType } from '../../engine/units';
 import { useSettings } from '../../settings/useSettings';
 import type { TranslationKey } from '../../settings/translations';
@@ -60,7 +60,7 @@ function LegendRow({ icon, textKey }: { icon: React.ReactNode; textKey: Translat
 export function HelpScreen({ onBack }: HelpScreenProps) {
   const { t } = useSettings();
   // The help page already describes this map's mountains and passes, so it
-  // may as well name this map's wonder too.
+  // shows this map's wonder as the landmark it will actually be built as.
   const map = getMap(DEFAULT_MAP_ID);
 
   // The key everybody presses when they want out of something. Cheap to
@@ -168,10 +168,10 @@ export function HelpScreen({ onBack }: HelpScreenProps) {
             const def = BUILDINGS[type];
             return (
               <div className="help-entry" key={type}>
-                <BuildingIcon type={type === 'wonder' ? map.wonder.id : type} size={26} />
+                <BuildingIcon type={type === 'wonder' ? map.wonder : type} size={26} />
                 <div className="help-entry-body">
                   <div className="help-entry-head">
-                    <span className="help-entry-name">{t(buildingNameKey(map, type))}</span>
+                    <span className="help-entry-name">{t(def.nameKey)}</span>
                     <span className="help-entry-meta">
                       {def.implemented ? (
                         <>

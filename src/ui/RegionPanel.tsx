@@ -1,5 +1,4 @@
 import { BUILDINGS, BUILDING_ORDER, CORE_HP, type BuildingType } from '../engine/buildings';
-import { buildingNameKey } from '../engine/maps';
 import type { IconKey } from './buildingIcons';
 import { BuildingIcon } from './buildingIcons';
 import { FOOD_PER_MIN_BY_SIZE, landSizeOf, type LandSize } from '../engine/land';
@@ -79,9 +78,10 @@ export function RegionPanel({
 }: RegionPanelProps) {
   const { t } = useSettings();
 
-  /** A wonder is drawn as whatever landmark this map's wonder is. */
+  /** A wonder is drawn as whatever landmark this map raises; only the model
+   *  differs from map to map, never the name. */
   const iconFor = (type: BuildingType): IconKey =>
-    type === 'wonder' ? engine.map.wonder.id : type;
+    type === 'wonder' ? engine.map.wonder : type;
 
   if (!selectedRegionId) {
     return <div className="region-panel region-panel-empty">{t('game.selectHint')}</div>;
@@ -280,8 +280,7 @@ export function RegionPanel({
             <div className="build-status">
               <div className="build-status-name">
                 <BuildingIcon type={iconFor(regionState.construction.type)} />
-                {t(buildingNameKey(engine.map, regionState.construction.type))}・
-                {t('building.building')}
+                {t(BUILDINGS[regionState.construction.type].nameKey)}・{t('building.building')}
               </div>
               <div className="progress-track">
                 <div
@@ -307,7 +306,7 @@ export function RegionPanel({
             <div className="build-status">
               <div className="build-status-name">
                 <BuildingIcon type={iconFor(regionState.building.type)} />
-                {t(buildingNameKey(engine.map, regionState.building.type))}
+                {t(BUILDINGS[regionState.building.type].nameKey)}
               </div>
               <div className="build-status-meta">
                 {t(BUILDINGS[regionState.building.type].descKey)}
@@ -342,9 +341,7 @@ export function RegionPanel({
                   >
                     <span className="build-option-head">
                       <BuildingIcon type={iconFor(type)} size={20} />
-                      <span className="build-option-name">
-                        {t(buildingNameKey(engine.map, type))}
-                      </span>
+                      <span className="build-option-name">{t(def.nameKey)}</span>
                       <span className="build-option-cost">
                         {def.costMoney > 0 && `${t('game.money')} ${def.costMoney}`}
                         {def.costFood > 0 && `　${t('game.food')} ${def.costFood}`}
