@@ -1,5 +1,5 @@
 import { useSettings } from '../../settings/useSettings';
-import { MapSilhouette } from '../MapSilhouette';
+import { GlobeSilhouette } from '../GlobeSilhouette';
 
 interface MainMenuProps {
   onStart: () => void;
@@ -12,7 +12,7 @@ export function MainMenu({ onStart, onSettings, onHelp, onReplays }: MainMenuPro
   const { t } = useSettings();
   return (
     <div className="screen screen-centered screen-hero">
-      <MapSilhouette />
+      <GlobeSilhouette />
       <div className="title-block">
         <h1 className="game-title">{t('game.title')}</h1>
         <p className="game-tagline">{t('menu.tagline')}</p>

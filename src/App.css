@@ -2103,35 +2103,71 @@
   gap: 6px;
 }
 
-/* ---------- the island behind the menu ----------
+/* ---------- the globe behind the menu ----------
 
-   A menu on a black field could belong to any game. This one is played on a
-   real place, so the place is drawn behind it — dim enough to read as
-   texture, bright enough to be recognised. */
+   A menu on a black field could belong to any game. This one is played on
+   real ground, and on more of it than Taiwan eventually — so the front door
+   shows a globe rather than the one island that exists today. No coastlines
+   are drawn, which is the point: none of them can be wrong. */
 
 .screen-hero {
   position: relative;
   isolation: isolate;
 }
 
-.map-silhouette {
+.globe-silhouette {
   position: absolute;
   z-index: -1;
-  right: 6%;
+  right: 7%;
   top: 50%;
   transform: translateY(-50%);
-  height: min(88%, 760px);
+  height: min(80%, 620px);
   width: auto;
   pointer-events: none;
+  fill: none;
+  stroke: color-mix(in oklab, var(--accent) 42%, transparent);
+  stroke-width: 0.7;
   /* Fades out at the edges so it sits in the dark rather than on top of it. */
-  mask-image: radial-gradient(closest-side, #000 55%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 62%, transparent 100%);
 }
 
-.map-silhouette-regions path {
-  fill: color-mix(in oklab, var(--accent) 22%, transparent);
-  stroke: color-mix(in oklab, var(--accent) 34%, transparent);
-  stroke-width: 0.6;
-  opacity: 0.5;
+.globe-limb {
+  stroke-width: 1.1;
+  fill: color-mix(in oklab, var(--accent) 7%, transparent);
+}
+
+.globe-parallel {
+  opacity: 0.6;
+}
+
+/*
+   A meridian's half-width is R·|sin λ|, so animating rx from nothing to the
+   full radius and back is the globe turning — not a shape being pulsed. The
+   opacity follows it so a meridian is faintest when it is edge-on, which is
+   also when it is nearest the viewer.
+*/
+.globe-meridian {
+  animation: globe-turn 48s linear infinite;
+}
+
+@keyframes globe-turn {
+  0%,
+  100% {
+    rx: 0px;
+    opacity: 0.15;
+  }
+  25% {
+    rx: 100px;
+    opacity: 0.55;
+  }
+  50% {
+    rx: 0px;
+    opacity: 0.15;
+  }
+  75% {
+    rx: 100px;
+    opacity: 0.55;
+  }
 }
 
 .game-tagline {
