@@ -35,6 +35,7 @@ npm run relay
 | `npm run lint` | 靜態檢查（oxlint） |
 | `node scripts/build-map-data.mjs` | 重新產生地圖資料（改動 `scripts/subregions.mjs` 後需執行） |
 | `node scripts/analyze-disconnected.mjs` | 檢查是否有區塊由不相連的土地組成 |
+| `node scripts/build-globe-data.mjs` | 重新產生主選單地球的海岸線資料（改動抽稀參數後需執行） |
 
 ## 玩起來是什麼樣子
 
@@ -103,3 +104,5 @@ docs/           設計文件
 ## 地圖資料來源
 
 地理形狀來自 [taiwan-atlas](https://github.com/dkaoster/taiwan-atlas)（內政部鄉鎮市區界線資料，MIT授權）。`src/engine/mapData.generated.ts` 為自動產生，請勿手動編輯。
+
+主選單地球的海岸線來自 [world-atlas](https://github.com/topojson/world-atlas)（Natural Earth 110m，公有領域）。`src/ui/globeData.generated.ts` 同樣是自動產生的：原始資料抽稀到 600 像素的球畫得出來的程度（5123 點 → 2956 點），因為比一個像素還細的峽灣每次載入都要付費卻什麼也看不到。

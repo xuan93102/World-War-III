@@ -2107,8 +2107,8 @@
 
    A menu on a black field could belong to any game. This one is played on
    real ground, and on more of it than Taiwan eventually — so the front door
-   shows a globe rather than the one island that exists today. No coastlines
-   are drawn, which is the point: none of them can be wrong. */
+   turns a globe with real coastlines on it. The paths are rewritten every
+   frame by the component; everything here is only how they look. */
 
 .screen-hero {
   position: relative;
@@ -2125,49 +2125,28 @@
   width: auto;
   pointer-events: none;
   fill: none;
-  stroke: color-mix(in oklab, var(--accent) 42%, transparent);
-  stroke-width: 0.7;
   /* Fades out at the edges so it sits in the dark rather than on top of it. */
-  mask-image: radial-gradient(closest-side, #000 62%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 66%, transparent 100%);
 }
 
 .globe-limb {
-  stroke-width: 1.1;
   fill: color-mix(in oklab, var(--accent) 7%, transparent);
+  stroke: color-mix(in oklab, var(--accent) 40%, transparent);
+  stroke-width: 1.1;
 }
 
-.globe-parallel {
-  opacity: 0.6;
+/* The grid is scaffolding: enough to read as a globe, never enough to
+   compete with the land on it. */
+.globe-grid {
+  stroke: color-mix(in oklab, var(--accent) 20%, transparent);
+  stroke-width: 0.55;
 }
 
-/*
-   A meridian's half-width is R·|sin λ|, so animating rx from nothing to the
-   full radius and back is the globe turning — not a shape being pulsed. The
-   opacity follows it so a meridian is faintest when it is edge-on, which is
-   also when it is nearest the viewer.
-*/
-.globe-meridian {
-  animation: globe-turn 48s linear infinite;
-}
-
-@keyframes globe-turn {
-  0%,
-  100% {
-    rx: 0px;
-    opacity: 0.15;
-  }
-  25% {
-    rx: 100px;
-    opacity: 0.55;
-  }
-  50% {
-    rx: 0px;
-    opacity: 0.15;
-  }
-  75% {
-    rx: 100px;
-    opacity: 0.55;
-  }
+.globe-land {
+  stroke: color-mix(in oklab, var(--accent) 62%, transparent);
+  stroke-width: 1;
+  stroke-linejoin: round;
+  stroke-linecap: round;
 }
 
 .game-tagline {
